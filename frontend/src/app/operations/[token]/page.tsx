@@ -134,6 +134,53 @@ export default function OperationPublicPage({ params }: { params: { token: strin
 
   const assignedJobs = useMemo(() => data?.jobs || [], [data]);
 
+  // Jobs filtered only by date (for status card counts)
+  const dateFilteredJobs = useMemo(() => {
+    if (!data) return [];
+    if (dateFilter === "all") return assignedJobs;
+    
+    const matchesDateFilter = (dateString: string | undefined): boolean => {
+      if (!dateString) return dateFilter === "all";
+      
+      try {
+        const jobDate = new Date(dateString);
+        if (isNaN(jobDate.getTime())) return dateFilter === "all";
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const weekFromNow = new Date(today);
+        weekFromNow.setDate(weekFromNow.getDate() + 7);
+        
+        const monthFromNow = new Date(today);
+        monthFromNow.setMonth(monthFromNow.getMonth() + 1);
+        
+        const jobDateOnly = new Date(jobDate);
+        jobDateOnly.setHours(0, 0, 0, 0);
+        
+        switch (dateFilter) {
+          case "today":
+            return jobDateOnly.getTime() === today.getTime();
+          case "tomorrow":
+            return jobDateOnly.getTime() === tomorrow.getTime();
+          case "week":
+            return jobDateOnly >= today && jobDateOnly <= weekFromNow;
+          case "month":
+            return jobDateOnly >= today && jobDateOnly <= monthFromNow;
+          default:
+            return true;
+        }
+      } catch {
+        return dateFilter === "all";
+      }
+    };
+    
+    return assignedJobs.filter((j) => matchesDateFilter(j.plannedDate));
+  }, [assignedJobs, dateFilter, data]);
+
   // Helper function to check if a date matches the filter
   const matchesDateFilter = useCallback((dateString: string | undefined): boolean => {
     if (!dateString) return dateFilter === "all";
@@ -247,29 +294,54 @@ export default function OperationPublicPage({ params }: { params: { token: strin
 
   const handleStartJob = async (jobId: string, jobTitle: string) => {
     const result = await Swal.fire({
-      title: "Confirmar Início",
+      title: `<div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+          <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <span class="text-xl font-bold text-slate-800">Iniciar Serviço</span>
+      </div>`,
       html: `
-        <div class="text-left">
-          <p class="mb-3 text-slate-300">Deseja realmente iniciar este serviço?</p>
-          <div class="bg-slate-800/50 rounded-lg p-3 mb-3">
-            <p class="text-sm font-semibold text-white mb-1">${jobTitle}</p>
-            <p class="text-xs text-slate-400">Ao confirmar, o serviço será marcado como "Em execução" e o horário de início será registrado.</p>
+        <div class="text-left space-y-4 mt-4">
+          <p class="text-base text-slate-600 font-medium">Deseja iniciar este serviço?</p>
+          
+          <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border-l-4 border-blue-500 rounded-lg p-4 shadow-sm">
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-bold text-slate-900 mb-1 break-words">${jobTitle}</p>
+                <p class="text-xs text-slate-600 leading-relaxed">O serviço será marcado como <span class="font-semibold text-blue-600">"Em execução"</span> e o horário de início será registrado automaticamente.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+            <svg class="w-4 h-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Você poderá marcar como concluído quando finalizar o trabalho.</span>
           </div>
         </div>
       `,
-      icon: "question",
       showCancelButton: true,
       confirmButtonColor: "#3b82f6",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Sim, iniciar",
+      cancelButtonColor: "#94a3b8",
+      confirmButtonText: '<span class="px-2">✓ Sim, iniciar agora</span>',
       cancelButtonText: "Cancelar",
       customClass: {
-        popup: "bg-slate-800 border border-slate-700",
-        title: "text-white",
-        htmlContainer: "text-slate-300",
-        confirmButton: "bg-blue-500 hover:bg-blue-600",
-        cancelButton: "bg-slate-600 hover:bg-slate-700"
-      }
+        popup: "rounded-2xl shadow-2xl",
+        title: "text-left pb-0",
+        htmlContainer: "text-left",
+        confirmButton: "rounded-lg font-semibold px-6 py-3 shadow-lg hover:shadow-xl transition-all",
+        cancelButton: "rounded-lg font-semibold px-6 py-3 hover:bg-slate-200 transition-all"
+      },
+      buttonsStyling: true
     });
 
     if (result.isConfirmed) {
@@ -947,9 +1019,9 @@ export default function OperationPublicPage({ params }: { params: { token: strin
         {view === "home" ? (
           <div className="grid gap-3 md:grid-cols-3">
             {[
-              { label: "Disponíveis", value: assignedJobs.filter((j) => j.status === "pendente").length },
-              { label: "Em execução", value: assignedJobs.filter((j) => j.status === "em_execucao").length },
-              { label: "Concluídos", value: assignedJobs.filter((j) => j.status === "concluida").length }
+              { label: "Disponíveis", value: dateFilteredJobs.filter((j) => j.status === "pendente").length },
+              { label: "Em execução", value: dateFilteredJobs.filter((j) => j.status === "em_execucao").length },
+              { label: "Concluídos", value: dateFilteredJobs.filter((j) => j.status === "concluida").length }
             ].map((item) => (
               <div
                 key={item.label}
@@ -993,10 +1065,10 @@ export default function OperationPublicPage({ params }: { params: { token: strin
               ] as { key: ViewTab; label: string; desc: string; icon: JSX.Element }[]).map((item) => {
               const count =
                 item.key === "disponiveis"
-                  ? assignedJobs.filter((j) => j.status === "pendente").length
+                  ? dateFilteredJobs.filter((j) => j.status === "pendente").length
                   : item.key === "execucao"
-                  ? assignedJobs.filter((j) => j.status === "em_execucao").length
-                  : assignedJobs.filter((j) => j.status === "concluida").length;
+                  ? dateFilteredJobs.filter((j) => j.status === "em_execucao").length
+                  : dateFilteredJobs.filter((j) => j.status === "concluida").length;
               return (
                 <button
                   key={item.key}

@@ -32,6 +32,7 @@ export default function OperationTeamPage({ params }: { params: { id: string } }
     dateFilter,
     setDateFilter,
     assignedJobs,
+    dateFilteredJobs,
     filteredJobs,
     groupedJobsByDate,
     authWithPassword,
@@ -86,9 +87,9 @@ export default function OperationTeamPage({ params }: { params: { id: string } }
         {view === "home" ? (
           <div className="grid gap-3 md:grid-cols-3">
             {[
-              { label: "Disponíveis", value: assignedJobs.filter((j) => j.status === "pendente").length },
-              { label: "Em execução", value: assignedJobs.filter((j) => j.status === "em_execucao").length },
-              { label: "Concluídos", value: assignedJobs.filter((j) => j.status === "concluida").length }
+              { label: "Disponíveis", value: dateFilteredJobs.filter((j) => j.status === "pendente").length },
+              { label: "Em execução", value: dateFilteredJobs.filter((j) => j.status === "em_execucao").length },
+              { label: "Concluídos", value: dateFilteredJobs.filter((j) => j.status === "concluida").length }
             ].map((item) => (
               <div
                 key={item.label}
@@ -126,10 +127,10 @@ export default function OperationTeamPage({ params }: { params: { id: string } }
               ].map((item) => {
                 const count =
                   item.key === "disponiveis"
-                    ? assignedJobs.filter((j) => j.status === "pendente").length
+                    ? dateFilteredJobs.filter((j) => j.status === "pendente").length
                     : item.key === "execucao"
-                    ? assignedJobs.filter((j) => j.status === "em_execucao").length
-                    : assignedJobs.filter((j) => j.status === "concluida").length;
+                    ? dateFilteredJobs.filter((j) => j.status === "em_execucao").length
+                    : dateFilteredJobs.filter((j) => j.status === "concluida").length;
                 return (
                   <button
                     key={item.key}

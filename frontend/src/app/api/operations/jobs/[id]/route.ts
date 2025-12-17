@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { backendFetch } from "@/lib/backend-fetch";
 
 const bodySchema = z.object({
-  token: z.string().min(4),
+  teamId: z.string().min(4).optional(),
+  token: z.string().min(4).optional(), // Legacy support
   password: z.string().min(4),
   status: z.enum(["pendente", "em_execucao", "concluida", "cancelada"]),
   startedAt: z.string().optional(),
   finishedAt: z.string().optional()
+}).refine((data) => data.teamId || data.token, {
+  message: "Either teamId or token must be provided"
 });
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "development"
-    ? "http://localhost:4000/api"
-    : "https://your-backend-placeholder-url.com/api");
 
 export async function PATCH(
   req: Request,
@@ -29,14 +27,14 @@ export async function PATCH(
       );
     }
 
-    // Call backend API instead of accessing database directly
-    const backendUrl = `${API_BASE}/operations/jobs/${params.id}`;
-    const backendRes = await fetch(backendUrl, {
+    // Call backend API - support both teamId (new) and token (legacy)
+    const backendRes = await backendFetch(`/operations/jobs/${params.id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        teamId: parsed.data.teamId,
         token: parsed.data.token,
         password: parsed.data.password,
         status: parsed.data.status,
