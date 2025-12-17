@@ -1,6 +1,9 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import https from "https";
+import fs from "fs";
+import path from "path";
 import clientsRouter from "./routes/clients";
 import settingsRouter from "./routes/settings";
 import authRouter from "./routes/auth";
@@ -61,9 +64,27 @@ app.use("/api/budgets", budgetsRouter);
 app.use("/api/travel-pricing", travelPricingRouter);
 app.use("/api/distance", distanceRouter);
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Backend server running on port ${PORT}`);
-});
+// Try to use HTTPS if certificates exist, otherwise fall back to HTTP
+const certsPath = path.join(__dirname, "..", "..", "certs");
+const keyPath = path.join(certsPath, "localhost-key.pem");
+const certPath = path.join(certsPath, "localhost.pem");
+
+if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  const httpsOptions = {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath)
+  };
+
+  https.createServer(httpsOptions, app).listen(PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`🔒 Backend HTTPS server running on https://localhost:${PORT}`);
+  });
+} else {
+  app.listen(PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`⚠️  Backend HTTP server running on http://localhost:${PORT}`);
+    console.log(`   (HTTPS certificates not found at ${certsPath})`);
+  });
+}
 
 

@@ -3,7 +3,7 @@ import { getSession } from "next-auth/react";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === "development"
-    ? "http://localhost:4000/api"
+    ? "https://localhost:4000/api"
     : "https://your-backend-placeholder-url.com/api");
 
 export function apiUrl(path: string) {

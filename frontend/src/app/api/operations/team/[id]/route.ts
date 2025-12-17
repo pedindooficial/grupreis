@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { backendFetch } from "@/lib/backend-fetch";
 
 const bodySchema = z.object({
   password: z.string().min(4, "Senha obrigatória")
 });
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "development"
-    ? "http://localhost:4000/api"
-    : "https://your-backend-placeholder-url.com/api");
 
 export async function POST(
   req: Request,
@@ -26,8 +21,7 @@ export async function POST(
     }
 
     // Call backend API - new team ID-based route
-    const backendUrl = `${API_BASE}/operations/team/${params.id}`;
-    const backendRes = await fetch(backendUrl, {
+    const backendRes = await backendFetch(`/operations/team/${params.id}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"

@@ -1,6 +1,6 @@
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { apiFetch } from "@/lib/api-client";
+import { backendFetch } from "@/lib/backend-fetch";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -18,13 +18,8 @@ export const authOptions: NextAuthOptions = {
 
         try {
           // Call backend directly (no session needed for login)
-          const API_BASE =
-            process.env.NEXT_PUBLIC_API_URL ||
-            (process.env.NODE_ENV === "development"
-              ? "http://localhost:4000/api"
-              : "https://your-backend-placeholder-url.com/api");
-
-          const res = await fetch(`${API_BASE}/auth/login`, {
+          // Uses backendFetch which handles HTTPS with self-signed certificates
+          const res = await backendFetch("/auth/login", {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
