@@ -5,6 +5,54 @@ import ClientModel from "../models/Client";
 
 const router = Router();
 
+// Função auxiliar para formatar endereço completo
+function formatAddress(address: {
+  addressStreet?: string;
+  addressNumber?: string;
+  addressNeighborhood?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressZip?: string;
+}): string {
+  return [
+    [address.addressStreet, address.addressNumber].filter(Boolean).join(", "),
+    address.addressNeighborhood,
+    [address.addressCity, address.addressState].filter(Boolean).join(" - "),
+    address.addressZip
+  ]
+    .filter((v) => v && v.trim().length > 0)
+    .join(" | ");
+}
+
+// Função auxiliar para processar e formatar array de endereços
+function processAddresses(addresses?: any[]): any[] {
+  if (!addresses || !Array.isArray(addresses)) {
+    return [];
+  }
+  
+  return addresses.map((addr) => {
+    const formattedAddress = formatAddress(addr);
+    return {
+      ...addr,
+      address: formattedAddress || addr.address || ""
+    };
+  });
+}
+
+const clientAddressSchema = z.object({
+  _id: z.string().optional(),
+  label: z.string().optional(),
+  address: z.string().optional(),
+  addressStreet: z.string().optional(),
+  addressNumber: z.string().optional(),
+  addressNeighborhood: z.string().optional(),
+  addressCity: z.string().optional(),
+  addressState: z.string().optional(),
+  addressZip: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional()
+});
+
 const clientSchema = z.object({
   name: z.string().min(2, "Nome obrigatório"),
   personType: z.enum(["cpf", "cnpj"]).optional(),
@@ -12,13 +60,16 @@ const clientSchema = z.object({
   contact: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("E-mail inválido").optional(),
+  // Campos legados para compatibilidade
   address: z.string().optional(),
   addressStreet: z.string().optional(),
   addressNumber: z.string().optional(),
   addressNeighborhood: z.string().optional(),
   addressCity: z.string().optional(),
   addressState: z.string().optional(),
-  addressZip: z.string().optional()
+  addressZip: z.string().optional(),
+  // Novo campo: array de endereços
+  addresses: z.array(clientAddressSchema).optional()
 });
 
 router.get("/", async (_req, res) => {
@@ -57,10 +108,14 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // Processar endereços
+    const processedAddresses = processAddresses(parsed.data.addresses);
+    
     const created = await ClientModel.create({
       ...parsed.data,
       personType,
-      docNumber
+      docNumber,
+      addresses: processedAddresses.length > 0 ? processedAddresses : undefined
     });
 
     res.status(201).json({ data: created });
@@ -101,13 +156,28 @@ router.put("/:id", async (req, res) => {
       }
     }
 
+    // Processar endereços
+    const processedAddresses = parsed.data.addresses !== undefined 
+      ? processAddresses(parsed.data.addresses)
+      : undefined;
+    
+    const updateData: any = {
+      name: parsed.data.name,
+      personType,
+      docNumber,
+      contact: parsed.data.contact,
+      phone: parsed.data.phone,
+      email: parsed.data.email
+    };
+    
+    // Incluir addresses apenas se fornecidos (substitui completamente os endereços existentes)
+    if (processedAddresses !== undefined) {
+      updateData.addresses = processedAddresses;
+    }
+    
     const updated = await ClientModel.findByIdAndUpdate(
       req.params.id,
-      {
-        ...parsed.data,
-        personType,
-        docNumber
-      },
+      updateData,
       { new: true, runValidators: true }
     );
 

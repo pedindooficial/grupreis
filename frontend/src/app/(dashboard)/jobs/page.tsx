@@ -1299,10 +1299,11 @@ export default function JobsPage() {
                 value={form.clientId}
                 onChange={(e) => {
                   const client = clients.find((c) => c._id === e.target.value);
+                  // Resetar endereço selecionado quando cliente muda
                   setForm((f) => ({
                     ...f,
                     clientId: e.target.value,
-                    site: client?.address || ""
+                    site: "" // Limpar endereço para permitir seleção
                   }));
                 }}
                 className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
@@ -1319,15 +1320,67 @@ export default function JobsPage() {
               </div>
             </div>
             <div className="space-y-1 text-sm">
-              <label className="text-slate-200">Obra / Endereço</label>
-              <input
-                value={form.site}
-                onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                placeholder="Endereço da obra"
-              />
+              <label className="text-slate-200">Endereço da Obra</label>
+              {form.clientId ? (() => {
+                const selectedClient = clients.find((c) => c._id === form.clientId);
+                const addresses = selectedClient?.addresses && Array.isArray(selectedClient.addresses) && selectedClient.addresses.length > 0
+                  ? selectedClient.addresses
+                  : (selectedClient?.addressStreet || selectedClient?.address
+                    ? [{
+                        label: "Endereço Principal",
+                        address: selectedClient.address || `${selectedClient.addressStreet || ""} ${selectedClient.addressNumber || ""}`.trim(),
+                        addressStreet: selectedClient.addressStreet || "",
+                        addressNumber: selectedClient.addressNumber || "",
+                        addressNeighborhood: selectedClient.addressNeighborhood || "",
+                        addressCity: selectedClient.addressCity || "",
+                        addressState: selectedClient.addressState || "",
+                        addressZip: selectedClient.addressZip || ""
+                      }]
+                    : []);
+                
+                return addresses.length > 0 ? (
+                  <select
+                    value={form.site}
+                    onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  >
+                    <option value="">Selecione um endereço</option>
+                    {addresses.map((addr: any, index: number) => {
+                      const addrLabel = addr.label || `Endereço ${index + 1}`;
+                      const addrFull = addr.address || [
+                        [addr.addressStreet, addr.addressNumber].filter(Boolean).join(", "),
+                        addr.addressNeighborhood,
+                        [addr.addressCity, addr.addressState].filter(Boolean).join(" - "),
+                        addr.addressZip
+                      ].filter((v) => v && v.trim().length > 0).join(" | ");
+                      return (
+                        <option key={index} value={addrFull}>
+                          {addrLabel} - {addrFull}
+                        </option>
+                      );
+                    })}
+                  </select>
+                ) : (
+                  <input
+                    value={form.site}
+                    onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    placeholder="Digite o endereço da obra"
+                  />
+                );
+              })() : (
+                <input
+                  value={form.site}
+                  onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  placeholder="Selecione um cliente primeiro"
+                  disabled
+                />
+              )}
               <div className="text-[11px] text-slate-400">
-                Endereço é preenchido pelo cliente selecionado; você pode ajustar se necessário.
+                {form.clientId 
+                  ? "Selecione um endereço do cliente ou digite um novo endereço."
+                  : "Selecione um cliente para ver os endereços disponíveis."}
               </div>
             </div>
             <div className="space-y-1 text-sm">

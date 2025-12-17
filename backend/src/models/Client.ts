@@ -1,5 +1,57 @@
 import { Model, Schema, model, models } from "mongoose";
-import type { Client } from "../../../../src/models/Client";
+
+// Tipos para endereço de cliente
+export interface ClientAddress {
+  _id?: string;
+  label?: string; // Nome/etiqueta do endereço (ex: "Casa", "Escritório", "Obra 1")
+  address?: string; // Endereço completo formatado
+  addressStreet?: string;
+  addressNumber?: string;
+  addressNeighborhood?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressZip?: string;
+  latitude?: number; // Latitude do endereço
+  longitude?: number; // Longitude do endereço
+}
+
+// Tipo para cliente
+export interface Client {
+  name: string;
+  personType?: "cpf" | "cnpj";
+  docNumber?: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  // Campos legados para compatibilidade
+  address?: string;
+  addressStreet?: string;
+  addressNumber?: string;
+  addressNeighborhood?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressZip?: string;
+  // Novo campo: array de endereços
+  addresses?: ClientAddress[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const ClientAddressSchema = new Schema<ClientAddress>(
+  {
+    label: { type: String, trim: true }, // Nome/etiqueta do endereço (ex: "Casa", "Escritório", "Obra 1")
+    address: { type: String, trim: true }, // Endereço completo formatado
+    addressStreet: { type: String, trim: true },
+    addressNumber: { type: String, trim: true },
+    addressNeighborhood: { type: String, trim: true },
+    addressCity: { type: String, trim: true },
+    addressState: { type: String, trim: true },
+    addressZip: { type: String, trim: true },
+    latitude: { type: Number }, // Latitude do endereço
+    longitude: { type: Number } // Longitude do endereço
+  },
+  { _id: true }
+);
 
 const ClientSchema = new Schema<Client>(
   {
@@ -9,13 +61,16 @@ const ClientSchema = new Schema<Client>(
     contact: { type: String, trim: true },
     phone: { type: String, trim: true },
     email: { type: String, trim: true, lowercase: true },
+    // Manter campos legados para compatibilidade durante migração
     address: { type: String, trim: true },
     addressStreet: { type: String, trim: true },
     addressNumber: { type: String, trim: true },
     addressNeighborhood: { type: String, trim: true },
     addressCity: { type: String, trim: true },
     addressState: { type: String, trim: true },
-    addressZip: { type: String, trim: true }
+    addressZip: { type: String, trim: true },
+    // Novo campo: array de endereços
+    addresses: { type: [ClientAddressSchema], default: [] }
   },
   { timestamps: true }
 );

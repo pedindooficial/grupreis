@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const publicPaths = ["/login", "/api/health", "/operations", "/api/operations"];
+const publicPaths = ["/login", "/api/health", "/operations", "/api/operations", "/location-capture"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -11,8 +11,11 @@ export async function middleware(req: NextRequest) {
   const isStaticAsset =
     pathname.match(/\.(png|jpe?g|gif|webp|ico|svg|txt|xml)$/i) !== null;
 
+  // Verifica se é uma rota pública
+  const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
+
   if (
-    publicPaths.some((path) => pathname.startsWith(path)) ||
+    isPublicPath ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/static") ||

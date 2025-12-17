@@ -17,6 +17,7 @@ import documentsRouter from "./routes/documents";
 import usersRouter from "./routes/users";
 import auditRouter from "./routes/audit";
 import catalogRouter from "./routes/catalog";
+import locationCaptureRouter from "./routes/location-capture";
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use("/api/documents", documentsRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/catalog", catalogRouter);
+app.use("/api/location-capture", locationCaptureRouter);
 
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
