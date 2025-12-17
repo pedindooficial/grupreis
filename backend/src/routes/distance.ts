@@ -196,5 +196,116 @@ router.post("/calculate", async (req, res) => {
   }
 });
 
+// Reverse geocoding: convert lat/lng to address
+const geocodeSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180)
+});
+
+router.post("/geocode", async (req, res) => {
+  try {
+    console.log("Reverse geocoding:", req.body);
+    
+    const parsed = geocodeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      console.error("Validation error:", parsed.error.flatten());
+      return res.status(400).json({ error: "Dados inválidos", issues: parsed.error.flatten() });
+    }
+
+    const { lat, lng } = parsed.data;
+    
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || "AIzaSyAUoyCSevBWa4CkeDcBuYd-R0mbR2NtpIs";
+    if (!apiKey) {
+      return res.status(500).json({
+        error: "Google Maps API Key não configurada no servidor"
+      });
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&language=pt-BR&key=${apiKey}`;
+    
+    console.log("Calling Google Geocoding API:", url);
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    console.log("Google Geocoding response status:", data.status);
+    
+    if (data.status !== "OK" || !data.results || data.results.length === 0) {
+      console.error("Geocoding error:", data.status, data.error_message);
+      return res.status(400).json({ 
+        error: "Não foi possível obter o endereço para as coordenadas fornecidas",
+        detail: data.error_message || data.status
+      });
+    }
+
+    const result = data.results[0];
+    const addressComponents = result.address_components;
+    const formattedAddress = result.formatted_address;
+
+    // Parse address components
+    let street = "";
+    let number = "";
+    let neighborhood = "";
+    let city = "";
+    let state = "";
+    let zip = "";
+
+    for (const component of addressComponents) {
+      const types = component.types;
+      
+      if (types.includes("route")) {
+        street = component.long_name;
+      } else if (types.includes("street_number")) {
+        number = component.long_name;
+      } else if (types.includes("sublocality_level_1") || types.includes("sublocality")) {
+        neighborhood = component.long_name;
+      } else if (types.includes("administrative_area_level_2")) {
+        city = component.long_name;
+      } else if (types.includes("administrative_area_level_1")) {
+        state = component.short_name;
+      } else if (types.includes("postal_code")) {
+        zip = component.long_name;
+      }
+    }
+
+    // If street not found in route, try to extract from formatted_address
+    if (!street && formattedAddress) {
+      const parts = formattedAddress.split(",");
+      if (parts.length > 0) {
+        const firstPart = parts[0].trim();
+        // Try to extract street name and number
+        const match = firstPart.match(/^(.+?)\s*,?\s*(\d+)?$/);
+        if (match) {
+          street = match[1].trim();
+          if (!number && match[2]) {
+            number = match[2].trim();
+          }
+        } else {
+          street = firstPart;
+        }
+      }
+    }
+
+    console.log("Parsed address:", { street, number, neighborhood, city, state, zip });
+
+    res.json({
+      data: {
+        formattedAddress,
+        street,
+        number,
+        neighborhood,
+        city,
+        state,
+        zip,
+        latitude: lat,
+        longitude: lng
+      }
+    });
+  } catch (error: any) {
+    console.error("POST /api/distance/geocode error", error);
+    res.status(500).json({ error: "Falha ao obter endereço", detail: error.message });
+  }
+});
+
 export default router;
 

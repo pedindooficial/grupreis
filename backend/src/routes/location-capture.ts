@@ -2,214 +2,338 @@ import { Router } from "express";
 import { z } from "zod";
 import { connectDB } from "../db";
 import LocationCaptureModel from "../models/LocationCapture";
-import ClientModel from "../models/Client";
 import crypto from "crypto";
 
 const router = Router();
 
-// Gerar token único para captura de localização
-router.post("/generate", async (req, res) => {
+// Validation schemas
+const createTokenSchema = z.object({
+  description: z.string().optional(),
+  resourceType: z.enum(["job", "client", "team", "other"]).optional(),
+  resourceId: z.string().optional(),
+  expiresInHours: z.number().min(1).max(720).optional().default(24) // Default 24h
+});
+
+const saveLocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  address: z.string().optional(),
+  addressStreet: z.string().optional(),
+  addressNumber: z.string().optional(),
+  addressNeighborhood: z.string().optional(),
+  addressCity: z.string().optional(),
+  addressState: z.string().optional(),
+  addressZip: z.string().optional()
+});
+
+// Generate a new location capture token
+router.post("/create", async (req, res) => {
   try {
-    await connectDB();
-    
-    const schema = z.object({
-      clientId: z.string().min(1, "ID do cliente é obrigatório"),
-      addressIndex: z.number().optional() // Índice do endereço (-1 para novo endereço)
-    });
-    
-    const parsed = schema.safeParse(req.body);
+    const parsed = createTokenSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.errors[0].message });
+      return res.status(400).json({ 
+        error: "Dados inválidos", 
+        issues: parsed.error.flatten() 
+      });
     }
-    
-    // Verificar se o cliente existe
-    const client = await ClientModel.findById(parsed.data.clientId);
-    if (!client) {
-      return res.status(404).json({ error: "Cliente não encontrado" });
-    }
-    
-    // Gerar token único
+
+    await connectDB();
+
+    // Generate unique token
     const token = crypto.randomBytes(32).toString("hex");
     
-    // Criar registro de captura (expira em 24 horas)
+    // Calculate expiration
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
-    
-    const capture = await LocationCaptureModel.create({
+    expiresAt.setHours(expiresAt.getHours() + parsed.data.expiresInHours);
+
+    const locationCapture = await LocationCaptureModel.create({
       token,
-      clientId: parsed.data.clientId,
-      addressIndex: parsed.data.addressIndex,
+      description: parsed.data.description,
+      resourceType: parsed.data.resourceType || "other",
+      resourceId: parsed.data.resourceId,
+      status: "pending",
       expiresAt
     });
-    
-    res.status(201).json({ 
+
+    res.status(201).json({
       data: {
-        token: capture.token,
-        link: `${process.env.FRONTEND_URL || "http://localhost:3000"}/location-capture/${token}`
+        _id: locationCapture._id,
+        token: locationCapture.token,
+        url: `/location-capture/${locationCapture.token}`,
+        expiresAt: locationCapture.expiresAt
       }
     });
   } catch (error: any) {
-    console.error("Erro ao gerar token de captura:", error);
-    res.status(500).json({ error: error?.message || "Erro ao gerar token" });
+    console.error("POST /api/location-capture/create error", error);
+    res.status(500).json({ error: "Falha ao criar token de captura" });
   }
 });
 
-// Função para fazer geocoding reverso (coordenadas -> endereço)
-async function reverseGeocode(lat: number, lon: number): Promise<any> {
+// Validate token and get info
+router.get("/validate/:token", async (req, res) => {
   try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&accept-language=pt-BR`,
-      {
-        headers: {
-          "User-Agent": "Grupreis/1.0"
-        }
-      }
-    );
-    
-    const data = await response.json();
-    
-    if (!data || !data.address) {
-      return null;
-    }
-    
-    const addr = data.address;
-    
-    // Mapear campos do Nominatim para nosso formato
-    return {
-      addressStreet: addr.road || addr.street || addr.pedestrian || "",
-      addressNumber: addr.house_number || "",
-      addressNeighborhood: addr.neighbourhood || addr.suburb || addr.quarter || "",
-      addressCity: addr.city || addr.town || addr.village || addr.municipality || "",
-      addressState: addr.state || "",
-      addressZip: addr.postcode || "",
-      address: data.display_name || ""
-    };
-  } catch (error) {
-    console.error("Erro no geocoding reverso:", error);
-    return null;
-  }
-}
-
-// Receber coordenadas capturadas
-router.post("/capture/:token", async (req, res) => {
-  try {
-    await connectDB();
-    
-    const schema = z.object({
-      latitude: z.number().min(-90).max(90),
-      longitude: z.number().min(-180).max(180)
-    });
-    
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.errors[0].message });
-    }
-    
     const { token } = req.params;
-    
-    // Buscar registro de captura
-    const capture = await LocationCaptureModel.findOne({ 
-      token,
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!capture) {
-      return res.status(404).json({ error: "Token inválido ou expirado" });
-    }
-    
-    // Fazer geocoding reverso para obter endereço completo
-    const addressData = await reverseGeocode(parsed.data.latitude, parsed.data.longitude);
-    
-    // Atualizar com coordenadas e dados do endereço
-    capture.latitude = parsed.data.latitude;
-    capture.longitude = parsed.data.longitude;
-    capture.capturedAt = new Date();
-    
-    if (addressData) {
-      capture.addressStreet = addressData.addressStreet;
-      capture.addressNumber = addressData.addressNumber;
-      capture.addressNeighborhood = addressData.addressNeighborhood;
-      capture.addressCity = addressData.addressCity;
-      capture.addressState = addressData.addressState;
-      capture.addressZip = addressData.addressZip;
-      capture.address = addressData.address;
-    }
-    
-    await capture.save();
-    
-    // Atualizar endereço do cliente se for endereço existente
-    const client = await ClientModel.findById(capture.clientId);
-    if (!client) {
-      return res.status(404).json({ error: "Cliente não encontrado" });
-    }
-    
-    if (capture.addressIndex !== undefined && capture.addressIndex >= 0) {
-      // Atualizar endereço existente
-      if (client.addresses && client.addresses[capture.addressIndex]) {
-        client.addresses[capture.addressIndex].latitude = parsed.data.latitude;
-        client.addresses[capture.addressIndex].longitude = parsed.data.longitude;
-        if (addressData) {
-          client.addresses[capture.addressIndex].addressStreet = addressData.addressStreet;
-          client.addresses[capture.addressIndex].addressNumber = addressData.addressNumber;
-          client.addresses[capture.addressIndex].addressNeighborhood = addressData.addressNeighborhood;
-          client.addresses[capture.addressIndex].addressCity = addressData.addressCity;
-          client.addresses[capture.addressIndex].addressState = addressData.addressState;
-          client.addresses[capture.addressIndex].addressZip = addressData.addressZip;
-        }
-        await client.save();
-      }
-    }
-    
-    res.status(200).json({ 
-      data: { 
-        success: true,
-        message: "Localização capturada com sucesso!",
-        address: addressData
-      }
-    });
-  } catch (error: any) {
-    console.error("Erro ao capturar localização:", error);
-    res.status(500).json({ error: error?.message || "Erro ao capturar localização" });
-  }
-});
 
-// Verificar status do token
-router.get("/status/:token", async (req, res) => {
-  try {
     await connectDB();
-    
-    const { token } = req.params;
-    
-    const capture = await LocationCaptureModel.findOne({ token });
-    
-    if (!capture) {
+
+    const locationCapture = await LocationCaptureModel.findOne({ token }).lean();
+
+    if (!locationCapture) {
       return res.status(404).json({ error: "Token não encontrado" });
     }
-    
-    if (capture.expiresAt < new Date()) {
+
+    // Check if expired
+    if (locationCapture.expiresAt && new Date() > new Date(locationCapture.expiresAt)) {
+      await LocationCaptureModel.updateOne({ token }, { status: "expired" });
       return res.status(400).json({ error: "Token expirado" });
     }
-    
-    res.status(200).json({
+
+    // Check if already captured
+    if (locationCapture.status === "captured") {
+      return res.status(400).json({ 
+        error: "Este link já foi usado",
+        capturedAt: locationCapture.capturedAt
+      });
+    }
+
+    res.json({
       data: {
-        captured: !!capture.capturedAt,
-        latitude: capture.latitude,
-        longitude: capture.longitude,
-        addressStreet: capture.addressStreet,
-        addressNumber: capture.addressNumber,
-        addressNeighborhood: capture.addressNeighborhood,
-        addressCity: capture.addressCity,
-        addressState: capture.addressState,
-        addressZip: capture.addressZip,
-        address: capture.address,
-        capturedAt: capture.capturedAt
+        description: locationCapture.description,
+        resourceType: locationCapture.resourceType,
+        status: locationCapture.status,
+        expiresAt: locationCapture.expiresAt
       }
     });
   } catch (error: any) {
-    console.error("Erro ao verificar status:", error);
-    res.status(500).json({ error: error?.message || "Erro ao verificar status" });
+    console.error(`GET /api/location-capture/validate/${req.params.token} error`, error);
+    res.status(500).json({ error: "Falha ao validar token" });
+  }
+});
+
+// Parse Google Maps address components
+function parseAddressComponents(addressComponents: any[]): {
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+} {
+  const parsed: any = {};
+  
+  for (const component of addressComponents) {
+    const types = component.types;
+    
+    if (types.includes("route")) {
+      parsed.street = component.long_name;
+    } else if (types.includes("street_number")) {
+      parsed.number = component.long_name;
+    } else if (types.includes("sublocality") || types.includes("sublocality_level_1")) {
+      parsed.neighborhood = component.long_name;
+    } else if (types.includes("administrative_area_level_2")) {
+      parsed.city = component.long_name;
+    } else if (types.includes("administrative_area_level_1")) {
+      parsed.state = component.short_name;
+    } else if (types.includes("postal_code")) {
+      parsed.zip = component.long_name;
+    }
+  }
+  
+  return parsed;
+}
+
+// GET /:token - Alias for /validate/:token (for frontend compatibility)
+router.get("/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    await connectDB();
+
+    const locationCapture = await LocationCaptureModel.findOne({ token }).lean();
+
+    if (!locationCapture) {
+      return res.status(404).json({ error: "Token não encontrado", status: "invalid" });
+    }
+
+    // Check if expired
+    if (locationCapture.expiresAt && new Date() > new Date(locationCapture.expiresAt)) {
+      await LocationCaptureModel.updateOne({ token }, { status: "expired" });
+      return res.status(400).json({ error: "Token expirado", status: "expired" });
+    }
+
+    // Check if already captured
+    if (locationCapture.status === "captured") {
+      return res.status(400).json({ 
+        error: "Este link já foi usado",
+        status: "captured",
+        capturedAt: locationCapture.capturedAt
+      });
+    }
+
+    res.json({ data: locationCapture });
+  } catch (error: any) {
+    console.error(`GET /api/location-capture/${req.params.token} error`, error);
+    res.status(500).json({ error: "Falha ao buscar token" });
+  }
+});
+
+// Save captured location
+router.post("/:token/capture", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const parsed = saveLocationSchema.safeParse(req.body);
+    
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        error: "Dados inválidos", 
+        issues: parsed.error.flatten() 
+      });
+    }
+
+    await connectDB();
+
+    const locationCapture = await LocationCaptureModel.findOne({ token });
+
+    if (!locationCapture) {
+      return res.status(404).json({ error: "Token não encontrado" });
+    }
+
+    // Check if expired
+    if (locationCapture.expiresAt && new Date() > new Date(locationCapture.expiresAt)) {
+      locationCapture.status = "expired";
+      await locationCapture.save();
+      return res.status(400).json({ error: "Token expirado", status: "expired" });
+    }
+
+    // Check if already captured
+    if (locationCapture.status === "captured") {
+      return res.status(400).json({ 
+        error: "Este link já foi usado",
+        status: "captured",
+        capturedAt: locationCapture.capturedAt
+      });
+    }
+
+    // Update with captured location
+    locationCapture.latitude = parsed.data.latitude;
+    locationCapture.longitude = parsed.data.longitude;
+    locationCapture.address = parsed.data.address;
+    locationCapture.addressStreet = parsed.data.addressStreet;
+    locationCapture.addressNumber = parsed.data.addressNumber;
+    locationCapture.addressNeighborhood = parsed.data.addressNeighborhood;
+    locationCapture.addressCity = parsed.data.addressCity;
+    locationCapture.addressState = parsed.data.addressState;
+    locationCapture.addressZip = parsed.data.addressZip;
+    locationCapture.status = "captured";
+    locationCapture.capturedAt = new Date();
+    locationCapture.capturedBy = req.ip || req.headers["x-forwarded-for"] as string || "unknown";
+
+    await locationCapture.save();
+
+    // If linked to a client, update client address
+    if (locationCapture.resourceType === "client" && locationCapture.resourceId) {
+      try {
+        const ClientModel = (await import("../models/Client")).default;
+        const client = await ClientModel.findById(locationCapture.resourceId);
+        
+        if (client) {
+          // Build full address string
+          const fullAddress = [
+            parsed.data.addressStreet,
+            parsed.data.addressNumber,
+            parsed.data.addressNeighborhood,
+            parsed.data.addressCity,
+            parsed.data.addressState,
+            parsed.data.addressZip
+          ].filter(Boolean).join(" | ");
+          
+          client.address = fullAddress || parsed.data.address;
+          client.addressStreet = parsed.data.addressStreet;
+          client.addressNumber = parsed.data.addressNumber;
+          client.addressNeighborhood = parsed.data.addressNeighborhood;
+          client.addressCity = parsed.data.addressCity;
+          client.addressState = parsed.data.addressState;
+          client.addressZip = parsed.data.addressZip;
+          client.latitude = parsed.data.latitude;
+          client.longitude = parsed.data.longitude;
+          
+          // Update first address in addresses array if exists
+          if (client.addresses && client.addresses.length > 0) {
+            client.addresses[0] = {
+              ...client.addresses[0],
+              address: fullAddress || parsed.data.address || "",
+              addressStreet: parsed.data.addressStreet,
+              addressNumber: parsed.data.addressNumber,
+              addressNeighborhood: parsed.data.addressNeighborhood,
+              addressCity: parsed.data.addressCity,
+              addressState: parsed.data.addressState,
+              addressZip: parsed.data.addressZip,
+              latitude: parsed.data.latitude,
+              longitude: parsed.data.longitude,
+            };
+          }
+          
+          await client.save();
+          console.log(`✅ Client ${client._id} address updated via location capture`);
+        }
+      } catch (clientError) {
+        console.error("Error updating client address:", clientError);
+        // Don't fail the whole request if client update fails
+      }
+    }
+
+    res.json({
+      data: {
+        message: "Localização salva com sucesso",
+        latitude: locationCapture.latitude,
+        longitude: locationCapture.longitude,
+        address: locationCapture.address,
+        capturedAt: locationCapture.capturedAt,
+        resourceType: locationCapture.resourceType,
+        resourceId: locationCapture.resourceId
+      }
+    });
+  } catch (error: any) {
+    console.error(`POST /api/location-capture/${req.params.token}/capture error`, error);
+    res.status(500).json({ error: "Falha ao salvar localização", detail: error.message });
+  }
+});
+
+// Get all location captures (admin)
+router.get("/", async (req, res) => {
+  try {
+    await connectDB();
+
+    const captures = await LocationCaptureModel.find()
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    res.json({ data: captures });
+  } catch (error: any) {
+    console.error("GET /api/location-capture error", error);
+    res.status(500).json({ error: "Falha ao buscar capturas" });
+  }
+});
+
+// Delete location capture (admin)
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await connectDB();
+
+    const capture = await LocationCaptureModel.findByIdAndDelete(id);
+
+    if (!capture) {
+      return res.status(404).json({ error: "Captura não encontrada" });
+    }
+
+    res.json({ data: { message: "Captura excluída com sucesso" } });
+  } catch (error: any) {
+    console.error(`DELETE /api/location-capture/${req.params.id} error`, error);
+    res.status(500).json({ error: "Falha ao excluir captura" });
   }
 });
 
 export default router;
-

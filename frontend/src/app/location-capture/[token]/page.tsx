@@ -1,216 +1,534 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
+import Swal from "sweetalert2";
+
+// TypeScript declarations for Google Maps
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
+// Google Maps API Key
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyAUoyCSevBWa4CkeDcBuYd-R0mbR2NtpIs";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
 export default function LocationCapturePage() {
   const params = useParams();
-  const token = params?.token as string;
-  const [status, setStatus] = useState<"loading" | "requesting" | "capturing" | "success" | "error">("loading");
-  const [error, setError] = useState<string>("");
-  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const token = params.token as string;
+  
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [tokenStatus, setTokenStatus] = useState<"valid" | "invalid" | "used">("valid");
+  const [tokenData, setTokenData] = useState<any>(null);
+  
+  const [location, setLocation] = useState<{
+    lat: number;
+    lng: number;
+    address?: string;
+    addressStreet?: string;
+    addressNumber?: string;
+    addressNeighborhood?: string;
+    addressCity?: string;
+    addressState?: string;
+    addressZip?: string;
+  } | null>(null);
+  
+  const mapRef = useRef<HTMLDivElement>(null);
+  const googleMapRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
 
+  // Load Google Maps Script (only if not already loaded)
   useEffect(() => {
-    if (!token) {
-      setError("Token inválido");
-      setStatus("error");
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      setError("Seu navegador não suporta geolocalização.");
-      setStatus("error");
-      return;
-    }
-
-    // Solicitar geolocalização do usuário
-    setStatus("requesting");
-
-    // Configurações para geolocalização
-    // Primeiro tenta sem forçar GPS (mais rápido, funciona melhor no celular)
-    const geoOptions = {
-      enableHighAccuracy: false, // Não força GPS primeiro (mais rápido no celular)
-      timeout: 20000, // 20 segundos
-      maximumAge: 300000 // Aceita localização com até 5 minutos (útil se já tem cache)
+    const initGoogleMaps = () => {
+      // Check if already loaded and fully initialized
+      if (window.google && window.google.maps && window.google.maps.Map) {
+        console.log("Google Maps already loaded and ready");
+        setMapLoaded(true);
+        return true;
+      }
+      return false;
     };
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        setCoords({ lat: latitude, lon: longitude });
-        setStatus("capturing");
+    // Try immediate check
+    if (initGoogleMaps()) {
+      return;
+    }
 
-        try {
-          // Detectar URL da API baseada no host atual (funciona com IP também)
-          const getApiUrl = () => {
-            if (typeof window !== 'undefined') {
-              // Se estiver rodando no navegador, usar o mesmo host/porta
-              const protocol = window.location.protocol;
-              const hostname = window.location.hostname;
-              // Se for localhost, usar localhost:4000, senão usar hostname:4000
-              if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                return process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
-              }
-              // Se for IP (192.168.x.x, etc), usar o mesmo IP com porta 4000
-              return `${protocol}//${hostname}:4000/api`;
-            }
-            return process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
-          };
-
-          // Enviar coordenadas para o backend
-          const res = await fetch(`${getApiUrl()}/location-capture/capture/${token}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              latitude,
-              longitude
-            })
-          });
-
-          const data = await res.json();
-
-          if (!res.ok) {
-            throw new Error(data?.error || "Erro ao enviar localização");
-          }
-
-          setStatus("success");
-        } catch (err: any) {
-          console.error("Erro ao capturar localização:", err);
-          setError(err?.message || "Erro ao enviar localização. Tente novamente.");
-          setStatus("error");
+    // Check if script is already being loaded
+    const existingScript = document.querySelector(
+      `script[src*="maps.googleapis.com/maps/api/js"]`
+    );
+    
+    if (existingScript) {
+      console.log("Google Maps script already in DOM, waiting for load...");
+      // Wait for it to load with timeout
+      let attempts = 0;
+      const maxAttempts = 50; // 5 seconds
+      const checkLoaded = setInterval(() => {
+        attempts++;
+        if (initGoogleMaps()) {
+          console.log("Google Maps loaded from existing script");
+          clearInterval(checkLoaded);
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkLoaded);
+          console.error("Timeout waiting for Google Maps to load");
+          Swal.fire("Erro", "Tempo esgotado ao carregar o Google Maps. Recarregue a página.", "error");
         }
+      }, 100);
+      
+      return () => clearInterval(checkLoaded);
+    }
+
+    // Load new script
+    console.log("Loading Google Maps script...");
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
+    script.async = true;
+    script.defer = true;
+    
+    script.onload = () => {
+      console.log("Google Maps script loaded, waiting for API to be ready...");
+      // Wait a bit for the API to fully initialize
+      let attempts = 0;
+      const maxAttempts = 50; // 5 seconds
+      const checkReady = setInterval(() => {
+        attempts++;
+        if (initGoogleMaps()) {
+          console.log("✅ Google Maps API fully ready");
+          clearInterval(checkReady);
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkReady);
+          console.error("Google Maps API not ready after script load");
+          Swal.fire("Erro", "Google Maps não está pronto. Recarregue a página.", "error");
+        }
+      }, 100);
+    };
+    
+    script.onerror = () => {
+      console.error("Failed to load Google Maps script");
+      Swal.fire("Erro", "Falha ao carregar o Google Maps. Verifique sua conexão.", "error");
+    };
+    
+    document.head.appendChild(script);
+  }, []);
+
+  // Validate token on mount
+  useEffect(() => {
+    validateToken();
+  }, [token]);
+
+  // Initialize map when loaded
+  useEffect(() => {
+    if (mapLoaded && mapRef.current && !googleMapRef.current) {
+      initializeMap();
+    }
+  }, [mapLoaded]);
+
+  const validateToken = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/location-capture/${token}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Token validation error:", data);
+        if (data.status === "expired" || data.status === "captured") {
+          setTokenStatus(data.status === "captured" ? "used" : "invalid");
+        } else {
+          setTokenStatus("invalid");
+        }
+        setTokenData(null);
+        return;
+      }
+
+      // Check status
+      if (data.data.status !== "pending") {
+        setTokenStatus(data.data.status === "captured" ? "used" : "invalid");
+        setTokenData(null);
+        return;
+      }
+
+      setTokenData(data.data);
+      setTokenStatus("valid");
+    } catch (error) {
+      console.error("Error validating token:", error);
+      setTokenStatus("invalid");
+      setTokenData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initializeMap = () => {
+    if (!mapRef.current) {
+      console.log("Map ref not ready");
+      return;
+    }
+
+    // Double-check Google Maps is fully loaded
+    if (!window.google || !window.google.maps || !window.google.maps.Map) {
+      console.error("Google Maps API not fully loaded");
+      return;
+    }
+
+    try {
+      console.log("Initializing Google Map...");
+      
+      // Default to Brazil center if no location yet
+      const defaultCenter = { lat: -15.7801, lng: -47.9292 }; // Brasília
+
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: defaultCenter,
+        zoom: 15,
+        mapTypeControl: true,
+        streetViewControl: true,
+        fullscreenControl: true,
+        zoomControl: true,
+      });
+
+      googleMapRef.current = map;
+
+      // Add click listener to map
+      map.addListener("click", (e: google.maps.MapMouseEvent) => {
+        if (e.latLng) {
+          updateLocation(e.latLng.lat(), e.latLng.lng());
+        }
+      });
+
+      console.log("✅ Map initialized successfully");
+    } catch (error) {
+      console.error("Failed to initialize map:", error);
+      Swal.fire("Erro", "Falha ao inicializar o mapa. Recarregue a página.", "error");
+    }
+  };
+
+  const updateLocation = async (lat: number, lng: number) => {
+    // Update marker
+    if (!googleMapRef.current || !window.google || !window.google.maps) return;
+
+    if (markerRef.current) {
+      markerRef.current.setMap(null);
+    }
+
+    const marker = new window.google.maps.Marker({
+      position: { lat, lng },
+      map: googleMapRef.current,
+      draggable: true,
+      animation: window.google.maps.Animation.DROP,
+      title: "Arraste para ajustar a posição",
+    });
+
+    // Add drag listener
+    marker.addListener("dragend", (e: google.maps.MapMouseEvent) => {
+      if (e.latLng) {
+        updateLocation(e.latLng.lat(), e.latLng.lng());
+      }
+    });
+
+    markerRef.current = marker;
+
+    // Center map on marker
+    googleMapRef.current.panTo({ lat, lng });
+
+    // Get address via backend reverse geocoding
+    const addressData = await reverseGeocode(lat, lng);
+
+    setLocation({
+      lat,
+      lng,
+      ...addressData,
+    });
+  };
+
+  const reverseGeocode = async (lat: number, lng: number) => {
+    try {
+      console.log("Reverse geocoding:", lat, lng);
+      const res = await fetch(`${API_URL}/distance/geocode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat, lng }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.data) {
+        console.log("Geocoding result:", data.data);
+        return {
+          address: data.data.formattedAddress,
+          addressStreet: data.data.street,
+          addressNumber: data.data.number,
+          addressNeighborhood: data.data.neighborhood,
+          addressCity: data.data.city,
+          addressState: data.data.state,
+          addressZip: data.data.zip,
+        };
+      }
+
+      return {
+        address: "Endereço não encontrado",
+      };
+    } catch (error) {
+      console.error("Geocoding error:", error);
+      return {
+        address: "Erro ao obter endereço",
+      };
+    }
+  };
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      Swal.fire("Erro", "Geolocalização não é suportada pelo seu navegador", "error");
+      return;
+    }
+
+    setGettingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        updateLocation(lat, lng);
+        setGettingLocation(false);
       },
       (error) => {
-        console.error("Erro na geolocalização:", error);
-        
-        // Verificar se está usando HTTP (não HTTPS)
-        const isHttp = typeof window !== 'undefined' && window.location.protocol === 'http:';
-        const isIpAddress = typeof window !== 'undefined' && /^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname);
-        
-        let errorMessage = "Erro ao obter localização.";
+        console.error("Geolocation error:", error);
+        let errorMessage = "Não foi possível obter sua localização";
         
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            if (isHttp && isIpAddress) {
-              errorMessage = "⚠️ O navegador bloqueia geolocalização em HTTP quando acessado por IP. Soluções: 1) Use no computador (localhost:3000), 2) Configure HTTPS, ou 3) Use um túnel HTTPS como ngrok.";
-            } else {
-              errorMessage = "Permissão negada. No Chrome: Menu (3 pontos) > Configurações > Permissões do site > Localização > Permita.";
-            }
+            errorMessage = "Permissão de localização negada. Por favor, habilite no seu navegador.";
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = "Informações de localização não disponíveis. Verifique se o GPS está ativado no seu dispositivo.";
+            errorMessage = "Informação de localização indisponível.";
             break;
           case error.TIMEOUT:
-            errorMessage = "Tempo de espera para obter localização expirou. Verifique se o GPS está ativado e tente novamente.";
+            errorMessage = "Timeout ao obter localização.";
             break;
         }
         
-        setError(errorMessage);
-        setStatus("error");
+        Swal.fire("Erro", errorMessage, "error");
+        setGettingLocation(false);
       },
-      geoOptions
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
     );
-  }, [token]);
+  };
+
+  const saveLocation = async () => {
+    if (!location) {
+      Swal.fire("Atenção", "Por favor, selecione uma localização no mapa primeiro", "warning");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      const res = await fetch(`${API_URL}/location-capture/${token}/capture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: location.lat,
+          longitude: location.lng,
+          address: location.address || "",
+          addressStreet: location.addressStreet || "",
+          addressNumber: location.addressNumber || "",
+          addressNeighborhood: location.addressNeighborhood || "",
+          addressCity: location.addressCity || "",
+          addressState: location.addressState || "",
+          addressZip: location.addressZip || "",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        Swal.fire("Erro", data.error || "Falha ao salvar localização", "error");
+        return;
+      }
+
+      Swal.fire({
+        icon: "success",
+        title: "✅ Localização Salva!",
+        html: `
+          <div class="text-left space-y-2">
+            <p class="text-gray-600">Sua localização foi registrada com sucesso!</p>
+            <div class="bg-green-50 p-3 rounded border border-green-200">
+              <p class="text-sm font-semibold text-green-800 mb-1">📍 Endereço:</p>
+              <p class="text-sm text-gray-700">${location.address}</p>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Você pode fechar esta página agora.</p>
+          </div>
+        `,
+        confirmButtonText: "Fechar",
+        allowOutsideClick: false,
+        confirmButtonColor: "#10b981",
+      }).then(() => {
+        // Mark as completed
+        setTokenStatus("used");
+        setTokenData(null);
+      });
+    } catch (error) {
+      console.error("Error saving location:", error);
+      Swal.fire("Erro", "Falha ao salvar localização. Verifique sua conexão e tente novamente.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-400 mx-auto mb-4"></div>
+          <p className="text-white text-lg font-semibold">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenStatus === "used") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-900 via-green-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
+          <div className="text-7xl mb-4">✅</div>
+          <h1 className="text-3xl font-bold text-white mb-3">Localização Salva!</h1>
+          <p className="text-green-200 text-lg mb-2">Este link já foi usado com sucesso.</p>
+          <p className="text-green-300/70 text-sm">Você pode fechar esta página.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenStatus === "invalid" || !tokenData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-red-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
+          <div className="text-7xl mb-4">⚠️</div>
+          <h1 className="text-3xl font-bold text-white mb-3">Link Inválido</h1>
+          <p className="text-red-200 text-lg mb-2">Este link é inválido ou expirou.</p>
+          <p className="text-red-300/70 text-sm">Entre em contato para obter um novo link.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-8 shadow-2xl">
-        <div className="text-center">
-          {status === "loading" && (
-            <>
-              <div className="mb-4">
-                <div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Carregando...</h1>
-            </>
-          )}
+    <div className="h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 flex flex-col overflow-hidden">
+      {/* Header - Fixed */}
+      <div className="bg-white/10 backdrop-blur-md border-b border-white/20 shadow-xl p-3 sm:p-4 flex-shrink-0">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+            <span className="text-3xl">📍</span>
+            Captura de Localização
+          </h1>
+          <p className="text-xs sm:text-sm text-blue-100 mt-1">
+            {tokenData.description || "Marque sua localização no mapa"}
+          </p>
+        </div>
+      </div>
 
-          {status === "requesting" && (
-            <>
-              <div className="mb-4">
-                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Solicitando localização</h1>
-              <p className="text-slate-300">Por favor, permita o acesso à sua localização no navegador.</p>
-            </>
-          )}
-
-          {status === "capturing" && (
-            <>
-              <div className="mb-4">
-                <div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Enviando localização...</h1>
-              <p className="text-slate-300">Aguarde enquanto enviamos sua localização.</p>
-            </>
-          )}
-
-          {status === "success" && (
-            <>
-              <div className="mb-4">
-                <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Localização capturada!</h1>
-              <p className="text-slate-300 mb-4">Sua localização foi enviada com sucesso.</p>
-              {coords && (
-                <div className="bg-white/5 rounded-lg p-4 text-left">
-                  <p className="text-sm text-slate-400 mb-1">Latitude:</p>
-                  <p className="text-white font-mono">{coords.lat.toFixed(6)}</p>
-                  <p className="text-sm text-slate-400 mb-1 mt-2">Longitude:</p>
-                  <p className="text-white font-mono">{coords.lon.toFixed(6)}</p>
-                </div>
+      {/* Main Content - Flexible */}
+      <div className="flex-1 flex flex-col gap-3 p-2 sm:p-4 max-w-7xl mx-auto w-full overflow-hidden">
+        {/* Controls - Compact */}
+        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-2 sm:p-3 shadow-xl flex-shrink-0">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={getCurrentLocation}
+              disabled={gettingLocation || !mapLoaded}
+              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg text-sm sm:text-base"
+            >
+              {gettingLocation ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                  <span>Obtendo...</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-xl">📱</span>
+                  <span>Usar Minha Localização</span>
+                </>
               )}
-              <p className="text-sm text-slate-400 mt-4">Você pode fechar esta página.</p>
-            </>
-          )}
+            </button>
+            
+            <div className="flex-1 flex items-center justify-center gap-2 text-white bg-white/5 border border-white/20 rounded-lg py-3 px-4 text-sm sm:text-base">
+              <span className="text-xl">🖱️</span>
+              <span className="hidden sm:inline">Ou clique no mapa</span>
+              <span className="sm:hidden">Clique no mapa</span>
+            </div>
+          </div>
+        </div>
 
-          {status === "error" && (
-            <>
-              <div className="mb-4">
-                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </div>
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Erro</h1>
-              <p className="text-red-300 mb-4">{error}</p>
-              <button
-                onClick={() => {
-                  // Limpar estado e tentar novamente
-                  setStatus("loading");
-                  setError("");
-                  setCoords(null);
-                  // Aguardar um pouco antes de tentar novamente
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 500);
-                }}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition font-semibold"
-              >
-                Tentar novamente
-              </button>
-              {error.includes("Permissão") && (
-                <p className="text-xs text-slate-400 mt-3">
-                  💡 Dica: No celular, o navegador pode não pedir permissão automaticamente. Acesse as configurações do navegador para permitir manualmente.
+        {/* Location Info - Compact when shown */}
+        {location && (
+          <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-2 border-green-400/50 rounded-xl p-3 sm:p-4 shadow-xl animate-in fade-in slide-in-from-top-2 duration-300 flex-shrink-0">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl sm:text-3xl">✅</div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-white text-sm sm:text-base mb-1">Localização Selecionada</h3>
+                <p className="text-xs sm:text-sm text-green-100 mb-1 leading-tight line-clamp-2">{location.address}</p>
+                <p className="text-xs text-green-200/70">
+                  📐 {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
                 </p>
-              )}
-            </>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Map - Takes all remaining space */}
+        <div className="flex-1 bg-white/10 backdrop-blur-md border-2 border-white/20 rounded-xl overflow-hidden shadow-2xl min-h-0">
+          {!mapLoaded ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-t-4 border-b-4 border-blue-400 mx-auto mb-4"></div>
+                <p className="text-white text-base sm:text-lg font-semibold">Carregando mapa...</p>
+                <p className="text-blue-200 text-xs sm:text-sm mt-2">Por favor, aguarde...</p>
+              </div>
+            </div>
+          ) : (
+            <div ref={mapRef} className="w-full h-full" />
           )}
+        </div>
+
+        {/* Save Button - Fixed at bottom */}
+        {location && (
+          <button
+            onClick={saveLocation}
+            disabled={saving}
+            className="w-full bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-600 hover:via-emerald-600 hover:to-green-700 text-white font-bold py-3 sm:py-4 px-6 rounded-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-base sm:text-lg shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300 flex-shrink-0"
+          >
+            {saving ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                <span>Salvando...</span>
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <span className="text-xl sm:text-2xl">💾</span>
+                <span>Salvar Localização</span>
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Instructions - Fixed at bottom */}
+      <div className="bg-white/10 backdrop-blur-md border-t border-white/20 p-2 sm:p-3 shadow-xl flex-shrink-0">
+        <div className="max-w-7xl mx-auto text-center">
+          <p className="text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 flex-wrap">
+            <span className="text-lg sm:text-xl">💡</span>
+            <span className="hidden sm:inline">Dica: Você pode arrastar o marcador no mapa para ajustar a posição</span>
+            <span className="sm:hidden">Arraste o marcador para ajustar</span>
+          </p>
         </div>
       </div>
     </div>
   );
 }
-

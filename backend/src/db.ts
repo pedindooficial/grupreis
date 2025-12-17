@@ -23,12 +23,17 @@ if (!cached) {
 }
 
 export async function connectDB() {
+  // Ensure cached is defined
+  if (!cached) {
+    cached = global.mongooseBackendCache = { conn: null, promise: null };
+  }
+
   if (cached.conn) {
     return cached.conn;
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI);
+    cached.promise = mongoose.connect(MONGODB_URI!);
   }
 
   cached.conn = await cached.promise;

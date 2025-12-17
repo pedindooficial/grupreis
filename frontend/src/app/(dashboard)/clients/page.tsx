@@ -464,13 +464,14 @@ export default function ClientsPage() {
         }
       });
 
-      const addressIndex = editingAddressIndex !== null && editingAddressIndex !== -1 ? editingAddressIndex : undefined;
-
-      const res = await apiFetch("/location-capture/generate", {
+      // Create location capture token
+      const res = await apiFetch("/location-capture/create", {
         method: "POST",
         body: JSON.stringify({
-          clientId: clientId,
-          addressIndex: addressIndex
+          description: `Confirme a localização - ${selectedClient.name}`,
+          resourceType: "client",
+          resourceId: clientId,
+          expiresInHours: 72 // 3 days
         })
       });
 
@@ -481,45 +482,60 @@ export default function ClientsPage() {
         throw new Error(data?.error || "Erro ao gerar link");
       }
 
-      const link = data.data.link;
-      const token = data.data.token;
+      const protocol = window.location.protocol;
+      const host = window.location.host;
+      const fullUrl = `${protocol}//${host}/location-capture/${data.data.token}`;
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(fullUrl)}`;
 
-      // Mostrar modal com link e opção de copiar
+      // Show link and QR code
       const result = await Swal.fire({
-        title: "Link de captura gerado!",
+        title: "📍 Link de Captura Gerado",
         html: `
-          <p class="mb-4 text-slate-300">Envie este link para o cliente para capturar a localização exata:</p>
-          <div class="bg-slate-800 p-3 rounded-lg mb-4">
-            <input 
-              id="location-link" 
-              type="text" 
-              value="${link}" 
-              readonly 
-              class="w-full bg-transparent text-emerald-400 text-sm border-none outline-none"
-            />
-          </div>
-          <p class="text-xs text-slate-400">O link expira em 24 horas. As coordenadas serão atualizadas automaticamente quando o cliente compartilhar a localização.</p>
-        `,
-        icon: "success",
-        showCancelButton: true,
-        confirmButtonText: "Copiar Link",
-        cancelButtonText: "Fechar",
-        confirmButtonColor: "#10b981",
-        didOpen: () => {
-          const input = document.getElementById("location-link") as HTMLInputElement;
-          if (input) {
-            input.select();
-          }
-        }
-      });
+          <div class="text-left space-y-4">
+            <p class="text-sm text-gray-600">
+              Envie este link para <strong>${selectedClient.name}</strong> confirmar a localização:
+            </p>
+            
+            <div class="p-3 bg-blue-50 rounded border border-blue-200">
+              <p class="text-xs text-gray-500 mb-1">Link:</p>
+              <input 
+                type="text" 
+                value="${fullUrl}" 
+                readonly 
+                class="w-full p-2 text-sm border rounded"
+                id="locationLink"
+              />
+            </div>
 
-      if (result.isConfirmed) {
-        await navigator.clipboard.writeText(link);
-        Swal.fire("Copiado!", "Link copiado para a área de transferência.", "success");
-        
-        // Iniciar verificação periódica do status (polling)
-        checkLocationCaptureStatus(token);
-      }
+            <div class="flex gap-2">
+              <button 
+                onclick="navigator.clipboard.writeText('${fullUrl}'); this.innerText='✓ Copiado!'; this.classList.add('bg-green-500'); this.classList.remove('bg-blue-500')"
+                class="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+              >
+                📋 Copiar Link
+              </button>
+              <button 
+                onclick="window.open('https://wa.me/${selectedClient.phone?.replace(/\D/g, '')}?text=${encodeURIComponent('Olá! Por favor, confirme sua localização através deste link: ' + fullUrl)}', '_blank')"
+                class="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+              >
+                💬 WhatsApp
+              </button>
+            </div>
+
+            <div class="text-center">
+              <p class="text-xs text-gray-500 mb-2">QR Code:</p>
+              <img src="${qrCodeUrl}" alt="QR Code" class="mx-auto rounded" />
+            </div>
+
+            <p class="text-xs text-gray-500">
+              ⏱️ Link válido por 72 horas. As coordenadas serão atualizadas automaticamente quando o cliente confirmar.
+            </p>
+          </div>
+        `,
+        width: 600,
+        confirmButtonText: "Fechar",
+        showCloseButton: true
+      });
     } catch (error: any) {
       Swal.close();
       console.error("Erro ao gerar link:", error);
@@ -582,6 +598,90 @@ export default function ClientsPage() {
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
     }
     return "#";
+  };
+
+  const generateLocationCaptureLink = async () => {
+    if (!selectedClient) return;
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+      
+      // Create location capture token
+      const res = await apiFetch("/location-capture/create", {
+        method: "POST",
+        body: JSON.stringify({
+          description: `Confirme a localização - ${selectedClient.name}`,
+          resourceType: "client",
+          resourceId: selectedClient._id,
+          expiresInHours: 72 // 3 days
+        })
+      });
+
+      const data = await res.json();
+      
+      if (!res.ok) {
+        Swal.fire("Erro", data.error || "Falha ao gerar link", "error");
+        return;
+      }
+
+      const protocol = window.location.protocol;
+      const host = window.location.host;
+      const fullUrl = `${protocol}//${host}/location-capture/${data.data.token}`;
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(fullUrl)}`;
+
+      // Show link and QR code
+      Swal.fire({
+        title: "📍 Link de Captura Gerado",
+        html: `
+          <div class="text-left space-y-4">
+            <p class="text-sm text-gray-600">
+              Envie este link para <strong>${selectedClient.name}</strong> confirmar a localização:
+            </p>
+            
+            <div class="p-3 bg-blue-50 rounded border border-blue-200">
+              <p class="text-xs text-gray-500 mb-1">Link:</p>
+              <input 
+                type="text" 
+                value="${fullUrl}" 
+                readonly 
+                class="w-full p-2 text-sm border rounded"
+                id="locationLink"
+              />
+            </div>
+
+            <div class="flex gap-2">
+              <button 
+                onclick="navigator.clipboard.writeText('${fullUrl}'); this.innerText='✓ Copiado!'; this.classList.add('bg-green-500')"
+                class="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+              >
+                📋 Copiar Link
+              </button>
+              <button 
+                onclick="window.open('https://wa.me/${selectedClient.phone?.replace(/\D/g, '')}?text=${encodeURIComponent('Olá! Por favor, confirme sua localização através deste link: ' + fullUrl)}', '_blank')"
+                class="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+              >
+                💬 WhatsApp
+              </button>
+            </div>
+
+            <div class="text-center">
+              <p class="text-xs text-gray-500 mb-2">QR Code:</p>
+              <img src="${qrCodeUrl}" alt="QR Code" class="mx-auto rounded" />
+            </div>
+
+            <p class="text-xs text-gray-500">
+              ⏱️ Link válido por 72 horas
+            </p>
+          </div>
+        `,
+        width: 600,
+        confirmButtonText: "Fechar",
+        showCloseButton: true
+      });
+    } catch (error) {
+      console.error("Error generating location link:", error);
+      Swal.fire("Erro", "Falha ao gerar link de captura", "error");
+    }
   };
 
   const handleDelete = async () => {
@@ -1565,6 +1665,12 @@ export default function ClientsPage() {
                     className="rounded-md border border-blue-400/50 bg-blue-500/20 px-3 py-2 font-semibold text-blue-50 transition hover:border-blue-300/50 hover:bg-blue-500/30"
                   >
                     💰 Fazer Orçamento
+                  </button>
+                  <button
+                    onClick={generateLocationCaptureLink}
+                    className="rounded-md border border-purple-400/50 bg-purple-500/20 px-3 py-2 font-semibold text-purple-50 transition hover:border-purple-300/50 hover:bg-purple-500/30"
+                  >
+                    📍 Gerar Link de Captura
                   </button>
                   <button
                     onClick={() => setEditing(true)}
