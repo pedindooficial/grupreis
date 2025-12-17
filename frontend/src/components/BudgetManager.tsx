@@ -56,6 +56,7 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
     discountPercent: 0,
     discountValue: 0,
     finalValue: 0,
+    selectedAddress: "",
     travelDistanceKm: 0,
     travelPrice: 0,
     travelDescription: "",
@@ -229,20 +230,90 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
 
     try {
       setCalculatingDistance(true);
+      console.log("Calculando distância para:", clientAddress);
       const res = await apiFetch("/distance/calculate", {
         method: "POST",
         body: JSON.stringify({ clientAddress })
       });
 
       const data = await res.json().catch(() => null);
+      console.log("Resposta do servidor:", data);
+      
       if (!res.ok) {
-        Swal.fire("Erro", data?.error || "Não foi possível calcular a distância", "error");
+        const errorMsg = data?.error || "Não foi possível calcular a distância";
+        const errorDetail = data?.detail || "";
+        
+        // Check if it's an API activation error
+        if (errorMsg.includes("Distance Matrix API") || errorDetail.includes("LegacyApiNotActivatedMapError")) {
+          Swal.fire({
+            icon: "error",
+            title: "Distance Matrix API não ativada",
+            html: `
+              <div class="text-left space-y-3">
+                <p>A API do Google Maps precisa ser ativada no Google Cloud Console.</p>
+                <p class="font-semibold">📋 Como ativar:</p>
+                <ol class="list-decimal ml-5 space-y-1">
+                  <li>Acesse o <a href="https://console.cloud.google.com/apis/library/distance-matrix-backend.googleapis.com" target="_blank" class="text-blue-500 underline">Google Cloud Console</a></li>
+                  <li>Faça login com sua conta Google</li>
+                  <li>Clique em "ATIVAR" na Distance Matrix API</li>
+                  <li>Aguarde alguns segundos e tente novamente</li>
+                </ol>
+                <p class="text-sm text-gray-500 mt-3">
+                  💡 É gratuito até 40.000 requisições/mês!
+                </p>
+              </div>
+            `,
+            confirmButtonText: "Entendi",
+            width: 600
+          });
+          return;
+        }
+        
+        // Check if it's an address not found error
+        if (errorMsg.includes("Endereço não encontrado") || errorMsg.includes("NOT_FOUND") || data?.companyAddress || data?.clientAddress) {
+          Swal.fire({
+            icon: "error",
+            title: "Endereço não encontrado",
+            html: `
+              <div class="text-left space-y-3">
+                <p class="text-sm">O Google Maps não conseguiu localizar um dos endereços:</p>
+                ${data?.companyAddress ? `
+                  <div class="p-3 bg-blue-50 rounded border-l-4 border-blue-400">
+                    <p class="text-xs font-semibold text-blue-700 mb-1">📍 Endereço da Empresa:</p>
+                    <p class="text-xs text-blue-900">${data.companyAddress}</p>
+                  </div>
+                ` : ""}
+                ${data?.clientAddress ? `
+                  <div class="p-3 bg-amber-50 rounded border-l-4 border-amber-400">
+                    <p class="text-xs font-semibold text-amber-700 mb-1">📍 Endereço do Cliente:</p>
+                    <p class="text-xs text-amber-900">${data.clientAddress}</p>
+                  </div>
+                ` : ""}
+                <p class="text-xs text-gray-600 mt-3">
+                  ✏️ <strong>Dica:</strong> Verifique se os endereços estão completos e corretos. 
+                  Endereços incompletos ou com erros de digitação podem não ser encontrados pelo Google Maps.
+                </p>
+                ${!data?.companyAddress || data.companyAddress.trim() === "" ? `
+                  <p class="text-xs text-red-600 mt-2">
+                    ⚠️ O endereço da empresa não está configurado! Configure em <strong>Configurações</strong>.
+                  </p>
+                ` : ""}
+              </div>
+            `,
+            confirmButtonText: "Entendi",
+            width: 600
+          });
+          return;
+        }
+        
+        Swal.fire("Erro", errorMsg + (errorDetail ? `<br><small>${errorDetail}</small>` : ""), "error");
         return;
       }
 
       if (data?.data) {
         setForm((prev) => ({
           ...prev,
+          selectedAddress: clientAddress,
           travelDistanceKm: data.data.distanceKm || 0,
           travelPrice: data.data.travelPrice || 0,
           travelDescription: data.data.travelDescription || ""
@@ -302,6 +373,7 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
       discountPercent: budget.discountPercent || 0,
       discountValue: budget.discountValue || 0,
       finalValue: budget.finalValue || 0,
+      selectedAddress: budget.selectedAddress || "",
       travelDistanceKm: budget.travelDistanceKm || 0,
       travelPrice: budget.travelPrice || 0,
       travelDescription: budget.travelDescription || "",
@@ -353,6 +425,7 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
         discountPercent: form.discountPercent,
         discountValue: form.discountValue,
         finalValue: form.finalValue,
+        selectedAddress: form.selectedAddress,
         travelDistanceKm: form.travelDistanceKm,
         travelPrice: form.travelPrice,
         travelDescription: form.travelDescription,
@@ -518,6 +591,7 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
       discountPercent: 0,
       discountValue: 0,
       finalValue: 0,
+      selectedAddress: "",
       travelDistanceKm: 0,
       travelPrice: 0,
       travelDescription: "",
@@ -695,15 +769,22 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
             {/* Total */}
             <div className="border-t border-white/10 pt-3 space-y-2 text-sm">
               {selected.travelDistanceKm && selected.travelDistanceKm > 0 && (
-                <div className="flex justify-between text-blue-300">
-                  <span>Deslocamento ({selected.travelDistanceKm}km):</span>
-                  <span>{formatCurrency(selected.travelPrice || 0)}</span>
-                </div>
-              )}
-              {selected.travelDescription && (
-                <div className="text-xs text-slate-400 italic">
-                  {selected.travelDescription}
-                </div>
+                <>
+                  {selected.selectedAddress && (
+                    <div className="text-xs text-slate-400 mb-1">
+                      📍 Endereço: {selected.selectedAddress}
+                    </div>
+                  )}
+                  <div className="flex justify-between text-blue-300">
+                    <span>Deslocamento ({selected.travelDistanceKm}km):</span>
+                    <span>{formatCurrency(selected.travelPrice || 0)}</span>
+                  </div>
+                  {selected.travelDescription && (
+                    <div className="text-xs text-slate-400 italic">
+                      {selected.travelDescription}
+                    </div>
+                  )}
+                </>
               )}
               {selected.value && (
                 <div className="flex justify-between text-slate-300">
@@ -1104,21 +1185,67 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
                 </h4>
                 <button
                   type="button"
-                  onClick={() => {
-                    // Get client data
-                    apiFetch(`/clients/${clientId}`)
-                      .then((res) => res.json())
-                      .then((data) => {
-                        if (data?.data?.address) {
-                          calculateTravelPrice(data.data.address);
-                        } else {
-                          Swal.fire("Atenção", "Cliente sem endereço cadastrado", "warning");
-                        }
-                      })
-                      .catch((err) => {
-                        console.error(err);
-                        Swal.fire("Erro", "Falha ao buscar endereço do cliente", "error");
-                      });
+                  onClick={async () => {
+                    try {
+                      // Get client data
+                      const res = await apiFetch(`/clients/${clientId}`);
+                      const data = await res.json();
+                      console.log("Dados do cliente:", data);
+                      
+                      let addresses: string[] = [];
+                      
+                      // Collect all available addresses
+                      if (data?.data?.addresses && Array.isArray(data.data.addresses) && data.data.addresses.length > 0) {
+                        addresses = data.data.addresses
+                          .map((addr: any) => addr.address)
+                          .filter((addr: string) => addr && addr.trim());
+                      } else if (data?.data?.address) {
+                        addresses = [data.data.address];
+                      }
+                      
+                      if (addresses.length === 0) {
+                        Swal.fire("Atenção", "Cliente sem endereço cadastrado", "warning");
+                        return;
+                      }
+                      
+                      let selectedAddress = addresses[0];
+                      
+                      // If multiple addresses, ask user to select
+                      if (addresses.length > 1) {
+                        const { value: selection } = await Swal.fire({
+                          title: "Selecione o Endereço",
+                          html: `
+                            <div class="text-left">
+                              <p class="mb-3 text-sm text-slate-600">Este cliente possui ${addresses.length} endereços cadastrados. Selecione qual usar para o cálculo de deslocamento:</p>
+                              <select id="addressSelect" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                                ${addresses.map((addr, idx) => 
+                                  `<option value="${idx}">${addr}</option>`
+                                ).join("")}
+                              </select>
+                            </div>
+                          `,
+                          showCancelButton: true,
+                          confirmButtonText: "Calcular",
+                          cancelButtonText: "Cancelar",
+                          preConfirm: () => {
+                            const select = document.getElementById("addressSelect") as HTMLSelectElement;
+                            return select ? parseInt(select.value) : 0;
+                          }
+                        });
+                        
+                        if (selection === undefined) return; // User cancelled
+                        selectedAddress = addresses[selection];
+                      }
+                      
+                      if (selectedAddress && selectedAddress.trim()) {
+                        calculateTravelPrice(selectedAddress.trim());
+                      } else {
+                        Swal.fire("Atenção", "Endereço inválido", "warning");
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      Swal.fire("Erro", "Falha ao buscar endereço do cliente", "error");
+                    }
                   }}
                   disabled={calculatingDistance}
                   className="px-3 py-1 rounded text-xs font-semibold border border-blue-400/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30 transition disabled:opacity-50"

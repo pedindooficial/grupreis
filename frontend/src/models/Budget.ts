@@ -36,6 +36,7 @@ export interface Budget {
   validUntil?: string; // Date string
   jobId?: Types.ObjectId | string | null; // If converted to job
   // Travel/Displacement fields
+  selectedAddress?: string; // Address used for distance calculation
   travelDistanceKm?: number;
   travelPrice?: number;
   travelDescription?: string;

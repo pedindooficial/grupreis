@@ -46,6 +46,11 @@ const JobSchema = new Schema<Job>(
     discountPercent: { type: Number, min: 0, max: 100 },
     discountValue: { type: Number, min: 0 },
     finalValue: { type: Number, min: 0 },
+    // Travel/Displacement fields
+    selectedAddress: { type: String, trim: true }, // Address used for distance calculation
+    travelDistanceKm: { type: Number, min: 0 },
+    travelPrice: { type: Number, min: 0 },
+    travelDescription: { type: String, trim: true },
     cancellationReason: { type: String, trim: true },
     received: { type: Boolean, default: false },
     receivedAt: { type: Date },

@@ -42,6 +42,7 @@ const BudgetSchema = new Schema<Budget>(
     validUntil: { type: String, trim: true },
     jobId: { type: Schema.Types.ObjectId, ref: "Job", default: null },
     // Travel/Displacement fields
+    selectedAddress: { type: String, trim: true }, // Address used for distance calculation
     travelDistanceKm: { type: Number, min: 0 },
     travelPrice: { type: Number, min: 0 },
     travelDescription: { type: String, trim: true }

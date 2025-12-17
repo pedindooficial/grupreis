@@ -221,6 +221,8 @@ export default function JobsPage() {
   } | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
+  const [calculatingDistance, setCalculatingDistance] = useState(false);
+
   const [form, setForm] = useState({
     clientId: "",
     clientName: "",
@@ -231,6 +233,10 @@ export default function JobsPage() {
     notes: "",
     value: "",
     discountPercent: "",
+    selectedAddress: "",
+    travelDistanceKm: 0,
+    travelPrice: 0,
+    travelDescription: "",
     services: [] as Array<{
       id: string;
       catalogId?: string;
@@ -427,7 +433,7 @@ export default function JobsPage() {
   }, [form.services]);
 
   useEffect(() => {
-    if (mode !== "form") return;
+    if (mode !== "form" && mode !== "edit") return;
     
     let totalValue = 0;
     let totalDiscountValue = 0;
@@ -452,6 +458,12 @@ export default function JobsPage() {
       }
     });
     
+    // Add travel price to total
+    if (form.travelPrice && form.travelPrice > 0) {
+      totalValue += form.travelPrice;
+      hasAnyValue = true;
+    }
+    
     // Atualizar valor total apenas se houver serviços com valores
     if (hasAnyValue && totalValue > 0) {
       const calculatedDiscountPercent = totalValue > 0 ? ((totalDiscountValue / totalValue) * 100) : 0;
@@ -474,7 +486,7 @@ export default function JobsPage() {
       // Se nenhum serviço tem valor mas o campo total tem, manter (permite edição manual)
       // Não fazer nada
     }
-  }, [servicesValuesKey, mode]);
+  }, [servicesValuesKey, form.travelPrice, mode]);
 
   const resetForm = () =>
     setForm({
@@ -487,6 +499,10 @@ export default function JobsPage() {
       notes: "",
       value: "",
       discountPercent: "",
+      selectedAddress: "",
+      travelDistanceKm: 0,
+      travelPrice: 0,
+      travelDescription: "",
       services: [] as Array<{
         id: string;
         catalogId?: string;
@@ -518,6 +534,10 @@ export default function JobsPage() {
       notes: job.notes || "",
       value: job.value ? String(job.value) : "",
       discountPercent: job.discountPercent ? String(job.discountPercent) : "",
+      selectedAddress: job.selectedAddress || "",
+      travelDistanceKm: job.travelDistanceKm || 0,
+      travelPrice: job.travelPrice || 0,
+      travelDescription: job.travelDescription || "",
       services: (job.services || []).map((srv: any, index: number) => ({
         id: `service-${Date.now()}-${index}`,
         catalogId: srv.catalogId || undefined,
@@ -543,6 +563,192 @@ export default function JobsPage() {
     resetForm();
     setMode("form");
     setSelected(null);
+  };
+
+  const calculateTravelPrice = async () => {
+    if (!form.clientId) {
+      Swal.fire("Atenção", "Selecione um cliente primeiro.", "warning");
+      return;
+    }
+
+    try {
+      setCalculatingDistance(true);
+      
+      // Get client address
+      const res = await apiFetch(`/clients/${form.clientId}`);
+      if (!res.ok) {
+        throw new Error("Falha ao buscar endereço do cliente");
+      }
+      const data = await res.json();
+      console.log("Dados do cliente:", data);
+      
+      // Collect all available addresses
+      let addresses: string[] = [];
+      
+      if (data?.data?.addresses && Array.isArray(data.data.addresses) && data.data.addresses.length > 0) {
+        addresses = data.data.addresses
+          .map((addr: any) => addr.address)
+          .filter((addr: string) => addr && addr.trim());
+      } else if (data?.data?.address) {
+        addresses = [data.data.address];
+      }
+      
+      if (addresses.length === 0) {
+        Swal.fire("Atenção", "Cliente não possui endereço cadastrado.", "warning");
+        setCalculatingDistance(false);
+        return;
+      }
+      
+      let clientAddress = addresses[0];
+      
+      // If multiple addresses, ask user to select
+      if (addresses.length > 1) {
+        const { value: selection } = await Swal.fire({
+          title: "Selecione o Endereço",
+          html: `
+            <div class="text-left">
+              <p class="mb-3 text-sm text-slate-600">Este cliente possui ${addresses.length} endereços cadastrados. Selecione qual usar para o cálculo de deslocamento:</p>
+              <select id="addressSelect" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                ${addresses.map((addr, idx) => 
+                  `<option value="${idx}">${addr}</option>`
+                ).join("")}
+              </select>
+            </div>
+          `,
+          showCancelButton: true,
+          confirmButtonText: "Calcular",
+          cancelButtonText: "Cancelar",
+          preConfirm: () => {
+            const select = document.getElementById("addressSelect") as HTMLSelectElement;
+            return select ? parseInt(select.value) : 0;
+          }
+        });
+        
+        if (selection === undefined) {
+          setCalculatingDistance(false);
+          return; // User cancelled
+        }
+        clientAddress = addresses[selection];
+      }
+      
+      if (!clientAddress || !clientAddress.trim()) {
+        Swal.fire("Atenção", "Endereço inválido", "warning");
+        setCalculatingDistance(false);
+        return;
+      }
+      
+      console.log("Calculando distância para:", clientAddress);
+      
+      // Calculate distance
+      const distRes = await apiFetch("/distance/calculate", {
+        method: "POST",
+        body: JSON.stringify({ clientAddress })
+      });
+      
+      const distData = await distRes.json();
+      console.log("Resposta do servidor:", distData);
+      
+      if (!distRes.ok) {
+        const errorMsg = distData?.error || "Não foi possível calcular a distância";
+        const errorDetail = distData?.detail || "";
+        
+        // Check if it's an API activation error
+        if (errorMsg.includes("Distance Matrix API") || errorDetail.includes("LegacyApiNotActivatedMapError")) {
+          Swal.fire({
+            icon: "error",
+            title: "Distance Matrix API não ativada",
+            html: `
+              <div class="text-left space-y-3">
+                <p>A API do Google Maps precisa ser ativada no Google Cloud Console.</p>
+                <p class="font-semibold">📋 Como ativar:</p>
+                <ol class="list-decimal ml-5 space-y-1">
+                  <li>Acesse o <a href="https://console.cloud.google.com/apis/library/distance-matrix-backend.googleapis.com" target="_blank" class="text-blue-500 underline">Google Cloud Console</a></li>
+                  <li>Faça login com sua conta Google</li>
+                  <li>Clique em "ATIVAR" na Distance Matrix API</li>
+                  <li>Aguarde alguns segundos e tente novamente</li>
+                </ol>
+                <p class="text-sm text-gray-500 mt-3">
+                  💡 É gratuito até 40.000 requisições/mês!
+                </p>
+              </div>
+            `,
+            confirmButtonText: "Entendi",
+            width: 600
+          });
+          return;
+        }
+        
+        // Check if it's an address not found error
+        if (errorMsg.includes("Endereço não encontrado") || errorMsg.includes("NOT_FOUND")) {
+          Swal.fire({
+            icon: "error",
+            title: "Endereço não encontrado",
+            html: `
+              <div class="text-left space-y-3">
+                <p class="text-sm">O Google Maps não conseguiu localizar um dos endereços:</p>
+                ${distData.companyAddress ? `
+                  <div class="p-3 bg-blue-50 rounded border-l-4 border-blue-400">
+                    <p class="text-xs font-semibold text-blue-700 mb-1">📍 Endereço da Empresa:</p>
+                    <p class="text-xs text-blue-900">${distData.companyAddress}</p>
+                  </div>
+                ` : ""}
+                ${distData.clientAddress ? `
+                  <div class="p-3 bg-amber-50 rounded border-l-4 border-amber-400">
+                    <p class="text-xs font-semibold text-amber-700 mb-1">📍 Endereço do Cliente:</p>
+                    <p class="text-xs text-amber-900">${distData.clientAddress}</p>
+                  </div>
+                ` : ""}
+                <p class="text-xs text-gray-600 mt-3">
+                  ✏️ <strong>Dica:</strong> Verifique se os endereços estão completos e corretos. 
+                  Endereços incompletos ou com erros de digitação podem não ser encontrados pelo Google Maps.
+                </p>
+                ${!distData.companyAddress || distData.companyAddress.trim() === "" ? `
+                  <p class="text-xs text-red-600 mt-2">
+                    ⚠️ O endereço da empresa não está configurado! Configure em <strong>Configurações</strong>.
+                  </p>
+                ` : ""}
+              </div>
+            `,
+            confirmButtonText: "Entendi",
+            width: 600
+          });
+          return;
+        }
+        
+        Swal.fire("Erro", errorMsg + (errorDetail ? `<br><small>${errorDetail}</small>` : ""), "error");
+        return;
+      }
+      
+      // Update form with travel data
+      setForm((f) => ({
+        ...f,
+        selectedAddress: clientAddress,
+        travelDistanceKm: distData.data.distanceKm,
+        travelPrice: distData.data.travelPrice,
+        travelDescription: distData.data.travelDescription
+      }));
+      
+      // Show success message
+      Swal.fire({
+        icon: "success",
+        title: "Distância Calculada",
+        html: `
+          <div class="text-left space-y-2">
+            <p><strong>Distância:</strong> ${distData.data.distanceText}</p>
+            <p><strong>Tempo estimado:</strong> ${distData.data.durationText}</p>
+            <p><strong>Preço de deslocamento:</strong> R$ ${distData.data.travelPrice.toFixed(2)}</p>
+            <p class="text-sm text-gray-500">${distData.data.travelDescription}</p>
+          </div>
+        `,
+        confirmButtonText: "OK"
+      });
+      
+    } catch (error: any) {
+      console.error("Erro ao calcular distância:", error);
+      Swal.fire("Erro", error.message || "Erro ao calcular distância", "error");
+    } finally {
+      setCalculatingDistance(false);
+    }
   };
 
   const saveJob = async () => {
@@ -624,6 +830,14 @@ export default function JobsPage() {
         clientName,
         status: "pendente"
       };
+      
+      // Include travel/displacement data if calculated
+      if (form.travelDistanceKm && form.travelDistanceKm > 0) {
+        payload.selectedAddress = form.selectedAddress;
+        payload.travelDistanceKm = form.travelDistanceKm;
+        payload.travelPrice = form.travelPrice;
+        payload.travelDescription = form.travelDescription;
+      }
       
       // Only include plannedDate if it has a value (not empty string)
       if (form.plannedDate && form.plannedDate.trim() !== "") {
@@ -2121,8 +2335,50 @@ export default function JobsPage() {
                 return null;
               })()}
             </div>
+
+            {/* Travel/Displacement Section */}
+            <div className="rounded-xl border border-blue-400/30 bg-blue-500/5 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-blue-200">🚗 Deslocamento</h4>
+                {form.clientId && (
+                  <button
+                    type="button"
+                    onClick={calculateTravelPrice}
+                    disabled={calculatingDistance}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {calculatingDistance ? "Calculando..." : "📍 Calcular"}
+                  </button>
+                )}
+              </div>
+              
+              {!form.clientId && (
+                <div className="text-xs text-slate-400">
+                  Selecione um cliente para calcular o deslocamento automaticamente.
+                </div>
+              )}
+              
+              {form.travelDistanceKm > 0 && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Distância:</span>
+                    <span className="text-white font-semibold">{form.travelDistanceKm} km</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Preço:</span>
+                    <span className="text-emerald-300 font-semibold">
+                      R$ {form.travelPrice.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 pt-1 border-t border-blue-400/20">
+                    {form.travelDescription}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="mb-2 text-xs text-slate-400">
-              O valor total é calculado automaticamente a partir dos valores dos serviços individuais.
+              O valor total é calculado automaticamente a partir dos valores dos serviços individuais{form.travelPrice > 0 ? " + deslocamento" : ""}.
             </div>
             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
               <div className="space-y-1 text-sm">
@@ -2520,6 +2776,40 @@ export default function JobsPage() {
                   : "-"}
               </div>
             </div>
+            
+            {/* Travel/Displacement Information */}
+            {selected.travelDistanceKm && selected.travelDistanceKm > 0 && (
+              <>
+                {selected.selectedAddress && (
+                  <div className="sm:col-span-2 rounded-lg border border-blue-400/30 bg-blue-500/5 px-3 py-2 text-sm text-slate-200">
+                    <div className="text-[11px] uppercase text-blue-300 flex items-center gap-1">
+                      <span>📍</span>
+                      Endereço Utilizado
+                    </div>
+                    <div className="text-blue-100 text-xs mt-0.5">{selected.selectedAddress}</div>
+                  </div>
+                )}
+                <div className="rounded-lg border border-blue-400/50 bg-blue-500/10 px-3 py-2 text-sm text-slate-200">
+                  <div className="text-[11px] uppercase text-blue-300 flex items-center gap-1">
+                    <span>🚗</span>
+                    Distância
+                  </div>
+                  <div className="text-blue-100 font-semibold">{selected.travelDistanceKm} km</div>
+                </div>
+                <div className="rounded-lg border border-blue-400/50 bg-blue-500/10 px-3 py-2 text-sm text-slate-200">
+                  <div className="text-[11px] uppercase text-blue-300">Deslocamento</div>
+                  <div className="text-blue-100 font-semibold">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL"
+                    }).format(selected.travelPrice)}
+                  </div>
+                  <div className="text-[10px] text-blue-200/60 mt-0.5">
+                    {selected.travelDescription}
+                  </div>
+                </div>
+              </>
+            )}
             
             {/* Execution Time Information */}
             {(() => {

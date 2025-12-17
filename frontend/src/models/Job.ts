@@ -39,6 +39,11 @@ export interface Job {
   discountPercent?: number;
   discountValue?: number;
   finalValue?: number;
+  // Travel/Displacement fields
+  selectedAddress?: string; // Address used for distance calculation
+  travelDistanceKm?: number;
+  travelPrice?: number;
+  travelDescription?: string;
   cancellationReason?: string;
   received?: boolean;
   receivedAt?: Date;
