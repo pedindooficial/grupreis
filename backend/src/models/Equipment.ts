@@ -1,5 +1,21 @@
 import { Model, Schema, model, models } from "mongoose";
-import type { Equipment } from "../../../../frontend/src/models/Equipment";
+
+export interface Equipment {
+  name: string;
+  type?: "equipamento" | "epi" | "ferramenta";
+  category?: string;
+  patrimony?: string;
+  serialNumber?: string;
+  status?: "ativo" | "inativo";
+  quantity?: number;
+  unit?: string;
+  assignedTo?: string;
+  location?: string;
+  nextMaintenance?: string;
+  notes?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const EquipmentSchema = new Schema<Equipment>(
   {

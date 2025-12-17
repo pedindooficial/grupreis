@@ -1,12 +1,12 @@
 /* eslint-disable react/no-children-prop */
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function LoginPage() {
+function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
 
@@ -113,6 +113,18 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center px-4 py-10">
+        <div className="text-white">Carregando...</div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
 

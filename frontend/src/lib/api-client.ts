@@ -18,9 +18,22 @@ export async function apiFetch(
   options?: RequestInit
 ): Promise<Response> {
   const url = apiUrl(path);
-  const headers: HeadersInit = {
-    ...(options?.headers || {})
-  };
+  const headers: Record<string, string> = {};
+  
+  // Copy existing headers
+  if (options?.headers) {
+    if (options.headers instanceof Headers) {
+      options.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+    } else if (Array.isArray(options.headers)) {
+      options.headers.forEach(([key, value]) => {
+        headers[key] = value;
+      });
+    } else {
+      Object.assign(headers, options.headers);
+    }
+  }
   
   // Don't set Content-Type for FormData, let browser set it with boundary
   if (!(options?.body instanceof FormData)) {

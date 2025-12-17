@@ -1,5 +1,19 @@
 import { Model, Schema, model, models } from "mongoose";
-import type { Cashier, CashierStatus } from "../../../../frontend/src/models/Cashier";
+
+export type CashierStatus = "aberto" | "fechado";
+
+export interface Cashier {
+  status: CashierStatus;
+  openedAt: Date;
+  closedAt?: Date;
+  openingBalance: number;
+  closingBalance?: number;
+  openedBy?: string;
+  closedBy?: string;
+  notes?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const CashierSchema = new Schema<Cashier>(
   {

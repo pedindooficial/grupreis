@@ -9,6 +9,27 @@ declare global {
   interface Window {
     google: any;
   }
+  
+  namespace google {
+    namespace maps {
+      class Map {
+        panTo(latlng: { lat: number; lng: number }): void;
+      }
+      class Marker {
+        setMap(map: Map | null): void;
+      }
+      interface MapMouseEvent {
+        latLng?: {
+          lat(): number;
+          lng(): number;
+        } | null;
+      }
+      enum Animation {
+        DROP = 2,
+        BOUNCE = 1
+      }
+    }
+  }
 }
 
 // Google Maps API Key

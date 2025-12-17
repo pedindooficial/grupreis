@@ -1,5 +1,61 @@
 import { Model, Schema, Types, model, models } from "mongoose";
-import type { Job, JobService } from "../../../../frontend/src/models/Job";
+
+type JobStatus = "pendente" | "em_execucao" | "concluida" | "cancelada";
+
+export interface JobService {
+  catalogId?: Types.ObjectId | string;
+  service: string;
+  localType?: string;
+  soilType?: string;
+  access?: string;
+  sptInfo?: string;
+  sptFileName?: string;
+  categories?: string[];
+  diametro?: string;
+  profundidade?: string;
+  quantidade?: string;
+  observacoes?: string;
+  value?: number;
+  discountPercent?: number;
+  discountValue?: number;
+  finalValue?: number;
+  executionTime?: number;
+}
+
+export interface Job {
+  title: string;
+  seq?: number;
+  clientId?: Types.ObjectId | null;
+  clientName?: string;
+  site?: string;
+  siteLatitude?: number;
+  siteLongitude?: number;
+  team?: string;
+  status: JobStatus;
+  plannedDate?: string;
+  estimatedDuration?: number;
+  startedAt?: string;
+  finishedAt?: string;
+  notes?: string;
+  value?: number;
+  discountPercent?: number;
+  discountValue?: number;
+  finalValue?: number;
+  selectedAddress?: string;
+  travelDistanceKm?: number;
+  travelPrice?: number;
+  travelDescription?: string;
+  cancellationReason?: string;
+  received?: boolean;
+  receivedAt?: Date;
+  receipt?: string;
+  receiptFileKey?: string;
+  clientSignature?: string;
+  clientSignedAt?: Date;
+  services: JobService[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const JobServiceSchema = new Schema<JobService>(
   {

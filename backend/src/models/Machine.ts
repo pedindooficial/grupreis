@@ -1,5 +1,43 @@
-import { Model, Schema, model, models } from "mongoose";
-import type { Machine } from "../../../../frontend/src/models/Machine";
+import { Model, Schema, Types, model, models } from "mongoose";
+
+export interface Machine {
+  name: string;
+  plate?: string;
+  model?: string;
+  year?: number;
+  chassi?: string;
+  renavam?: string;
+  category?: string;
+  ownerCompany?: string;
+  internalCode?: string;
+  fuelType?: string;
+  fuelAverage?: number;
+  fuelUnit?: string;
+  tankCapacityL?: number;
+  consumptionKmPerL?: number;
+  useType?: "leve" | "medio" | "pesado";
+  autonomyEstimated?: number;
+  hourmeterStart?: number;
+  odometerKm?: number;
+  weightKg?: number;
+  loadCapacityKg?: number;
+  status?: "ativa" | "inativa";
+  statusOperational?: "operando" | "manutencao" | "parada" | "inativa";
+  lastMaintenance?: string;
+  maintenanceType?: "preventiva" | "corretiva";
+  maintenanceVendor?: string;
+  maintenanceCostAvg?: number;
+  requiredLicense?: string;
+  mandatoryTraining?: boolean;
+  checklistRequired?: boolean;
+  lastInspection?: string;
+  laudoValidity?: string;
+  operatorId?: Types.ObjectId | null;
+  operatorName?: string;
+  notes?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const MachineSchema = new Schema<Machine>(
   {

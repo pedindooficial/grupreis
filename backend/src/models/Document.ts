@@ -1,5 +1,28 @@
 import { Model, Schema, Types, model, models } from "mongoose";
-import type { Document, DocumentType, DocumentStatus } from "../../../../frontend/src/models/Document";
+
+export type DocumentType = "contrato" | "proposta" | "nota_fiscal" | "recibo" | "outro";
+export type DocumentStatus = "pendente" | "assinado" | "cancelado" | "arquivado";
+
+export interface Document {
+  _id?: Types.ObjectId | string;
+  title: string;
+  type: DocumentType;
+  status: DocumentStatus;
+  description?: string;
+  clientId?: Types.ObjectId | string | null;
+  clientName?: string;
+  jobId?: Types.ObjectId | string | null;
+  jobTitle?: string;
+  fileKey: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  signedAt?: Date | string;
+  expiresAt?: Date | string;
+  notes?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
 
 const DocumentSchema = new Schema<Document>(
   {

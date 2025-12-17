@@ -1,9 +1,25 @@
-import { Model, Schema, model, models } from "mongoose";
-import type {
-  CashTransaction,
-  TransactionType,
-  PaymentMethod
-} from "../../../../frontend/src/models/CashTransaction";
+import { Model, Schema, Types, model, models } from "mongoose";
+
+export type TransactionType = "entrada" | "saida";
+export type PaymentMethod = "dinheiro" | "pix" | "transferencia" | "cartao" | "cheque" | "outro";
+
+export interface CashTransaction {
+  type: TransactionType;
+  amount: number;
+  description: string;
+  date: string;
+  clientId?: Types.ObjectId | null;
+  clientName?: string;
+  jobId?: Types.ObjectId | null;
+  jobTitle?: string;
+  paymentMethod: PaymentMethod;
+  category?: string;
+  notes?: string;
+  receiptFileKey?: string;
+  cashierId?: Types.ObjectId | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const CashTransactionSchema = new Schema<CashTransaction>(
   {

@@ -140,11 +140,11 @@ export default function OperationPublicPage({ params }: { params: { token: strin
     if (dateFilter === "all") return assignedJobs;
     
     const matchesDateFilter = (dateString: string | undefined): boolean => {
-      if (!dateString) return dateFilter === "all";
+      if (!dateString) return true; // Include jobs without date when filtering
       
       try {
         const jobDate = new Date(dateString);
-        if (isNaN(jobDate.getTime())) return dateFilter === "all";
+        if (isNaN(jobDate.getTime())) return true; // Include invalid dates when filtering
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -174,7 +174,7 @@ export default function OperationPublicPage({ params }: { params: { token: strin
             return true;
         }
       } catch {
-        return dateFilter === "all";
+        return true; // Include on error when filtering
       }
     };
     
@@ -182,12 +182,13 @@ export default function OperationPublicPage({ params }: { params: { token: strin
   }, [assignedJobs, dateFilter, data]);
 
   // Helper function to check if a date matches the filter
+  // Note: This function is only called when dateFilter !== "all"
   const matchesDateFilter = useCallback((dateString: string | undefined): boolean => {
-    if (!dateString) return dateFilter === "all";
+    if (!dateString) return true; // Include jobs without date when filtering
     
     try {
       const jobDate = new Date(dateString);
-      if (isNaN(jobDate.getTime())) return dateFilter === "all";
+      if (isNaN(jobDate.getTime())) return true; // Include invalid dates when filtering
       
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -217,7 +218,7 @@ export default function OperationPublicPage({ params }: { params: { token: strin
           return true;
       }
     } catch {
-      return dateFilter === "all";
+      return true; // Include on error when filtering
     }
   }, [dateFilter]);
 

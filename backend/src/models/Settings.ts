@@ -1,5 +1,20 @@
 import { Model, Schema, model, models } from "mongoose";
-import type { Settings } from "../../../../src/models/Settings";
+
+export interface Settings {
+  companyName?: string;
+  headquartersAddress?: string;
+  headquartersStreet?: string;
+  headquartersNumber?: string;
+  headquartersNeighborhood?: string;
+  headquartersCity?: string;
+  headquartersState?: string;
+  headquartersZip?: string;
+  phone?: string;
+  email?: string;
+  companySignature?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const SettingsSchema = new Schema<Settings>(
   {

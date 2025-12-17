@@ -1,5 +1,37 @@
-import { Model, Schema, model, models } from "mongoose";
-import type { Employee, FileRef } from "../../../../frontend/src/models/Employee";
+import { Model, Schema, Types, model, models } from "mongoose";
+
+export interface FileRef {
+  name: string;
+  mime: string;
+  size: number;
+  data: string;
+}
+
+export interface Employee {
+  name: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+  document?: string;
+  docRg?: string;
+  docCnh?: string;
+  docAddressProof?: string;
+  docCv?: string;
+  docRgFile?: FileRef;
+  docCnhFile?: FileRef;
+  docAddressProofFile?: FileRef;
+  docCvFile?: FileRef;
+  status?: "ativo" | "inativo";
+  hireDate?: string;
+  salary?: number;
+  teamId?: Types.ObjectId | null;
+  teamName?: string;
+  machineId?: Types.ObjectId | null;
+  machineName?: string;
+  notes?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const FileRefSchema = new Schema<FileRef>(
   {

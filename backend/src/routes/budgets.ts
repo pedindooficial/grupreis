@@ -355,7 +355,7 @@ router.get("/:id/pdf", async (req, res) => {
     if (budget.validUntil) {
       doc.text(`Válido até: ${new Date(budget.validUntil).toLocaleDateString("pt-BR")}`);
     }
-    doc.text(`Status: ${budget.status.toUpperCase()}`);
+    doc.text(`Status: ${(budget.status || "pendente").toUpperCase()}`);
     doc.moveDown();
 
     // Services table

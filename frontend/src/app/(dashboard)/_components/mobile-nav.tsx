@@ -22,7 +22,7 @@ export default function MobileNav({ items }: { items: NavItem[] }) {
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={item.href as any}
             className={`flex flex-col items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
               isActive
                 ? "text-emerald-300 bg-emerald-500/10"

@@ -1,5 +1,17 @@
 import { Model, Schema, model, models } from "mongoose";
-import type { Team } from "../../../../frontend/src/models/Team";
+
+export interface Team {
+  _id?: string;
+  name: string;
+  status?: "ativa" | "inativa";
+  leader?: string;
+  members: string[];
+  notes?: string;
+  operationToken?: string;
+  operationPass?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const TeamSchema = new Schema<Team>(
   {

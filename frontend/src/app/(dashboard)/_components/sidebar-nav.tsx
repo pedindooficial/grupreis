@@ -25,7 +25,7 @@ export default function SidebarNav({ items }: { items: NavItem[] }) {
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={item.href as any}
             className={`flex items-center gap-3 rounded-lg px-3 py-2 transition ${
               isActive
                 ? "bg-emerald-500/20 border border-emerald-400/30 text-white"

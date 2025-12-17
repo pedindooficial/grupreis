@@ -76,7 +76,17 @@ router.post("/calculate", async (req, res) => {
     console.log("URL Google Maps:", url);
     
     const response = await fetch(url);
-    const data = await response.json();
+    const data = await response.json() as {
+      status: string;
+      error_message?: string;
+      rows?: Array<{
+        elements: Array<{
+          status: string;
+          distance?: { value: number; text: string };
+          duration?: { value: number; text: string };
+        }>;
+      }>;
+    };
     
     console.log("Resposta Google Maps:", JSON.stringify(data, null, 2));
 
@@ -97,7 +107,7 @@ router.post("/calculate", async (req, res) => {
       });
     }
 
-    const element = data.rows[0]?.elements[0];
+    const element = data.rows?.[0]?.elements?.[0];
     console.log("Elemento da rota:", element);
     
     if (!element || element.status !== "OK") {
@@ -126,6 +136,13 @@ router.post("/calculate", async (req, res) => {
     }
 
     // Distance in meters, convert to km
+    if (!element.distance || !element.duration) {
+      return res.status(400).json({
+        error: "Não foi possível calcular a distância",
+        detail: "Dados incompletos da API do Google Maps"
+      });
+    }
+    
     const distanceMeters = element.distance.value;
     const distanceKm = Math.round(distanceMeters / 1000); // Round to nearest km
     const durationSeconds = element.duration.value;
@@ -181,7 +198,7 @@ router.post("/calculate", async (req, res) => {
     res.json({
       data: {
         distanceKm,
-        distanceText: element.distance.text,
+        distanceText: element.distance?.text || `${distanceKm} km`,
         durationSeconds,
         durationText,
         travelPrice,
@@ -226,7 +243,18 @@ router.post("/geocode", async (req, res) => {
     console.log("Calling Google Geocoding API:", url);
     
     const response = await fetch(url);
-    const data = await response.json();
+    const data = await response.json() as {
+      status: string;
+      error_message?: string;
+      results?: Array<{
+        formatted_address: string;
+        address_components: Array<{
+          long_name: string;
+          short_name: string;
+          types: string[];
+        }>;
+      }>;
+    };
     
     console.log("Google Geocoding response status:", data.status);
     

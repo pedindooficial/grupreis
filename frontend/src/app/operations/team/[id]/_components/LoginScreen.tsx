@@ -6,7 +6,7 @@ interface LoginScreenProps {
   password: string;
   setPassword: (password: string) => void;
   showPass: boolean;
-  setShowPass: (show: boolean) => void;
+  setShowPass: (show: boolean | ((prev: boolean) => boolean)) => void;
   authLoading: boolean;
   onLogin: () => void;
 }

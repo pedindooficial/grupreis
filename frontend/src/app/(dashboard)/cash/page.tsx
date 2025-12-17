@@ -688,7 +688,8 @@ export default function CashPage() {
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {Object.entries(paymentStats).map(([method, stats]) => {
                 const methodLabel = PAYMENT_METHODS.find((p) => p.value === method)?.label || method;
-                const saldo = stats.entrada - stats.saida;
+                const statsTyped = stats as { entrada: number; saida: number };
+                const saldo = statsTyped.entrada - statsTyped.saida;
                 return (
                   <div
                     key={method}
@@ -698,11 +699,11 @@ export default function CashPage() {
                     <div className="mt-2 space-y-1 text-xs">
                       <div className="flex justify-between text-emerald-300">
                         <span>Entradas:</span>
-                        <span>{formatCurrency(stats.entrada)}</span>
+                        <span>{formatCurrency(statsTyped.entrada)}</span>
                       </div>
                       <div className="flex justify-between text-red-300">
                         <span>Saídas:</span>
-                        <span>{formatCurrency(stats.saida)}</span>
+                        <span>{formatCurrency(statsTyped.saida)}</span>
                       </div>
                       <div className="flex justify-between border-t border-white/10 pt-1 text-slate-200">
                         <span>Saldo:</span>

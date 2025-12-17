@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import type { Session } from "next-auth";
 import "@/app/globals.css";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import SidebarAvatar from "./_components/sidebar-avatar";
 import SidebarNav from "./_components/sidebar-nav";
 import MobileNav from "./_components/mobile-nav";
