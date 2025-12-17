@@ -4,7 +4,7 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === "development"
     ? "https://localhost:4000/api"
-    : "https://your-backend-placeholder-url.com/api");
+    : "https://api.reisfundacoes.com/api");
 
 export function apiUrl(path: string) {
   if (path.startsWith("http://") || path.startsWith("https://")) {

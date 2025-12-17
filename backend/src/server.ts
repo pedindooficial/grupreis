@@ -64,12 +64,14 @@ app.use("/api/budgets", budgetsRouter);
 app.use("/api/travel-pricing", travelPricingRouter);
 app.use("/api/distance", distanceRouter);
 
-// Try to use HTTPS if certificates exist, otherwise fall back to HTTP
+// Use HTTPS with self-signed certs only in development
+// Production should use HTTP behind reverse proxy (Nginx) with proper SSL
+const isDevelopment = process.env.NODE_ENV !== 'production';
 const certsPath = path.join(__dirname, "..", "..", "certs");
 const keyPath = path.join(certsPath, "localhost-key.pem");
 const certPath = path.join(certsPath, "localhost.pem");
 
-if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+if (isDevelopment && fs.existsSync(keyPath) && fs.existsSync(certPath)) {
   const httpsOptions = {
     key: fs.readFileSync(keyPath),
     cert: fs.readFileSync(certPath)
@@ -78,12 +80,19 @@ if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
   https.createServer(httpsOptions, app).listen(PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`🔒 Backend HTTPS server running on https://localhost:${PORT}`);
+    console.log(`   Environment: development`);
   });
 } else {
   app.listen(PORT, () => {
     // eslint-disable-next-line no-console
-    console.log(`⚠️  Backend HTTP server running on http://localhost:${PORT}`);
-    console.log(`   (HTTPS certificates not found at ${certsPath})`);
+    if (isDevelopment) {
+      console.log(`⚠️  Backend HTTP server running on http://localhost:${PORT}`);
+      console.log(`   (HTTPS certificates not found at ${certsPath})`);
+    } else {
+      console.log(`✅ Backend server running on port ${PORT}`);
+      console.log(`   Environment: production`);
+      console.log(`   Note: Should be behind reverse proxy (nginx) with SSL`);
+    }
   });
 }
 

@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "set NEXT_PUBLIC_API_URL=https://localhost:4000/api&& node server.js",
     "dev:http": "set NEXT_PUBLIC_API_URL=http://localhost:4000/api&& next dev",
-    "build": "set NEXT_PUBLIC_API_URL=https://your-backend-placeholder-url.com/api&& next build",
+    "build": "next build",
     "build:dev": "set NEXT_PUBLIC_API_URL=https://localhost:4000/api&& next build",
-    "build:prod": "set NEXT_PUBLIC_API_URL=https://your-backend-placeholder-url.com/api&& next build",
+    "build:prod": "next build",
     "start": "next start",
     "lint": "next lint"
   },

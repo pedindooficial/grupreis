@@ -5,11 +5,7 @@ const bodySchema = z.object({
   password: z.string().min(4, "Senha obrigatória")
 });
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "development"
-    ? "http://localhost:4000/api"
-    : "https://your-backend-placeholder-url.com/api");
+import { backendFetch } from "@/lib/backend-fetch";
 
 export async function POST(
   req: Request,
@@ -25,9 +21,8 @@ export async function POST(
       );
     }
 
-    // Call backend API instead of accessing database directly
-    const backendUrl = `${API_BASE}/operations/${params.token}`;
-    const backendRes = await fetch(backendUrl, {
+    // Call backend API - legacy token-based route
+    const backendRes = await backendFetch(`/operations/${params.token}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"

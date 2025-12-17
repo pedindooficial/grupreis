@@ -5,7 +5,7 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === "development"
     ? "https://localhost:4000/api"
-    : "https://your-backend-placeholder-url.com/api");
+    : "https://api.reisfundacoes.com/api");
 
 // Custom fetch that uses https module for self-signed certs in development
 export async function backendFetch(
