@@ -18,6 +18,9 @@ import usersRouter from "./routes/users";
 import auditRouter from "./routes/audit";
 import catalogRouter from "./routes/catalog";
 import locationCaptureRouter from "./routes/location-capture";
+import budgetsRouter from "./routes/budgets";
+import travelPricingRouter from "./routes/travel-pricing";
+import distanceRouter from "./routes/distance";
 
 const app = express();
 
@@ -54,6 +57,9 @@ app.use("/api/users", usersRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/location-capture", locationCaptureRouter);
+app.use("/api/budgets", budgetsRouter);
+app.use("/api/travel-pricing", travelPricingRouter);
+app.use("/api/distance", distanceRouter);
 
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console

@@ -33,6 +33,20 @@ export default function SettingsPage() {
     active: true
   });
 
+  // Travel Pricing States
+  const [travelPricings, setTravelPricings] = useState<any[]>([]);
+  const [travelPricingMode, setTravelPricingMode] = useState<"list" | "form">("list");
+  const [editingTravelPricingId, setEditingTravelPricingId] = useState<string | null>(null);
+  const [travelPricingForm, setTravelPricingForm] = useState({
+    upToKm: "",
+    pricePerKm: "",
+    fixedPrice: "",
+    type: "per_km" as "per_km" | "fixed",
+    description: "",
+    roundTrip: true,
+    order: 0
+  });
+
   const [form, setForm] = useState({
     companyName: "",
     headquartersAddress: "",
@@ -79,6 +93,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (isAdmin) {
       loadUsers();
+      loadTravelPricings();
     }
   }, [isAdmin]);
 
@@ -237,6 +252,150 @@ export default function SettingsPage() {
     } catch (err) {
       console.error(err);
       Swal.fire("Erro", "Falha ao excluir usuário.", "error");
+    }
+  };
+
+  // Travel Pricing Functions
+  const loadTravelPricings = async () => {
+    try {
+      const res = await apiFetch("/travel-pricing", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.data) {
+        setTravelPricings(Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (err) {
+      console.error("Error loading travel pricings:", err);
+      setTravelPricings([]);
+    }
+  };
+
+  const handleTravelPricingSubmit = async () => {
+    if (saving) return;
+
+    if (!travelPricingForm.description.trim()) {
+      Swal.fire("Atenção", "Informe uma descrição.", "warning");
+      return;
+    }
+
+    if (travelPricingForm.type === "per_km" && !travelPricingForm.pricePerKm) {
+      Swal.fire("Atenção", "Informe o preço por km.", "warning");
+      return;
+    }
+
+    if (travelPricingForm.type === "fixed" && !travelPricingForm.fixedPrice) {
+      Swal.fire("Atenção", "Informe o preço fixo.", "warning");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const payload: any = {
+        description: travelPricingForm.description.trim(),
+        type: travelPricingForm.type,
+        roundTrip: travelPricingForm.roundTrip,
+        order: travelPricingForm.order
+      };
+
+      // upToKm can be null for "any distance" pricing
+      if (travelPricingForm.upToKm && travelPricingForm.upToKm.trim() !== "") {
+        payload.upToKm = parseFloat(travelPricingForm.upToKm);
+      } else {
+        payload.upToKm = null;
+      }
+
+      if (travelPricingForm.type === "per_km" && travelPricingForm.pricePerKm) {
+        payload.pricePerKm = parseFloat(travelPricingForm.pricePerKm);
+      }
+
+      if (travelPricingForm.type === "fixed" && travelPricingForm.fixedPrice) {
+        payload.fixedPrice = parseFloat(travelPricingForm.fixedPrice);
+      }
+
+      const res = editingTravelPricingId
+        ? await apiFetch(`/travel-pricing/${editingTravelPricingId}`, {
+            method: "PUT",
+            body: JSON.stringify(payload)
+          })
+        : await apiFetch("/travel-pricing", {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        Swal.fire("Erro", data?.error || "Não foi possível salvar preço.", "error");
+        return;
+      }
+
+      Swal.fire("Sucesso", editingTravelPricingId ? "Preço atualizado com sucesso." : "Preço criado com sucesso.", "success");
+      resetTravelPricingForm();
+      loadTravelPricings();
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Erro", "Falha ao salvar preço.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetTravelPricingForm = () => {
+    setTravelPricingForm({
+      upToKm: "",
+      pricePerKm: "",
+      fixedPrice: "",
+      type: "per_km",
+      description: "",
+      roundTrip: true,
+      order: 0
+    });
+    setEditingTravelPricingId(null);
+    setTravelPricingMode("list");
+  };
+
+  const handleEditTravelPricing = (pricing: any) => {
+    setTravelPricingForm({
+      upToKm: pricing.upToKm ? pricing.upToKm.toString() : "",
+      pricePerKm: pricing.pricePerKm ? pricing.pricePerKm.toString() : "",
+      fixedPrice: pricing.fixedPrice ? pricing.fixedPrice.toString() : "",
+      type: pricing.type || "per_km",
+      description: pricing.description || "",
+      roundTrip: pricing.roundTrip !== undefined ? pricing.roundTrip : true,
+      order: pricing.order || 0
+    });
+    setEditingTravelPricingId(pricing._id);
+    setTravelPricingMode("form");
+  };
+
+  const handleDeleteTravelPricing = async (pricingId: string) => {
+    const result = await Swal.fire({
+      title: "Confirmar exclusão",
+      text: "Deseja realmente excluir este preço?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Sim, excluir",
+      cancelButtonText: "Cancelar"
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const res = await apiFetch(`/travel-pricing/${pricingId}`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        Swal.fire("Erro", data?.error || "Não foi possível excluir preço.", "error");
+        return;
+      }
+
+      setTravelPricings((prev) => prev.filter((p) => p._id !== pricingId));
+      Swal.fire("Sucesso", "Preço excluído com sucesso.", "success");
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Erro", "Falha ao excluir preço.", "error");
     }
   };
 
@@ -612,6 +771,216 @@ export default function SettingsPage() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Travel Pricing - Only for Admins */}
+      {isAdmin && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white mb-2">🚗 Preços de Deslocamento</h2>
+              <p className="text-xs text-slate-400">
+                Configure os preços de deslocamento padrão com base na distância.
+              </p>
+            </div>
+            {travelPricingMode === "list" && (
+              <button
+                onClick={() => setTravelPricingMode("form")}
+                className="px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 transition"
+              >
+                + Novo Preço
+              </button>
+            )}
+          </div>
+
+          {travelPricingMode === "form" ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1 text-sm md:col-span-2">
+                  <label className="text-slate-200">Descrição *</label>
+                  <input
+                    value={travelPricingForm.description}
+                    onChange={(e) => setTravelPricingForm((f) => ({ ...f, description: e.target.value }))}
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    placeholder="Ex: Até 50km, Acima de 100km, Deslocamento padrão, etc."
+                  />
+                </div>
+
+                <div className="space-y-1 text-sm">
+                  <label className="text-slate-200">Tipo de Preço *</label>
+                  <select
+                    value={travelPricingForm.type}
+                    onChange={(e) => setTravelPricingForm((f) => ({ ...f, type: e.target.value as "per_km" | "fixed" }))}
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  >
+                    <option value="per_km">Por Km</option>
+                    <option value="fixed">Preço Fixo</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1 text-sm md:col-span-2">
+                  <label className="text-slate-200 flex items-center gap-2">
+                    Até (Km)
+                    {travelPricingForm.type === "fixed" && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/50">
+                        Opcional
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    value={travelPricingForm.upToKm}
+                    onChange={(e) => setTravelPricingForm((f) => ({ ...f, upToKm: e.target.value }))}
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    placeholder={travelPricingForm.type === "fixed" 
+                      ? "Deixe vazio para aplicar a qualquer distância" 
+                      : "Ex: 50, 100, etc."
+                    }
+                    min="0"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    {travelPricingForm.type === "fixed" 
+                      ? "💡 Deixe vazio para criar um preço fixo válido para qualquer quilometragem"
+                      : "Ex: 50 (até 50km), 100 (até 100km), ou deixe vazio para acima de X km"
+                    }
+                  </p>
+                </div>
+
+                {travelPricingForm.type === "per_km" && (
+                  <div className="space-y-1 text-sm">
+                    <label className="text-slate-200">Preço por Km (R$) *</label>
+                    <input
+                      type="number"
+                      value={travelPricingForm.pricePerKm}
+                      onChange={(e) => setTravelPricingForm((f) => ({ ...f, pricePerKm: e.target.value }))}
+                      className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                      placeholder="Ex: 3.50"
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+                )}
+
+                {travelPricingForm.type === "fixed" && (
+                  <div className="space-y-1 text-sm">
+                    <label className="text-slate-200">Preço Fixo (R$) *</label>
+                    <input
+                      type="number"
+                      value={travelPricingForm.fixedPrice}
+                      onChange={(e) => setTravelPricingForm((f) => ({ ...f, fixedPrice: e.target.value }))}
+                      className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                      placeholder="Ex: 350.00"
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-1 text-sm">
+                  <label className="text-slate-200">Ordem</label>
+                  <input
+                    type="number"
+                    value={travelPricingForm.order}
+                    onChange={(e) => setTravelPricingForm((f) => ({ ...f, order: parseInt(e.target.value) || 0 }))}
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    placeholder="0"
+                    min="0"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    id="roundTrip"
+                    checked={travelPricingForm.roundTrip}
+                    onChange={(e) => setTravelPricingForm((f) => ({ ...f, roundTrip: e.target.checked }))}
+                    className="w-4 h-4 rounded border border-white/10 bg-slate-900/60"
+                  />
+                  <label htmlFor="roundTrip" className="text-slate-200 cursor-pointer">
+                    Ida e Volta
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4 border-t border-white/10">
+                <button
+                  onClick={resetTravelPricingForm}
+                  className="flex-1 px-4 py-2 rounded-lg border border-white/10 bg-slate-900/60 text-slate-200 font-semibold hover:bg-slate-800/60 transition"
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleTravelPricingSubmit}
+                  className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 transition disabled:opacity-50"
+                  disabled={saving}
+                >
+                  {saving ? "Salvando..." : editingTravelPricingId ? "Atualizar" : "Salvar"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {travelPricings.length === 0 ? (
+                <p className="text-slate-300 text-center py-8">Nenhum preço de deslocamento cadastrado.</p>
+              ) : (
+                <div className="space-y-2">
+                  {travelPricings.map((pricing) => (
+                    <div
+                      key={pricing._id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-white/10 bg-slate-900/30"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-white">{pricing.description}</span>
+                          {pricing.roundTrip && (
+                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/50">
+                              Ida e Volta
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-400">
+                          {pricing.type === "per_km" ? (
+                            <>
+                              {pricing.upToKm ? `Até ${pricing.upToKm}km` : "Acima de X km"} • 
+                              <span className="text-emerald-300 font-semibold ml-1">
+                                R$ {pricing.pricePerKm?.toFixed(2)}/km
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              {pricing.upToKm 
+                                ? `Até ${pricing.upToKm}km` 
+                                : <span className="text-blue-300 font-medium">Qualquer distância</span>
+                              } • 
+                              <span className="text-emerald-300 font-semibold ml-1">
+                                R$ {pricing.fixedPrice?.toFixed(2)} (fixo)
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditTravelPricing(pricing)}
+                          className="px-3 py-1 rounded text-xs font-semibold border border-yellow-500/50 bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 transition"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTravelPricing(pricing._id)}
+                          className="px-3 py-1 rounded text-xs font-semibold border border-red-500/50 bg-red-500/20 text-red-300 hover:bg-red-500/30 transition"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

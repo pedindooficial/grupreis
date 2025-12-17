@@ -819,7 +819,16 @@ export default function CashPage() {
                             {t.type === "entrada" ? "Entrada" : "Saída"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-white">{t.description || "-"}</td>
+                        <td className="px-4 py-3 text-white">
+                          <div className="flex items-center gap-2">
+                            <span>{t.description || "-"}</span>
+                            {t.receiptFileKey && (
+                              <span className="text-blue-400" title="Comprovante anexado">
+                                📎
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-slate-200">
                           {t.clientName || "-"}
                         </td>
@@ -1088,6 +1097,32 @@ export default function CashPage() {
               <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 sm:col-span-2">
                 <div className="text-[11px] uppercase text-slate-400">Observações</div>
                 <div className="text-white">{selected.notes}</div>
+              </div>
+            )}
+
+            {selected.receiptFileKey && (
+              <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2 text-sm text-slate-200 sm:col-span-2">
+                <div className="text-[11px] uppercase text-blue-300 mb-2 flex items-center gap-1">
+                  📎 Comprovante Anexado
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+                      const downloadUrl = `${apiUrl}/api/s3/download/${selected.receiptFileKey}`;
+                      window.open(downloadUrl, "_blank");
+                    } catch (err) {
+                      console.error("Erro ao baixar comprovante:", err);
+                      Swal.fire("Erro", "Não foi possível baixar o comprovante", "error");
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-400/50 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-300 transition hover:border-blue-400 hover:bg-blue-500/30"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Baixar Comprovante
+                </button>
               </div>
             )}
           </div>

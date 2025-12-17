@@ -85,6 +85,23 @@ router.get("/", async (_req, res) => {
   }
 });
 
+// GET single client by ID
+router.get("/:id", async (req, res) => {
+  try {
+    await connectDB();
+    const client = await ClientModel.findById(req.params.id).lean();
+    if (!client) {
+      return res.status(404).json({ error: "Cliente não encontrado" });
+    }
+    res.json({ data: client });
+  } catch (error: any) {
+    console.error("GET /clients/:id error", error);
+    res
+      .status(500)
+      .json({ error: "Falha ao buscar cliente", detail: error?.message });
+  }
+});
+
 router.post("/", async (req, res) => {
   try {
     const parsed = clientSchema.safeParse(req.body);

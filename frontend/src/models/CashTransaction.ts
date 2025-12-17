@@ -15,6 +15,7 @@ export interface CashTransaction {
   paymentMethod: PaymentMethod;
   category?: string;
   notes?: string;
+  receiptFileKey?: string; // S3 file key for receipt
   cashierId?: Types.ObjectId | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -71,6 +72,10 @@ const CashTransactionSchema = new Schema<CashTransaction>(
       trim: true
     },
     notes: {
+      type: String,
+      trim: true
+    },
+    receiptFileKey: {
       type: String,
       trim: true
     },

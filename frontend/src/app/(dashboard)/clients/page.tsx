@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { apiFetch } from "@/lib/api-client";
+import BudgetManager from "@/components/BudgetManager";
 
 type PersonType = "cpf" | "cnpj";
 
@@ -93,7 +94,10 @@ export default function ClientsPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingAddressIndex, setEditingAddressIndex] = useState<number | null | -1>(null);
-  
+
+  const [budgetMode, setBudgetMode] = useState<"list" | "form" | null>(null);
+  const [budgets, setBudgets] = useState<any[]>([]);
+  const [selectedBudget, setSelectedBudget] = useState<any | null>(null);
   const emptyAddress = {
     label: "",
     address: "",
@@ -172,6 +176,7 @@ export default function ClientsPage() {
   useEffect(() => {
     if (selectedClient) {
       setEditing(false);
+      setBudgetMode(null);
       const personType = (selectedClient.personType || "cpf") as PersonType;
       const rawDocNumber = (selectedClient.docNumber || "").replace(/\D/g, "");
       const formattedDocNumber = personType === "cpf" ? formatCPF(rawDocNumber) : formatCNPJ(rawDocNumber);
@@ -226,8 +231,23 @@ export default function ClientsPage() {
         email: selectedClient.email || "",
         addresses
       });
+
+      // Load client budgets
+      loadClientBudgets(selectedClient._id);
     }
   }, [selectedClient]);
+
+  const loadClientBudgets = async (clientId: string) => {
+    try {
+      const res = await apiFetch(`/budgets/client/${clientId}`, { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        setBudgets(data?.data || []);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar orçamentos:", err);
+    }
+  };
 
   const openNewClient = () => {
     setMode("select");
@@ -1158,7 +1178,13 @@ export default function ClientsPage() {
             
             {/* Conteúdo scrollável */}
             <div className="flex-1 overflow-y-auto p-6 pt-4">
-            {editing ? (
+            {budgetMode ? (
+              <BudgetManager
+                clientId={selectedClient._id}
+                clientName={selectedClient.name}
+                onClose={() => setBudgetMode(null)}
+              />
+            ) : editing ? (
               <>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1 text-sm">
@@ -1282,7 +1308,6 @@ export default function ClientsPage() {
                     ))}
                   </div>
                 )}
-
                 {/* Formulário de novo/editar endereço */}
                 {(editingAddressIndex !== null || editForm.addresses.length === 0) && (
                   <div className="space-y-3 rounded-lg border border-emerald-400/30 bg-emerald-500/5 p-3">
@@ -1500,7 +1525,7 @@ export default function ClientsPage() {
                     )}
                   </div>
                 </div>
-            )}
+              )}
             </div>
 
             {/* Footer fixo com botões */}
@@ -1511,7 +1536,14 @@ export default function ClientsPage() {
               >
                 Fechar
               </button>
-              {editing ? (
+              {budgetMode ? (
+                <button
+                  onClick={() => setBudgetMode(null)}
+                  className="rounded-md border border-white/10 bg-white/5 px-3 py-2 font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+                >
+                  Voltar
+                </button>
+              ) : editing ? (
                 <>
                   <button
                     onClick={() => setEditing(false)}
@@ -1528,6 +1560,12 @@ export default function ClientsPage() {
                 </>
               ) : (
                 <>
+                  <button
+                    onClick={() => setBudgetMode("form")}
+                    className="rounded-md border border-blue-400/50 bg-blue-500/20 px-3 py-2 font-semibold text-blue-50 transition hover:border-blue-300/50 hover:bg-blue-500/30"
+                  >
+                    💰 Fazer Orçamento
+                  </button>
                   <button
                     onClick={() => setEditing(true)}
                     className="rounded-md border border-white/10 bg-emerald-500/20 px-3 py-2 font-semibold text-emerald-50 transition hover:border-emerald-300/50 hover:bg-emerald-500/30"

@@ -59,6 +59,10 @@ const CashTransactionSchema = new Schema<CashTransaction>(
       type: String,
       trim: true
     },
+    receiptFileKey: {
+      type: String,
+      trim: true
+    },
     cashierId: {
       type: Schema.Types.ObjectId,
       ref: "Cashier",

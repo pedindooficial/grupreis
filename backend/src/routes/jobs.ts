@@ -766,6 +766,7 @@ router.post("/:id/received", async (req, res) => {
               paymentMethod: parsed.data.paymentMethod,
               category: "Pagamento de Serviço",
               notes: `Recebimento da OS ${job.seq ? String(job.seq).padStart(6, "0") : ""} - ${job.title}`,
+              receiptFileKey: parsed.data.receiptFileKey || undefined,
               cashierId: openCashier._id
             }
           ],
