@@ -322,6 +322,8 @@ router.post("/", async (req, res) => {
 
     let clientName = parsed.data.clientName?.trim();
     let site = parsed.data.site?.trim() || "";
+    let siteLatitude: number | undefined;
+    let siteLongitude: number | undefined;
     let clientId: string | null = parsed.data.clientId || null;
 
     if (clientId) {
@@ -329,6 +331,18 @@ router.post("/", async (req, res) => {
       if (client) {
         clientName = client.name || clientName;
         if (!site) site = client.address || "";
+        
+        // Try to find coordinates from client's addresses
+        if (client.addresses && Array.isArray(client.addresses) && client.addresses.length > 0) {
+          // Find the address that matches the site
+          const matchingAddress = client.addresses.find((addr: any) => 
+            addr.address === site || addr.address === parsed.data.site
+          );
+          if (matchingAddress && matchingAddress.latitude && matchingAddress.longitude) {
+            siteLatitude = matchingAddress.latitude;
+            siteLongitude = matchingAddress.longitude;
+          }
+        }
       }
     }
 
@@ -396,6 +410,8 @@ router.post("/", async (req, res) => {
       clientId: clientId || undefined,
       clientName,
       site,
+      siteLatitude,
+      siteLongitude,
       status: parsed.data.status || "pendente",
       seq,
       title
@@ -462,6 +478,8 @@ router.put("/:id", async (req, res) => {
 
     let clientName = parsed.data.clientName?.trim();
     let site = parsed.data.site?.trim() || "";
+    let siteLatitude: number | undefined;
+    let siteLongitude: number | undefined;
     let clientId: string | null = parsed.data.clientId || null;
 
     if (clientId) {
@@ -469,6 +487,18 @@ router.put("/:id", async (req, res) => {
       if (client) {
         clientName = client.name || clientName;
         if (!site) site = client.address || "";
+        
+        // Try to find coordinates from client's addresses
+        if (client.addresses && Array.isArray(client.addresses) && client.addresses.length > 0) {
+          // Find the address that matches the site
+          const matchingAddress = client.addresses.find((addr: any) => 
+            addr.address === site || addr.address === parsed.data.site
+          );
+          if (matchingAddress && matchingAddress.latitude && matchingAddress.longitude) {
+            siteLatitude = matchingAddress.latitude;
+            siteLongitude = matchingAddress.longitude;
+          }
+        }
       }
     }
 
@@ -531,6 +561,8 @@ router.put("/:id", async (req, res) => {
       clientId: clientId || undefined,
       clientName,
       site,
+      siteLatitude,
+      siteLongitude,
       title
     };
 

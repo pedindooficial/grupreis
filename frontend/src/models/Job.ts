@@ -28,6 +28,8 @@ export interface Job {
   clientId?: Types.ObjectId | null;
   clientName?: string;
   site?: string;
+  siteLatitude?: number; // Latitude da localização da obra
+  siteLongitude?: number; // Longitude da localização da obra
   team?: string;
   status: JobStatus;
   plannedDate?: string;

@@ -1566,7 +1566,7 @@ export default function JobsPage() {
                         addr.addressNeighborhood,
                         [addr.addressCity, addr.addressState].filter(Boolean).join(" - "),
                         addr.addressZip
-                      ].filter((v) => v && v.trim().length > 0).join(" | ");
+                      ].filter((v) => v && v.trim().length > 0).join(", ");
                       return (
                         <option key={index} value={addrFull}>
                           {addrLabel} - {addrFull}

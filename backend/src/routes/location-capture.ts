@@ -11,6 +11,7 @@ const createTokenSchema = z.object({
   description: z.string().optional(),
   resourceType: z.enum(["job", "client", "team", "other"]).optional(),
   resourceId: z.string().optional(),
+  addressId: z.string().optional(), // ID of the specific address in client's addresses array
   expiresInHours: z.number().min(1).max(720).optional().default(24) // Default 24h
 });
 
@@ -51,6 +52,7 @@ router.post("/create", async (req, res) => {
       description: parsed.data.description,
       resourceType: parsed.data.resourceType || "other",
       resourceId: parsed.data.resourceId,
+      addressId: parsed.data.addressId,
       status: "pending",
       expiresAt
     });
@@ -245,22 +247,36 @@ router.post("/:token/capture", async (req, res) => {
             parsed.data.addressCity,
             parsed.data.addressState,
             parsed.data.addressZip
-          ].filter(Boolean).join(" | ");
+          ].filter(Boolean).join(", ");
           
-          client.address = fullAddress || parsed.data.address;
-          client.addressStreet = parsed.data.addressStreet;
-          client.addressNumber = parsed.data.addressNumber;
-          client.addressNeighborhood = parsed.data.addressNeighborhood;
-          client.addressCity = parsed.data.addressCity;
-          client.addressState = parsed.data.addressState;
-          client.addressZip = parsed.data.addressZip;
-          client.latitude = parsed.data.latitude;
-          client.longitude = parsed.data.longitude;
-          
-          // Update first address in addresses array if exists
-          if (client.addresses && client.addresses.length > 0) {
-            client.addresses[0] = {
-              ...client.addresses[0],
+          // If addressId is provided, update specific address in array
+          if (locationCapture.addressId && client.addresses && Array.isArray(client.addresses)) {
+            const addressIndex = client.addresses.findIndex((addr: any) => 
+              addr._id && addr._id.toString() === locationCapture.addressId
+            );
+            
+            if (addressIndex !== -1) {
+              // Update the specific address
+              client.addresses[addressIndex] = {
+                ...client.addresses[addressIndex],
+                address: fullAddress || parsed.data.address || "",
+                addressStreet: parsed.data.addressStreet,
+                addressNumber: parsed.data.addressNumber,
+                addressNeighborhood: parsed.data.addressNeighborhood,
+                addressCity: parsed.data.addressCity,
+                addressState: parsed.data.addressState,
+                addressZip: parsed.data.addressZip,
+                latitude: parsed.data.latitude,
+                longitude: parsed.data.longitude,
+              };
+              console.log(`✅ Client ${client._id} address ${locationCapture.addressId} updated via location capture`);
+            } else {
+              console.warn(`⚠️ Address ${locationCapture.addressId} not found in client ${client._id}`);
+            }
+          } else {
+            // No addressId provided: CREATE a new address in the addresses array
+            const newAddress = {
+              label: `Endereço ${(client.addresses?.length || 0) + 1}`,
               address: fullAddress || parsed.data.address || "",
               addressStreet: parsed.data.addressStreet,
               addressNumber: parsed.data.addressNumber,
@@ -271,10 +287,20 @@ router.post("/:token/capture", async (req, res) => {
               latitude: parsed.data.latitude,
               longitude: parsed.data.longitude,
             };
+            
+            // Initialize addresses array if it doesn't exist
+            if (!client.addresses) {
+              client.addresses = [];
+            }
+            
+            // Add the new address
+            client.addresses.push(newAddress);
+            
+            console.log(`✅ Client ${client._id} NEW address added via location capture`);
+            console.log(`📍 Total addresses: ${client.addresses.length}`);
           }
           
           await client.save();
-          console.log(`✅ Client ${client._id} address updated via location capture`);
         }
       } catch (clientError) {
         console.error("Error updating client address:", clientError);

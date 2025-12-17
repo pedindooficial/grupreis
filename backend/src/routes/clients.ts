@@ -21,7 +21,7 @@ function formatAddress(address: {
     address.addressZip
   ]
     .filter((v) => v && v.trim().length > 0)
-    .join(" | ");
+    .join(", ");
 }
 
 // Função auxiliar para processar e formatar array de endereços
@@ -128,12 +128,20 @@ router.post("/", async (req, res) => {
     // Processar endereços
     const processedAddresses = processAddresses(parsed.data.addresses);
     
-    const created = await ClientModel.create({
-      ...parsed.data,
+    const createData: any = {
+      name: parsed.data.name,
       personType,
       docNumber,
-      addresses: processedAddresses.length > 0 ? processedAddresses : undefined
-    });
+      contact: parsed.data.contact,
+      phone: parsed.data.phone,
+      email: parsed.data.email,
+      addresses: processedAddresses.length > 0 ? processedAddresses : []
+    };
+    
+    // Don't use legacy address fields when creating with addresses array
+    // This keeps the data clean
+    
+    const created = await ClientModel.create(createData);
 
     res.status(201).json({ data: created });
   } catch (error: any) {
@@ -190,6 +198,19 @@ router.put("/:id", async (req, res) => {
     // Incluir addresses apenas se fornecidos (substitui completamente os endereços existentes)
     if (processedAddresses !== undefined) {
       updateData.addresses = processedAddresses;
+      
+      // Clear legacy address fields when using addresses array
+      // This prevents confusion between old and new address system
+      updateData.address = "";
+      updateData.addressStreet = "";
+      updateData.addressNumber = "";
+      updateData.addressNeighborhood = "";
+      updateData.addressCity = "";
+      updateData.addressState = "";
+      updateData.addressZip = "";
+      
+      console.log(`✅ Clearing legacy address fields for client ${req.params.id}`);
+      console.log(`📍 New addresses array length: ${processedAddresses.length}`);
     }
     
     const updated = await ClientModel.findByIdAndUpdate(

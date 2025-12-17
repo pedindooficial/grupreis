@@ -23,7 +23,8 @@ export default function TeamsPage() {
     status: "ativa" as TeamStatus,
     membersText: "",
     selectedEmployeeIds: [] as string[],
-    notes: ""
+    notes: "",
+    operationPass: ""
   });
 
   useEffect(() => {
@@ -72,7 +73,8 @@ export default function TeamsPage() {
       status: "ativa",
       membersText: "",
       selectedEmployeeIds: [],
-      notes: ""
+      notes: "",
+      operationPass: ""
     });
 
   const membersFromText = (text: string) =>
@@ -108,7 +110,8 @@ export default function TeamsPage() {
         status: form.status,
         notes: form.notes,
         members: allMembers,
-        employeeIds: form.selectedEmployeeIds
+        employeeIds: form.selectedEmployeeIds,
+        operationPass: form.operationPass || undefined
       };
       if (editingId) {
         const res = await apiFetch(`/teams/${editingId}`, {
@@ -175,7 +178,8 @@ export default function TeamsPage() {
       status: (team.status || "ativa") as TeamStatus,
       membersText: textOnlyMembers.join("\n"),
       selectedEmployeeIds: teamEmployeeIds,
-      notes: team.notes || ""
+      notes: team.notes || "",
+      operationPass: team.operationPass || ""
     });
   };
 
@@ -231,80 +235,61 @@ export default function TeamsPage() {
     }
   };
 
-  const handleGenerateLink = async (team: any) => {
-    const result = await Swal.fire({
-      title: "Gerar link de operação",
-      html:
-        '<p class="text-sm text-slate-200">Defina uma senha para a equipe acessar o painel público.</p>' +
-        '<input id="swal-pass" type="password" class="swal2-input" placeholder="Senha (mín. 4 dígitos)">',
-      showCancelButton: true,
-      confirmButtonText: "Gerar",
-      cancelButtonText: "Cancelar",
-      preConfirm: () => {
-        const input = document.getElementById("swal-pass") as HTMLInputElement | null;
-        const pass = input?.value.trim();
-        if (!pass || pass.length < 4) {
-          Swal.showValidationMessage("Informe uma senha com pelo menos 4 dígitos.");
-          return;
-        }
-        return pass;
-      }
-    });
-    if (!result.isConfirmed || !result.value) return;
-
-    try {
-      const password = result.value as string;
-      const res = await apiFetch(`/teams/${team._id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action: "generateLink", password })
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        Swal.fire("Erro", data?.error || "Não foi possível gerar o link.", "error");
-        return;
-      }
-      const link = data?.data?.link;
-      const pwd = data?.data?.password;
-      const updatedTeam = data?.data?.team;
-      if (updatedTeam?._id) {
-        setTeams((prev) => prev.map((t) => (t._id === updatedTeam._id ? updatedTeam : t)));
-      }
-      if (link && pwd) {
-        Swal.fire({
-          title: "Link de operação gerado",
-          html: `
-            <div class="text-left text-sm">
-              <div><strong>Equipe:</strong> ${team.name}</div>
-              <div class="mt-2"><strong>Link:</strong> <a href="${link}" target="_blank" class="text-emerald-400">${link}</a></div>
-              <div class="mt-1"><strong>Senha:</strong> <span class="text-white font-semibold">${pwd}</span></div>
-              <div class="mt-2 text-slate-300 text-xs">Compartilhe o link e a senha com a equipe. Um novo link substitui o anterior.</div>
-            </div>
-          `,
-          icon: "success"
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      Swal.fire("Erro", "Falha ao gerar link.", "error");
-    }
-  };
-
   const handleCopyLink = (team: any) => {
-    if (!team.operationToken) {
-      Swal.fire("Atenção", "Gere o link primeiro.", "warning");
-      return;
-    }
     const base = typeof window !== "undefined" ? window.location.origin : "";
-    const link = `${base}/operations/${team.operationToken}`;
+    const link = `${base}/operations/team/${team._id}`;
     copyToClipboard(link, "Link copiado.");
   };
 
   const handleCopyPass = (team: any) => {
     if (!team.operationPass) {
-      Swal.fire("Atenção", "Gere o link primeiro.", "warning");
+      Swal.fire("Atenção", "Configure a senha primeiro na edição da equipe.", "warning");
       return;
     }
     copyToClipboard(team.operationPass, "Senha copiada.");
+  };
+
+  const handleShowLinkInfo = (team: any) => {
+    const base = typeof window !== "undefined" ? window.location.origin : "";
+    const link = `${base}/operations/team/${team._id}`;
+    
+    if (!team.operationPass) {
+      Swal.fire({
+        title: "Link de Operação",
+        html: `
+          <div class="text-left text-sm">
+            <div class="p-3 mb-3 bg-yellow-50 border border-yellow-200 rounded">
+              <p class="text-yellow-800">⚠️ Senha não configurada</p>
+              <p class="text-xs text-yellow-700 mt-1">Configure a senha na edição da equipe para permitir acesso ao painel.</p>
+            </div>
+            <div><strong>Equipe:</strong> ${team.name}</div>
+            <div class="mt-2"><strong>Link permanente:</strong></div>
+            <div class="text-xs text-slate-600 break-all mt-1">${link}</div>
+          </div>
+        `,
+        icon: "warning"
+      });
+      return;
+    }
+    
+    Swal.fire({
+      title: "Link de Operação",
+      html: `
+        <div class="text-left text-sm">
+          <div><strong>Equipe:</strong> ${team.name}</div>
+          <div class="mt-2"><strong>Link permanente:</strong></div>
+          <div class="mt-1 p-2 bg-gray-50 rounded break-all">
+            <a href="${link}" target="_blank" class="text-emerald-600 text-xs">${link}</a>
+          </div>
+          <div class="mt-3"><strong>Senha:</strong> <span class="text-gray-900 font-mono">${team.operationPass}</span></div>
+          <div class="mt-3 text-slate-600 text-xs p-2 bg-blue-50 border border-blue-200 rounded">
+            ℹ️ Este link é permanente. Compartilhe com a equipe. A senha pode ser alterada na edição da equipe.
+          </div>
+        </div>
+      `,
+      icon: "info",
+      width: 600
+    });
   };
 
   return (
@@ -423,6 +408,19 @@ export default function TeamsPage() {
                 className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
                 placeholder="Equipamento, região, turno..."
               />
+            </div>
+            <div className="space-y-1 text-sm md:col-span-2">
+              <label className="text-slate-200">Senha do Painel de Operações</label>
+              <input
+                type="password"
+                value={form.operationPass}
+                onChange={(e) => setForm((f) => ({ ...f, operationPass: e.target.value }))}
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                placeholder="Senha para acesso ao painel público (mínimo 4 caracteres)"
+              />
+              <div className="text-[11px] text-slate-400">
+                Esta senha será usada pela equipe para acessar o painel de operações. Deixe em branco para não permitir acesso.
+              </div>
             </div>
             <div className="space-y-2 text-sm md:col-span-2">
               <div className="flex items-center justify-between">
@@ -577,11 +575,6 @@ export default function TeamsPage() {
               </thead>
               <tbody>
                 {filtered.map((team) => {
-                  const origin =
-                    typeof window !== "undefined" ? window.location.origin : "";
-                  const opLink = team.operationToken
-                    ? `${origin}/operations/${team.operationToken}`
-                    : null;
                   return (
                     <tr
                       key={team._id}
@@ -644,24 +637,22 @@ export default function TeamsPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleGenerateLink(team);
+                              handleShowLinkInfo(team);
                             }}
                             className="rounded-md border border-blue-400/50 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-100 transition hover:border-blue-300/80 hover:bg-blue-500/20"
                           >
-                            Gerar link operação
+                            Ver link
                           </button>
-                          {team.operationToken && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopyLink(team);
-                              }}
-                              className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/60 hover:bg-white/10"
-                            >
-                              Copiar link
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyLink(team);
+                            }}
+                            className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/60 hover:bg-white/10"
+                          >
+                            Copiar link
+                          </button>
                           {team.operationPass && (
                             <button
                               type="button"
@@ -810,23 +801,31 @@ export default function TeamsPage() {
                 )}
               </div>
 
-              {viewingTeam.operationToken && (
-                <div>
-                  <label className="text-xs text-slate-400 mb-2 block">Link de Operação</label>
-                  <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 p-3">
-                    <div className="text-sm text-blue-100 break-all">
-                      {typeof window !== "undefined"
-                        ? `${window.location.origin}/operations/${viewingTeam.operationToken}`
-                        : ""}
-                    </div>
-                    {viewingTeam.operationPass && (
-                      <div className="text-xs text-slate-300 mt-2">
-                        Senha: <span className="font-semibold text-white">{viewingTeam.operationPass}</span>
-                      </div>
-                    )}
+              <div>
+                <label className="text-xs text-slate-400 mb-2 block">Link de Operação (Permanente)</label>
+                <div className={`rounded-lg border p-3 ${
+                  viewingTeam.operationPass 
+                    ? "border-blue-400/30 bg-blue-500/10"
+                    : "border-yellow-400/30 bg-yellow-500/10"
+                }`}>
+                  <div className={`text-sm break-all ${
+                    viewingTeam.operationPass ? "text-blue-100" : "text-yellow-100"
+                  }`}>
+                    {typeof window !== "undefined"
+                      ? `${window.location.origin}/operations/team/${viewingTeam._id}`
+                      : ""}
                   </div>
+                  {viewingTeam.operationPass ? (
+                    <div className="text-xs text-slate-300 mt-2">
+                      Senha: <span className="font-semibold text-white">{viewingTeam.operationPass}</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-yellow-200 mt-2">
+                      ⚠️ Configure a senha na edição da equipe para permitir acesso
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>

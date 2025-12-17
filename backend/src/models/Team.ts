@@ -8,7 +8,7 @@ const TeamSchema = new Schema<Team>(
     leader: { type: String, trim: true },
     members: { type: [String], default: [] },
     notes: { type: String, trim: true },
-    operationToken: { type: String, trim: true },
+    operationToken: { type: String, trim: true }, // Legacy - for old links
     operationPass: { type: String, trim: true }
   },
   { timestamps: true }

@@ -7,6 +7,7 @@ export interface LocationCapture {
   // What this location is for
   resourceType?: "job" | "client" | "team" | "other";
   resourceId?: Schema.Types.ObjectId | string;
+  addressId?: string; // ID of the specific address in client's addresses array
   // Captured location
   latitude?: number;
   longitude?: number;
@@ -37,6 +38,7 @@ const LocationCaptureSchema = new Schema<LocationCapture>(
       default: "other"
     },
     resourceId: { type: Schema.Types.ObjectId },
+    addressId: { type: String, trim: true }, // ID of the specific address in client's addresses array
     latitude: { type: Number },
     longitude: { type: Number },
     address: { type: String, trim: true },

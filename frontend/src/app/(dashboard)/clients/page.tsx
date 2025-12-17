@@ -79,7 +79,7 @@ const formatAddressString = (addr: {
     addr.addressZip
   ]
     .filter((v) => v && v.trim().length > 0)
-    .join(" | ");
+    .join(", ");
 };
 
 export default function ClientsPage() {
@@ -358,10 +358,24 @@ export default function ClientsPage() {
         Swal.fire("Erro", data?.error || "Não foi possível atualizar", "error");
         return;
       }
+      
+      console.log("✅ Cliente atualizado:", data.data);
+      console.log("📍 Endereços após atualização:", data.data.addresses);
+      
       Swal.fire("Sucesso", "Cliente atualizado.", "success");
+      
+      // Update the clients list
       setClients((prev) => prev.map((c) => (c._id === selectedClient._id ? data.data : c)));
+      
+      // Update selected client with fresh data from server
       setSelectedClient(data.data);
+      
+      // Reset editing state
       setEditing(false);
+      
+      // Clear any address editing state
+      setEditingAddressIndex(null);
+      setNewAddressForm(emptyAddress);
     } catch (err) {
       console.error(err);
       Swal.fire("Erro", "Falha ao atualizar cliente.", "error");
@@ -386,18 +400,68 @@ export default function ClientsPage() {
     setNewAddressForm(emptyAddress);
   };
 
-  const removeAddress = (index: number) => {
+  const removeAddress = async (index: number) => {
+    const addresses = editing ? editForm.addresses : form.addresses;
+    const addressToRemove = addresses[index];
+    const addressLabel = addressToRemove?.label || `Endereço ${index + 1}`;
+    
+    const result = await Swal.fire({
+      title: "Remover Endereço?",
+      html: `
+        <div class="text-left">
+          <p class="mb-3 text-sm text-slate-600">Tem certeza que deseja remover este endereço?</p>
+          <div class="rounded-lg bg-red-50 border border-red-200 p-3">
+            <p class="text-sm font-semibold text-red-900">${addressLabel}</p>
+            <p class="text-xs text-red-700 mt-1">${addressToRemove?.address || formatAddressString(addressToRemove) || "Endereço incompleto"}</p>
+          </div>
+          <p class="mt-3 text-xs text-slate-500">Esta ação não pode ser desfeita.</p>
+        </div>
+      `,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sim, remover",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280"
+    });
+    
+    if (!result.isConfirmed) return;
+    
+    console.log(`🗑️ Removendo endereço ${index}:`, addressToRemove);
+    
     if (editing) {
-      setEditForm(f => ({
-        ...f,
-        addresses: f.addresses.filter((_, i) => i !== index)
-      }));
+      setEditForm(f => {
+        const newAddresses = f.addresses.filter((_, i) => i !== index);
+        console.log(`📍 Endereços restantes (${newAddresses.length}):`, newAddresses);
+        return {
+          ...f,
+          addresses: newAddresses
+        };
+      });
     } else {
-      setForm(f => ({
-        ...f,
-        addresses: f.addresses.filter((_, i) => i !== index)
-      }));
+      setForm(f => {
+        const newAddresses = f.addresses.filter((_, i) => i !== index);
+        console.log(`📍 Endereços restantes (${newAddresses.length}):`, newAddresses);
+        return {
+          ...f,
+          addresses: newAddresses
+        };
+      });
     }
+    
+    // If we were editing this address, clear the form
+    if (editingAddressIndex === index) {
+      setEditingAddressIndex(null);
+      setNewAddressForm(emptyAddress);
+    }
+    
+    Swal.fire({
+      title: "Removido!",
+      html: `<p>Endereço removido com sucesso.</p><p class="text-sm text-gray-600 mt-2">Lembre-se de clicar em <strong>"Salvar alterações"</strong> para persistir esta mudança.</p>`,
+      icon: "success",
+      timer: 3000,
+      showConfirmButton: false
+    });
   };
 
   const startEditAddress = (index: number) => {
@@ -407,7 +471,7 @@ export default function ClientsPage() {
   };
 
   const saveEditAddress = () => {
-    if (editingAddressIndex === null) {
+    if (editingAddressIndex === null || editingAddressIndex === -1) {
       addAddress();
       return;
     }
@@ -454,6 +518,110 @@ export default function ClientsPage() {
       });
       return;
     }
+    
+    // Check if we're editing an existing address (has _id) or creating a new one
+    let addressId = (newAddressForm as any)?._id;
+    
+    // If creating a new address, we need to save the client first to get the address ID
+    if (!addressId && editingAddressIndex !== null) {
+      const confirmResult = await Swal.fire({
+        title: "Atenção",
+        html: "Para capturar a localização de um novo endereço, você precisa salvá-lo primeiro.<br/><br/>Deseja salvar este endereço agora?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Sim, salvar",
+        cancelButtonText: "Cancelar"
+      });
+      
+      if (!confirmResult.isConfirmed) {
+        return;
+      }
+      
+      // Show loading
+      Swal.fire({
+        title: "Salvando...",
+        text: "Aguarde enquanto salvamos o endereço",
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      try {
+        // First, prepare the addresses array with the new/updated address
+        const currentAddresses = editingAddressIndex === null || editingAddressIndex === -1
+          ? [...editForm.addresses, newAddressForm]  // Adding new address
+          : editForm.addresses.map((addr, i) => i === editingAddressIndex ? newAddressForm : addr);  // Updating existing
+        
+        // Process addresses
+        const processedAddresses = currentAddresses.map(addr => ({
+          ...addr,
+          address: formatAddressString(addr)
+        }));
+        
+        // Save the client directly
+        const res = await apiFetch(`/clients/${clientId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            name: editForm.name,
+            personType: editForm.personType,
+            docNumber: editForm.docNumber.replace(/\D/g, ""),
+            phone: editForm.phone.replace(/\D/g, ""),
+            email: editForm.email,
+            addresses: processedAddresses
+          })
+        });
+        
+        const data = await res.json().catch(() => null);
+        
+        if (!res.ok) {
+          Swal.fire("Erro", data?.error || "Não foi possível salvar", "error");
+          return;
+        }
+        
+        // Update states
+        setClients((prev) => prev.map((c) => (c._id === clientId ? data.data : c)));
+        setSelectedClient(data.data);
+        
+        // Find the address we just added/updated
+        const addresses = data.data.addresses || [];
+        if (addresses.length > 0) {
+          // For new address (-1 or null), it will be the last one
+          // For existing address, find it by matching the data
+          if (editingAddressIndex === null || editingAddressIndex === -1) {
+            // New address is last
+            const targetAddress = addresses[addresses.length - 1];
+            addressId = targetAddress._id;
+            console.log(`✅ Cliente salvo, novo endereço ID: ${addressId}`);
+          } else {
+            // Find existing address by matching some fields
+            const targetAddress = addresses.find((addr: any) => 
+              addr.addressStreet === newAddressForm.addressStreet &&
+              addr.addressNumber === newAddressForm.addressNumber &&
+              addr.label === newAddressForm.label
+            );
+            if (targetAddress) {
+              addressId = targetAddress._id;
+              console.log(`✅ Cliente salvo, endereço atualizado ID: ${addressId}`);
+            }
+          }
+        }
+        
+        if (!addressId) {
+          Swal.fire("Erro", "Não foi possível obter o ID do endereço. Tente novamente.", "error");
+          return;
+        }
+        
+        // Clear the address form
+        setEditingAddressIndex(null);
+        setNewAddressForm(emptyAddress);
+        
+      } catch (error) {
+        console.error("Erro ao salvar cliente:", error);
+        Swal.fire("Erro", "Falha ao salvar o cliente. Tente novamente.", "error");
+        return;
+      }
+    }
 
     try {
       Swal.fire({
@@ -464,13 +632,14 @@ export default function ClientsPage() {
         }
       });
 
-      // Create location capture token
+      // Create location capture token with addressId
       const res = await apiFetch("/location-capture/create", {
         method: "POST",
         body: JSON.stringify({
           description: `Confirme a localização - ${selectedClient.name}`,
           resourceType: "client",
           resourceId: clientId,
+          addressId: addressId, // Pass the specific address ID
           expiresInHours: 72 // 3 days
         })
       });
@@ -634,6 +803,10 @@ export default function ClientsPage() {
         title: "📍 Link de Captura Gerado",
         html: `
           <div class="text-left space-y-4">
+            <div class="p-3 bg-blue-50 rounded border border-blue-200 mb-3">
+              <p class="text-xs text-blue-700 font-semibold mb-1">ℹ️ Novo Endereço</p>
+              <p class="text-xs text-blue-600">Quando o cliente confirmar a localização, um NOVO endereço será adicionado automaticamente.</p>
+            </div>
             <p class="text-sm text-gray-600">
               Envie este link para <strong>${selectedClient.name}</strong> confirmar a localização:
             </p>
@@ -1592,11 +1765,13 @@ export default function ClientsPage() {
                     <div className="text-white">{selectedClient.email || "-"}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 sm:col-span-2 space-y-1">
-                    <div className="text-[11px] uppercase text-slate-400">Endereços</div>
+                    <div className="text-[11px] uppercase text-slate-400">
+                      Endereços {selectedClient.addresses && selectedClient.addresses.length > 0 && `(${selectedClient.addresses.length})`}
+                    </div>
                     {(selectedClient.addresses && Array.isArray(selectedClient.addresses) && selectedClient.addresses.length > 0) ? (
                       <div className="space-y-2">
                         {selectedClient.addresses.map((addr: any, index: number) => (
-                          <div key={index} className="text-white">
+                          <div key={addr._id || index} className="text-white">
                             <div className="font-semibold text-sm">
                               {addr.label || `Endereço ${index + 1}`}
                             </div>
@@ -1619,8 +1794,17 @@ export default function ClientsPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-white text-sm">
-                        {selectedClient.address || "Nenhum endereço cadastrado"}
+                      <div>
+                        <div className="text-slate-400 text-sm italic">
+                          Nenhum endereço cadastrado
+                        </div>
+                        {/* Show legacy address if it exists (for debugging/migration) */}
+                        {selectedClient.address && (
+                          <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs">
+                            <div className="text-yellow-300 font-semibold mb-1">⚠️ Endereço legado (será limpo ao editar):</div>
+                            <div className="text-yellow-200">{selectedClient.address}</div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

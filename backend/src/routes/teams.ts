@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { z } from "zod";
-import crypto from "crypto";
 import { connectDB } from "../db";
 import TeamModel from "../models/Team";
 import EmployeeModel from "../models/Employee";
@@ -22,12 +21,8 @@ const updateSchema = z.object({
   leader: z.string().optional(),
   notes: z.string().optional(),
   members: z.array(z.string().min(1)).min(1).optional(),
-  employeeIds: z.array(z.string()).optional()
-});
-
-const generateSchema = z.object({
-  action: z.literal("generateLink"),
-  password: z.string().min(4).optional()
+  employeeIds: z.array(z.string()).optional(),
+  operationPass: z.string().min(4).optional()
 });
 
 router.get("/", async (_req, res) => {
@@ -160,48 +155,6 @@ router.delete("/:id", async (req, res) => {
     console.error("DELETE /api/teams/:id error", error);
     res.status(500).json({
       error: "Falha ao excluir equipe",
-      detail: error?.message || "Erro interno"
-    });
-  }
-});
-
-router.patch("/:id", async (req, res) => {
-  try {
-    const parsed = generateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res
-        .status(400)
-        .json({ error: "Dados inválidos", issues: parsed.error.flatten() });
-    }
-
-    await connectDB();
-
-    const baseUrl =
-      process.env.FRONTEND_ORIGIN ||
-      process.env.NEXTAUTH_URL ||
-      process.env.APP_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-
-    const token = crypto.randomBytes(12).toString("hex");
-    const pass = parsed.data.password ?? Math.random().toString().slice(2, 8);
-
-    const updated = await TeamModel.findByIdAndUpdate(
-      req.params.id,
-      { operationToken: token, operationPass: pass },
-      { new: true }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ error: "Equipe não encontrada" });
-    }
-
-    const link = `${baseUrl}/operations/${token}`;
-
-    res.json({ data: { link, password: pass, team: updated } });
-  } catch (error: any) {
-    console.error("PATCH /api/teams/:id error", error);
-    res.status(500).json({
-      error: "Falha ao gerar link",
       detail: error?.message || "Erro interno"
     });
   }

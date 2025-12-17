@@ -640,6 +640,163 @@ export default function OperationPublicPage({ params }: { params: { token: strin
     setView("ops");
   };
 
+  const handleNavigateToJob = async (job: any) => {
+    const destination = job.site;
+    
+    if (!destination && (!job.siteLatitude || !job.siteLongitude)) {
+      Swal.fire("Erro", "Endereço do serviço não disponível.", "error");
+      return;
+    }
+
+    // Determine destination: prioritize coordinates over text address
+    let destinationParam: string;
+    if (job.siteLatitude && job.siteLongitude) {
+      destinationParam = `${job.siteLatitude},${job.siteLongitude}`;
+    } else {
+      destinationParam = destination.replace(/\s*\|\s*/g, ', ');
+    }
+
+    // Get current location
+    if (!navigator.geolocation) {
+      // No geolocation support - open maps directly
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destinationParam)}`, '_blank');
+      return;
+    }
+
+    // Show loading with skip option
+    const loadingAlert = Swal.fire({
+      title: "Obtendo localização...",
+      html: `
+        <p class="text-sm text-slate-600 mb-3">Aguarde enquanto obtemos sua localização atual</p>
+        <button
+          id="skipLocationBtn"
+          class="mt-2 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition text-sm"
+        >
+          Pular e abrir Google Maps
+        </button>
+      `,
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+        
+        // Add click handler for skip button
+        const skipBtn = document.getElementById('skipLocationBtn');
+        if (skipBtn) {
+          skipBtn.onclick = () => {
+            Swal.close();
+            window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destinationParam)}`, '_blank');
+          };
+        }
+      }
+    });
+
+    // Try to get location with retry logic
+    const tryGetLocation = (highAccuracy: boolean, timeout: number, maxAge: number = 0) => {
+      return new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            enableHighAccuracy: highAccuracy,
+            timeout: timeout,
+            maximumAge: maxAge
+          }
+        );
+      });
+    };
+
+    try {
+      let position: GeolocationPosition;
+      
+      try {
+        // First try: High accuracy with 15 second timeout
+        console.log('Tentando obter localização com alta precisão...');
+        position = await tryGetLocation(true, 15000, 0);
+        console.log('Localização obtida com alta precisão');
+      } catch (firstError: any) {
+        console.log('Alta precisão falhou, tentando com precisão moderada...');
+        try {
+          // Second try: Low accuracy with 10 second timeout
+          position = await tryGetLocation(false, 10000, 0);
+          console.log('Localização obtida com precisão moderada');
+        } catch (secondError: any) {
+          console.log('Precisão moderada falhou, usando localização em cache...');
+          // Third try: Use any cached location (up to 5 minutes old)
+          position = await tryGetLocation(false, 5000, 300000);
+          console.log('Localização obtida do cache');
+        }
+      }
+
+      const { latitude, longitude } = position.coords;
+      const currentLocation = `${latitude},${longitude}`;
+      
+      Swal.close();
+
+      // Open Google Maps with route
+      const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(currentLocation)}&destination=${encodeURIComponent(destinationParam)}&travelmode=driving`;
+      window.open(googleMapsUrl, '_blank');
+      
+    } catch (error: any) {
+      Swal.close();
+      
+      let errorMessage = "Não foi possível obter sua localização.";
+      let errorDetails = "";
+      
+      if (error.code) {
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Permissão negada";
+            errorDetails = "Por favor, permita o acesso à localização nas configurações do navegador.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Localização indisponível";
+            errorDetails = "Verifique se o GPS está ativado e você está em um local com boa recepção.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Tempo esgotado";
+            errorDetails = "Não foi possível obter sua localização em tempo hábil. Tente novamente ou use o botão abaixo.";
+            break;
+        }
+      }
+      
+      Swal.fire({
+        title: "Erro ao obter localização",
+        html: `
+          <div class="text-left space-y-3">
+            <div class="p-3 bg-red-50 border border-red-200 rounded">
+              <p class="text-sm font-semibold text-red-900 mb-1">${errorMessage}</p>
+              <p class="text-xs text-red-700">${errorDetails}</p>
+            </div>
+            
+            <div class="mt-4 pt-3 border-t border-gray-200">
+              <p class="text-xs text-gray-500 mb-3">
+                Você ainda pode abrir o destino no Google Maps:
+              </p>
+              <button
+                onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destinationParam)}', '_blank'); Swal.close();"
+                class="w-full flex items-center justify-center gap-2 p-3 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition text-sm font-semibold"
+              >
+                <span class="text-xl">🗺️</span>
+                <span>Abrir no Google Maps</span>
+              </button>
+            </div>
+          </div>
+        `,
+        icon: "warning",
+        width: 500,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: "Pular",
+        cancelButtonColor: "#6b7280",
+        customClass: {
+          popup: "text-left",
+          htmlContainer: "text-gray-600"
+        }
+      });
+    }
+  };
+
   useEffect(() => {
     setData(null);
     setSelectedJob(null);
@@ -980,10 +1137,10 @@ export default function OperationPublicPage({ params }: { params: { token: strin
                       ✓ Recebido
                     </div>
                   )}
-                  {job.status === "pendente" && job.site && headquartersAddress && (
+                  {job.status === "pendente" && job.site && (
                     <button
                       type="button"
-                      onClick={() => setRouteJobId(job._id)}
+                      onClick={() => handleNavigateToJob(job)}
                       className="w-full sm:flex-1 rounded-md border border-purple-400/40 bg-purple-500/10 px-3 py-2 text-xs font-semibold text-purple-100 transition hover:border-purple-300/60 hover:bg-purple-500/20"
                     >
                       Rota
@@ -1210,13 +1367,13 @@ export default function OperationPublicPage({ params }: { params: { token: strin
                     ✓ Recebido
                   </div>
                 )}
-                {selectedJob.site && headquartersAddress && (
+                {selectedJob.site && (
                   <button
                     type="button"
-                    onClick={() => setShowRoute(!showRoute)}
+                    onClick={() => handleNavigateToJob(selectedJob)}
                     className="w-full sm:w-auto rounded-md border border-purple-400/40 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-100 transition hover:border-purple-300/60 hover:bg-purple-500/20"
                   >
-                    {showRoute ? "Ocultar Rota" : "Ver Rota"}
+                    🚗 Rota
                   </button>
                 )}
                 <button

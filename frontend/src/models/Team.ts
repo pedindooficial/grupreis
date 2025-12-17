@@ -1,12 +1,13 @@
 import { Model, Schema, model, models } from "mongoose";
 
 export interface Team {
+  _id?: string;
   name: string;
   status?: "ativa" | "inativa";
   leader?: string;
   members: string[];
   notes?: string;
-  operationToken?: string;
+  operationToken?: string; // Legacy - for old links
   operationPass?: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -19,7 +20,7 @@ const TeamSchema = new Schema<Team>(
     leader: { type: String, trim: true },
     members: { type: [String], default: [] },
     notes: { type: String, trim: true },
-    operationToken: { type: String, trim: true },
+    operationToken: { type: String, trim: true }, // Legacy - for old links
     operationPass: { type: String, trim: true }
   },
   { timestamps: true }

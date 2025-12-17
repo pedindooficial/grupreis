@@ -31,6 +31,8 @@ const JobSchema = new Schema<Job>(
     clientId: { type: Schema.Types.ObjectId, ref: "Client" },
     clientName: { type: String, trim: true },
     site: { type: String, trim: true },
+    siteLatitude: { type: Number }, // Latitude da localização da obra
+    siteLongitude: { type: Number }, // Longitude da localização da obra
     team: { type: String, trim: true },
     status: {
       type: String,
