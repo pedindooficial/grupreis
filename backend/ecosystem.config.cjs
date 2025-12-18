@@ -25,12 +25,12 @@ module.exports = {
       GOOGLE_MAPS_API_KEY: "AIzaSyAUoyCSevBWa4CkeDcBuYd-R0mbR2NtpIs",
       
       // AWS S3 Configuration (for file uploads)
-      // IMPORTANT: Set these as environment variables or use PM2 env_file
+      // IMPORTANT: Set these as environment variables on the server before starting PM2
       // Do not commit actual credentials to git!
-      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || '',
-      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || '',
-      AWS_REGION: process.env.AWS_REGION || 'sa-east-1',
-      AWS_S3_BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || 'gruporeis'
+      // Example: export AWS_ACCESS_KEY_ID=... && export AWS_SECRET_ACCESS_KEY=... && pm2 start ecosystem.config.cjs
+      // Or create a .env file (not committed) and use: pm2 start ecosystem.config.cjs --env production
+      AWS_REGION: 'sa-east-1',
+      AWS_S3_BUCKET_NAME: 'gruporeis'
     },
     error_file: './logs/err.log',
     out_file: './logs/out.log',

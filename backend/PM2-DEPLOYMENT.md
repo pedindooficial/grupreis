@@ -33,10 +33,22 @@ Edit `backend/ecosystem.config.cjs` and update the following environment variabl
 #### Optional Variables:
 
 - **GOOGLE_MAPS_API_KEY**: Your Google Maps API key (if using distance/geocoding features)
-- **AWS_ACCESS_KEY_ID**: AWS access key (if using S3 for file uploads)
-- **AWS_SECRET_ACCESS_KEY**: AWS secret key
-- **AWS_REGION**: AWS region (default: `sa-east-1`)
-- **AWS_S3_BUCKET_NAME**: S3 bucket name
+
+#### AWS S3 Credentials (Set as Environment Variables):
+
+**IMPORTANT**: AWS credentials are NOT in `ecosystem.config.cjs` for security. Set them as environment variables:
+
+```bash
+# Option 1: Export before starting PM2
+export AWS_ACCESS_KEY_ID='your-access-key'
+export AWS_SECRET_ACCESS_KEY='your-secret-key'
+export AWS_REGION='sa-east-1'
+export AWS_S3_BUCKET_NAME='gruporeis'
+pm2 start ecosystem.config.cjs
+
+# Option 2: Create a .env file (not committed to git) and use dotenv
+# Or set them in your server's environment (systemd, etc.)
+```
 
 ### 2. Create Logs Directory
 
