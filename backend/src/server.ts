@@ -24,6 +24,8 @@ import locationCaptureRouter from "./routes/location-capture";
 import budgetsRouter from "./routes/budgets";
 import travelPricingRouter from "./routes/travel-pricing";
 import distanceRouter from "./routes/distance";
+import { connectDB } from "./db";
+import mongoose from "mongoose";
 
 const app = express();
 
@@ -39,8 +41,50 @@ app.use(
 
 app.use(express.json());
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+// Health check endpoint
+app.get("/api/health", async (_req, res) => {
+  try {
+    // Check database connection
+    await connectDB();
+    const dbStatus = mongoose.connection.readyState;
+    const dbStatusText = dbStatus === 1 ? "connected" : dbStatus === 2 ? "connecting" : "disconnected";
+    
+    const health = {
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || "development",
+      database: {
+        status: dbStatusText,
+        readyState: dbStatus
+      },
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        unit: "MB"
+      }
+    };
+
+    // If database is not connected, return 503 (Service Unavailable)
+    if (dbStatus !== 1) {
+      return res.status(503).json({
+        ...health,
+        status: "unhealthy",
+        error: "Database connection failed"
+      });
+    }
+
+    res.status(200).json(health);
+  } catch (error: any) {
+    res.status(503).json({
+      status: "unhealthy",
+      timestamp: new Date().toISOString(),
+      error: error?.message || "Health check failed",
+      database: {
+        status: "error"
+      }
+    });
+  }
 });
 
 app.use("/api/clients", clientsRouter);

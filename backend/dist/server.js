@@ -29,6 +29,8 @@ const location_capture_1 = __importDefault(require("./routes/location-capture"))
 const budgets_1 = __importDefault(require("./routes/budgets"));
 const travel_pricing_1 = __importDefault(require("./routes/travel-pricing"));
 const distance_1 = __importDefault(require("./routes/distance"));
+const db_1 = require("./db");
+const mongoose_1 = __importDefault(require("mongoose"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 4000;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
@@ -37,8 +39,48 @@ app.use((0, cors_1.default)({
     credentials: true
 }));
 app.use(express_1.default.json());
-app.get("/health", (_req, res) => {
-    res.json({ ok: true });
+// Health check endpoint
+app.get("/api/health", async (_req, res) => {
+    try {
+        // Check database connection
+        await (0, db_1.connectDB)();
+        const dbStatus = mongoose_1.default.connection.readyState;
+        const dbStatusText = dbStatus === 1 ? "connected" : dbStatus === 2 ? "connecting" : "disconnected";
+        const health = {
+            status: "ok",
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            environment: process.env.NODE_ENV || "development",
+            database: {
+                status: dbStatusText,
+                readyState: dbStatus
+            },
+            memory: {
+                used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+                total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+                unit: "MB"
+            }
+        };
+        // If database is not connected, return 503 (Service Unavailable)
+        if (dbStatus !== 1) {
+            return res.status(503).json({
+                ...health,
+                status: "unhealthy",
+                error: "Database connection failed"
+            });
+        }
+        res.status(200).json(health);
+    }
+    catch (error) {
+        res.status(503).json({
+            status: "unhealthy",
+            timestamp: new Date().toISOString(),
+            error: error?.message || "Health check failed",
+            database: {
+                status: "error"
+            }
+        });
+    }
 });
 app.use("/api/clients", clients_1.default);
 app.use("/api/settings", settings_1.default);

@@ -155,6 +155,29 @@ pm2 status
 curl http://localhost:4000/api/health
 ```
 
+The health endpoint returns:
+- **200 OK**: Service is healthy (database connected)
+- **503 Service Unavailable**: Service is unhealthy (database disconnected or error)
+
+Example response (healthy):
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-12-17T23:45:00.000Z",
+  "uptime": 3600,
+  "environment": "production",
+  "database": {
+    "status": "connected",
+    "readyState": 1
+  },
+  "memory": {
+    "used": 45,
+    "total": 128,
+    "unit": "MB"
+  }
+}
+```
+
 ### View detailed logs
 ```bash
 pm2 logs gruporeis-backend --lines 100
