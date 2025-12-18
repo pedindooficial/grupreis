@@ -60,7 +60,7 @@ router.post("/calculate", async (req, res) => {
     console.log("Endereço cliente:", clientAddress);
 
     // Use Google Maps Distance Matrix API
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || "AIzaSyAUoyCSevBWa4CkeDcBuYd-R0mbR2NtpIs";
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ 
         error: "Google Maps API Key não configurada no servidor" 
@@ -231,7 +231,7 @@ router.post("/geocode", async (req, res) => {
 
     const { lat, lng } = parsed.data;
     
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY || "AIzaSyAUoyCSevBWa4CkeDcBuYd-R0mbR2NtpIs";
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
       return res.status(500).json({
         error: "Google Maps API Key não configurada no servidor"

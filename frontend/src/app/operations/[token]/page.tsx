@@ -1398,7 +1398,7 @@ export default function OperationPublicPage({ params }: { params: { token: strin
                       loading="lazy"
                       allowFullScreen
                       referrerPolicy="no-referrer-when-downgrade"
-                      src={`https://www.google.com/maps/embed/v1/directions?key=AIzaSyAUoyCSevBWa4CkeDcBuYd-R0mbR2NtpIs&origin=${encodeURIComponent(headquartersAddress)}&destination=${encodeURIComponent(selectedJob.site)}&mode=driving`}
+                      src={`https://www.google.com/maps/embed/v1/directions?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&origin=${encodeURIComponent(headquartersAddress)}&destination=${encodeURIComponent(selectedJob.site)}&mode=driving`}
                     />
                   </div>
                 </div>

@@ -30,7 +30,7 @@ export default function JobsMap({ jobs }: JobsMapProps) {
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [mapReady, setMapReady] = useState(false);
 
-  const API_KEY = "AIzaSyAUoyCSevBWa4CkeDcBuYd-R0mbR2NtpIs";
+  const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   const addDebug = (msg: string) => {
     console.log(`[JobsMap] ${msg}`);

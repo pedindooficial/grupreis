@@ -18,3 +18,7 @@ pnpm-lock.yaml
 .env.test.local
 .env.production.local
 
+# PM2 logs
+backend/logs/
+*.log
+
