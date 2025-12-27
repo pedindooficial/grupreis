@@ -42,7 +42,12 @@ export function useOperations(teamId: string) {
         return;
       }
       setPassword(pass);
-      setData(json.data);
+      if (json?.data) {
+        setData(json.data);
+      } else {
+        if (!silent) Swal.fire("Erro", "Resposta inválida do servidor.", "error");
+        return;
+      }
       
       // Store with timestamp
       const timestamp = Date.now();

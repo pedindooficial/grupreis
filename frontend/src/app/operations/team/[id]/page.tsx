@@ -1,7 +1,6 @@
-"use client";
-
 import "@/app/globals.css";
 import { useState } from "react";
+import { useParams } from "react-router-dom";
 import { MainView } from "./types";
 import { DATE_FILTERS, ICONS } from "./constants";
 import { statusLabel } from "./utils";
@@ -12,8 +11,12 @@ import JobCard from "./_components/JobCard";
 import BottomNavigation from "./_components/BottomNavigation";
 import SignatureCanvas from "@/components/SignatureCanvas";
 
-export default function OperationTeamPage({ params }: { params: { id: string } }) {
-  const teamId = params.id;
+export default function OperationTeamPage() {
+  const { id: teamId } = useParams<{ id: string }>();
+  
+  if (!teamId) {
+    return <div className="min-h-screen flex items-center justify-center text-white">Team ID não encontrado</div>;
+  }
   const [view, setView] = useState<MainView>("ops");
   
   const {
