@@ -479,6 +479,82 @@ export function useOperations(teamId: string) {
 
     // Check if device is mobile/tablet (has GPS)
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    // Function to open Google Maps app on mobile
+    const openGoogleMapsApp = (destination: string, origin?: string) => {
+      if (isAndroid) {
+        // Android: Use google.navigation: scheme for route navigation
+        let appUrl: string;
+        if (origin) {
+          // With origin (route navigation)
+          appUrl = `google.navigation:q=${destination}`;
+        } else {
+          // Just destination
+          appUrl = `google.navigation:q=${destination}`;
+        }
+        
+        // Create a hidden link and click it to open the app
+        const link = document.createElement('a');
+        link.href = appUrl;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Fallback to web version after a short delay
+        setTimeout(() => {
+          const webUrl = origin
+            ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
+            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
+          window.open(webUrl, '_blank');
+        }, 1000);
+      } else if (isIOS) {
+        // iOS: Use comgooglemaps:// scheme (Google Maps app)
+        let appUrl: string;
+        if (origin) {
+          appUrl = `comgooglemaps://?daddr=${destination}&saddr=${origin}&directionsmode=driving`;
+        } else {
+          appUrl = `comgooglemaps://?daddr=${destination}&directionsmode=driving`;
+        }
+        
+        // Create a hidden link and click it to open the app
+        const link = document.createElement('a');
+        link.href = appUrl;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Fallback to Apple Maps if Google Maps not installed, then web
+        setTimeout(() => {
+          const appleMapsUrl = origin
+            ? `maps://?daddr=${destination}&saddr=${origin}`
+            : `maps://?daddr=${destination}`;
+          const appleLink = document.createElement('a');
+          appleLink.href = appleMapsUrl;
+          appleLink.style.display = 'none';
+          document.body.appendChild(appleLink);
+          appleLink.click();
+          document.body.removeChild(appleLink);
+          
+          // Final fallback to web
+          setTimeout(() => {
+            const webUrl = origin
+              ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
+              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
+            window.open(webUrl, '_blank');
+          }, 1000);
+        }, 1000);
+      } else {
+        // Desktop or other: open in web browser
+        const webUrl = origin
+          ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
+          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
+        window.open(webUrl, '_blank');
+      }
+    };
     
     // If desktop, show alert about GPS requirement
     if (!isMobile) {
@@ -518,7 +594,7 @@ export function useOperations(teamId: string) {
         text: "Seu navegador não suporta geolocalização. Abrindo apenas o destino...",
         icon: "info"
       }).then(() => {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destinationParam)}`, '_blank');
+        openGoogleMapsApp(destinationParam);
       });
       return;
     }
@@ -551,7 +627,7 @@ export function useOperations(teamId: string) {
               navigator.geolocation.clearWatch(watchId);
             }
             Swal.close();
-            window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destinationParam)}`, '_blank');
+            openGoogleMapsApp(destinationParam);
           };
         }
 
@@ -569,8 +645,8 @@ export function useOperations(teamId: string) {
             
             Swal.close();
             const currentLocation = `${latitude},${longitude}`;
-            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(currentLocation)}&destination=${encodeURIComponent(destinationParam)}&travelmode=driving`;
-            window.open(googleMapsUrl, '_blank');
+            // Open Google Maps app on mobile with route navigation
+            openGoogleMapsApp(destinationParam, currentLocation);
           },
           (error) => {
             if (positionObtained) return;
@@ -615,7 +691,7 @@ export function useOperations(teamId: string) {
                       Você ainda pode abrir o destino no Google Maps:
                     </p>
                     <button
-                      onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destinationParam)}', '_blank'); Swal.close();"
+                      id="openMapsErrorBtn"
                       class="w-full flex items-center justify-center gap-2 p-3 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition text-sm font-semibold"
                     >
                       <span class="text-xl">🗺️</span>
@@ -633,6 +709,15 @@ export function useOperations(teamId: string) {
               customClass: {
                 popup: "text-left",
                 htmlContainer: "text-gray-600"
+              },
+              didOpen: () => {
+                const openMapsBtn = document.getElementById('openMapsErrorBtn');
+                if (openMapsBtn) {
+                  openMapsBtn.onclick = () => {
+                    Swal.close();
+                    openGoogleMapsApp(destinationParam);
+                  };
+                }
               }
             });
           },
