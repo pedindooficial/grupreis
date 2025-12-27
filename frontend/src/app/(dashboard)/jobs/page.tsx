@@ -84,33 +84,60 @@ const formatDateTime = (dateTimeString: string | null | undefined): string => {
 };
 
 // Helper function to convert datetime-local format to ISO string for backend
+// Preserves the local time without timezone conversion
 const convertToISO = (dateTimeLocal: string): string => {
   if (!dateTimeLocal || dateTimeLocal.trim() === "") return "";
   try {
     // datetime-local format is YYYY-MM-DDTHH:mm
-    // Convert to ISO format for backend
-    const date = new Date(dateTimeLocal);
-    if (isNaN(date.getTime())) return "";
-    return date.toISOString();
+    // Parse the components directly to avoid timezone conversion
+    const [datePart, timePart] = dateTimeLocal.split("T");
+    if (!datePart || !timePart) return "";
+    
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hours, minutes] = timePart.split(":").map(Number);
+    
+    if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
+      return "";
+    }
+    
+    // Create ISO string treating the local time as if it were UTC
+    // This preserves the exact time the user selected
+    return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}T${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:00.000Z`;
   } catch {
     return "";
   }
 };
 
 // Helper function to convert ISO string to datetime-local format for input
+// Extracts the time components directly from the ISO string to avoid timezone conversion
 const convertFromISO = (isoString: string | null | undefined): string => {
   if (!isoString) return "";
   try {
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return "";
-    // Convert to datetime-local format: YYYY-MM-DDTHH:mm
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, "0");
-    const day = date.getDate().toString().padStart(2, "0");
-    const hours = date.getHours().toString().padStart(2, "0");
-    const minutes = date.getMinutes().toString().padStart(2, "0");
+    // Parse ISO string directly: YYYY-MM-DDTHH:mm:ss.sssZ
+    // Extract the date and time components before the 'Z' or timezone offset
+    const isoDate = isoString.split("T")[0]; // YYYY-MM-DD
+    const timePart = isoString.split("T")[1]; // HH:mm:ss.sssZ or HH:mm:ss.sss+HH:mm
     
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+    if (!isoDate || !timePart) {
+      // Fallback to Date object if format is unexpected
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return "";
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const day = date.getDate().toString().padStart(2, "0");
+      const hours = date.getHours().toString().padStart(2, "0");
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    
+    // Extract hours and minutes from time part (before seconds or timezone)
+    const timeMatch = timePart.match(/^(\d{2}):(\d{2})/);
+    if (timeMatch) {
+      const [, hours, minutes] = timeMatch;
+      return `${isoDate}T${hours}:${minutes}`;
+    }
+    
+    return "";
   } catch {
     return "";
   }
