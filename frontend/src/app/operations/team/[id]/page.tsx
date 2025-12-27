@@ -1,10 +1,12 @@
 import "@/app/globals.css";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import Swal from "sweetalert2";
 import { MainView } from "./types";
 import { DATE_FILTERS, ICONS } from "./constants";
 import { statusLabel } from "./utils";
 import { useOperations } from "./hooks/useOperations";
+import { apiFetch } from "@/lib/api-client";
 import LoadingScreen from "./_components/LoadingScreen";
 import LoginScreen from "./_components/LoginScreen";
 import JobCard from "./_components/JobCard";
@@ -296,6 +298,41 @@ export default function OperationTeamPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Receipt Section */}
+              {(selectedJob.received || hasTransactionForJob(selectedJob._id)) && selectedJob.receiptFileKey && (
+                <div className="mt-3 sm:mt-4 rounded-lg sm:rounded-xl border border-blue-400/30 bg-blue-500/10 p-2.5 sm:p-3 sm:p-4">
+                  <div className="text-xs sm:text-sm font-semibold text-white mb-2 sm:mb-3">
+                    📎 Comprovante de Recebimento
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await apiFetch("/files/presigned-url", {
+                          method: "POST",
+                          body: JSON.stringify({ key: selectedJob.receiptFileKey })
+                        });
+                        const data = await res.json();
+                        if (res.ok && data?.data?.url) {
+                          window.open(data.data.url, "_blank");
+                        } else {
+                          Swal.fire("Erro", "Não foi possível baixar o comprovante", "error");
+                        }
+                      } catch (err) {
+                        console.error("Erro ao baixar comprovante:", err);
+                        Swal.fire("Erro", "Não foi possível baixar o comprovante", "error");
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-400/50 bg-blue-500/20 px-4 py-2.5 sm:py-2 text-xs sm:text-sm font-semibold text-blue-300 transition active:border-blue-400 active:bg-blue-500/30 touch-manipulation min-h-[44px]"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Baixar Comprovante
+                  </button>
+                </div>
+              )}
 
               {/* Signature Section */}
               <div className="mt-3 sm:mt-4 rounded-lg sm:rounded-xl border border-white/10 bg-white/5 p-2.5 sm:p-3 sm:p-4">

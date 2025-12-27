@@ -108,11 +108,12 @@ router.get("/availability", async (req, res) => {
     endOfDay.setHours(23, 59, 59, 999);
 
     // Find all jobs for this team on this date with their estimated duration
+    // Exclude cancelled and completed jobs - they don't block availability
     const existingJobs = await JobModel.find({
       team: team as string,
-      status: { $ne: "cancelada" } // Don't count cancelled jobs
+      status: { $nin: ["cancelada", "concluida"] } // Don't count cancelled or completed jobs
     })
-      .select("plannedDate estimatedDuration services")
+      .select("plannedDate estimatedDuration services status")
       .lean();
 
     // Filter jobs that fall on the selected date and get their durations
@@ -269,6 +270,7 @@ router.get("/", async (_req, res) => {
           received: 1,
           receivedAt: 1,
           receipt: 1,
+          receiptFileKey: 1,
           clientSignature: 1,
           clientSignedAt: 1,
           createdAt: 1,

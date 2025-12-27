@@ -1109,9 +1109,16 @@ export default function CashPage() {
                 <button
                   onClick={async () => {
                     try {
-                      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
-                      const downloadUrl = `${apiUrl}/s3/download/${selected.receiptFileKey}`;
-                      window.open(downloadUrl, "_blank");
+                      const res = await apiFetch("/files/presigned-url", {
+                        method: "POST",
+                        body: JSON.stringify({ key: selected.receiptFileKey })
+                      });
+                      const data = await res.json();
+                      if (res.ok && data?.data?.url) {
+                        window.open(data.data.url, "_blank");
+                      } else {
+                        Swal.fire("Erro", "Não foi possível baixar o comprovante", "error");
+                      }
                     } catch (err) {
                       console.error("Erro ao baixar comprovante:", err);
                       Swal.fire("Erro", "Não foi possível baixar o comprovante", "error");
