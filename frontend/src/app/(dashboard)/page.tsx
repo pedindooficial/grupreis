@@ -25,6 +25,7 @@ export default function Home() {
   const [machines, setMachines] = useState<any[]>([]);
   const [equipment, setEquipment] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [maintenanceRecords, setMaintenanceRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null); // null = all teams
 
@@ -39,7 +40,8 @@ export default function Home() {
           teamsRes,
           machinesRes,
           equipmentRes,
-          transactionsRes
+          transactionsRes,
+          maintenanceRes
         ] = await Promise.all([
           apiFetch("/clients", { cache: "no-store" }),
           apiFetch("/jobs", { cache: "no-store" }),
@@ -47,7 +49,8 @@ export default function Home() {
           apiFetch("/teams", { cache: "no-store" }),
           apiFetch("/machines", { cache: "no-store" }),
           apiFetch("/equipment", { cache: "no-store" }),
-          apiFetch("/cash", { cache: "no-store" })
+          apiFetch("/cash", { cache: "no-store" }),
+          apiFetch("/maintenance", { cache: "no-store" })
         ]);
 
         const clientsData = await clientsRes.json().catch(() => null);
@@ -57,6 +60,7 @@ export default function Home() {
         const machinesData = await machinesRes.json().catch(() => null);
         const equipmentData = await equipmentRes.json().catch(() => null);
         const transactionsData = await transactionsRes.json().catch(() => null);
+        const maintenanceData = await maintenanceRes.json().catch(() => null);
 
         setClients(Array.isArray(clientsData?.data) ? clientsData.data : []);
         setJobs(Array.isArray(jobsData?.data) ? jobsData.data : []);
@@ -65,6 +69,7 @@ export default function Home() {
         setMachines(Array.isArray(machinesData?.data) ? machinesData.data : []);
         setEquipment(Array.isArray(equipmentData?.data) ? equipmentData.data : []);
         setTransactions(Array.isArray(transactionsData?.data) ? transactionsData.data : []);
+        setMaintenanceRecords(Array.isArray(maintenanceData?.data) ? maintenanceData.data : []);
       } catch (err) {
         console.error("Erro ao carregar dados do dashboard", err);
       } finally {
@@ -689,6 +694,273 @@ export default function Home() {
             OS em andamento
           </div>
         </div>
+      </div>
+
+      {/* Manutenção Section */}
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-orange-100">
+              Gestão de Manutenção
+            </div>
+            <h2 className="mt-3 text-2xl font-semibold leading-tight text-white md:text-3xl">
+              Manutenções
+            </h2>
+            <p className="mt-1 text-sm text-slate-300">
+              Visão geral de manutenções de equipamentos e máquinas
+            </p>
+          </div>
+        </div>
+
+        {/* Maintenance Stats */}
+        {(() => {
+          const getDaysUntil = (dateString: string): number => {
+            if (!dateString) return Infinity;
+            try {
+              let maintenanceDate: Date;
+              if (dateString.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                const [day, month, year] = dateString.split('/').map(Number);
+                maintenanceDate = new Date(year, month - 1, day);
+              } else if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                maintenanceDate = new Date(dateString);
+              } else {
+                maintenanceDate = new Date(dateString);
+              }
+              if (isNaN(maintenanceDate.getTime())) return Infinity;
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              maintenanceDate.setHours(0, 0, 0, 0);
+              const diffTime = maintenanceDate.getTime() - today.getTime();
+              return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            } catch {
+              return Infinity;
+            }
+          };
+
+          const formatDate = (dateString: string | undefined | null): string => {
+            if (!dateString) return "-";
+            try {
+              if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                const [year, month, day] = dateString.split("-");
+                return `${day}/${month}/${year}`;
+              }
+              const date = new Date(dateString);
+              if (!isNaN(date.getTime())) {
+                return date.toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric"
+                });
+              }
+              return dateString;
+            } catch {
+              return dateString;
+            }
+          };
+
+          // Get all items with nextMaintenance dates
+          const allItemsWithMaintenance = [
+            ...equipment.filter((e) => e.nextMaintenance && e.status === "ativo").map((e) => ({
+              ...e,
+              type: "equipment" as const,
+              itemName: e.name
+            })),
+            ...machines.filter((m) => m.nextMaintenance && m.status === "ativa").map((m) => ({
+              ...m,
+              type: "machine" as const,
+              itemName: m.name
+            }))
+          ];
+
+          // Check maintenance history for nextMaintenanceDate
+          const itemsWithEffectiveDates = allItemsWithMaintenance.map((item) => {
+            // Find most recent maintenance record for this item
+            const itemMaintenance = maintenanceRecords
+              .filter((m) => m.itemId === item._id && m.itemType === item.type)
+              .sort((a, b) => {
+                const dateA = new Date(a.date).getTime();
+                const dateB = new Date(b.date).getTime();
+                return dateB - dateA;
+              });
+
+            // Use nextMaintenanceDate from most recent maintenance record if available
+            const effectiveNextMaintenance = itemMaintenance.find((m) => m.nextMaintenanceDate)?.nextMaintenanceDate || item.nextMaintenance;
+
+            return {
+              ...item,
+              effectiveNextMaintenance,
+              daysUntil: getDaysUntil(effectiveNextMaintenance)
+            };
+          });
+
+          const upcomingMaintenance = itemsWithEffectiveDates
+            .filter((item) => item.daysUntil <= 30 && item.daysUntil >= -7)
+            .sort((a, b) => a.daysUntil - b.daysUntil);
+
+          const overdueMaintenance = itemsWithEffectiveDates
+            .filter((item) => item.daysUntil < 0)
+            .sort((a, b) => a.daysUntil - b.daysUntil);
+
+          const recentMaintenance = maintenanceRecords
+            .filter((m) => {
+              const maintenanceDate = new Date(m.date).getTime();
+              const thirtyDaysAgo = new Date().getTime() - (30 * 24 * 60 * 60 * 1000);
+              return maintenanceDate >= thirtyDaysAgo;
+            })
+            .sort((a, b) => {
+              const dateA = new Date(a.date).getTime();
+              const dateB = new Date(b.date).getTime();
+              return dateB - dateA;
+            })
+            .slice(0, 5);
+
+          const totalMaintenanceCost = maintenanceRecords
+            .filter((m) => m.cost && m.cost > 0)
+            .reduce((sum, m) => sum + (m.cost || 0), 0);
+
+          const thisMonthMaintenanceCost = maintenanceRecords
+            .filter((m) => {
+              if (!m.cost || m.cost <= 0) return false;
+              const maintenanceDate = new Date(m.date);
+              const now = new Date();
+              return maintenanceDate.getMonth() === now.getMonth() && maintenanceDate.getFullYear() === now.getFullYear();
+            })
+            .reduce((sum, m) => sum + (m.cost || 0), 0);
+
+          return (
+            <>
+              {/* Maintenance KPIs */}
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
+                <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-4 shadow-lg shadow-black/30">
+                  <div className="text-[11px] uppercase tracking-wide text-orange-200">Manutenções Próximas</div>
+                  <div className="mt-2 text-3xl font-semibold text-orange-100">{upcomingMaintenance.length}</div>
+                  <div className="mt-1 text-xs text-orange-200/70">
+                    {overdueMaintenance.length > 0 && `${overdueMaintenance.length} atrasada(s)`}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/20 to-red-600/10 p-4 shadow-lg shadow-black/30">
+                  <div className="text-[11px] uppercase tracking-wide text-red-200">Manutenções Atrasadas</div>
+                  <div className="mt-2 text-3xl font-semibold text-red-100">{overdueMaintenance.length}</div>
+                  <div className="mt-1 text-xs text-red-200/70">
+                    Requer atenção imediata
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-4 shadow-lg shadow-black/30">
+                  <div className="text-[11px] uppercase tracking-wide text-emerald-200">Custo Total</div>
+                  <div className="mt-2 text-3xl font-semibold text-emerald-100">
+                    {formatCurrency(totalMaintenanceCost)}
+                  </div>
+                  <div className="mt-1 text-xs text-emerald-200/70">
+                    {formatCurrency(thisMonthMaintenanceCost)} este mês
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-4 shadow-lg shadow-black/30">
+                  <div className="text-[11px] uppercase tracking-wide text-blue-200">Registros</div>
+                  <div className="mt-2 text-3xl font-semibold text-blue-100">{maintenanceRecords.length}</div>
+                  <div className="mt-1 text-xs text-blue-200/70">
+                    Total de manutenções
+                  </div>
+                </div>
+              </div>
+
+              {/* Upcoming and Recent Maintenance */}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/30">
+                  <div className="mb-4 text-sm font-semibold text-white">Manutenções Próximas (30 dias)</div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {upcomingMaintenance.length === 0 ? (
+                      <div className="text-sm text-slate-400">Nenhuma manutenção próxima</div>
+                    ) : (
+                      upcomingMaintenance.map((item) => (
+                        <div
+                          key={`${item.type}-${item._id}`}
+                          className="rounded-lg border border-white/10 bg-slate-900/50 p-3 text-sm"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-semibold text-white text-xs">
+                                {item.itemName || item.name}
+                              </div>
+                              <div className="text-xs text-slate-400 mt-1">
+                                {item.type === "equipment" ? "Equipamento" : "Máquina"}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div
+                                className={`text-xs font-semibold px-2 py-1 rounded ${
+                                  item.daysUntil < 0
+                                    ? "bg-red-500/20 text-red-300"
+                                    : item.daysUntil <= 7
+                                    ? "bg-orange-500/20 text-orange-300"
+                                    : "bg-yellow-500/20 text-yellow-300"
+                                }`}
+                              >
+                                {item.daysUntil < 0
+                                  ? `${Math.abs(item.daysUntil)} dias atrasado`
+                                  : item.daysUntil === 0
+                                  ? "Hoje"
+                                  : item.daysUntil === 1
+                                  ? "Amanhã"
+                                  : `Em ${item.daysUntil} dias`}
+                              </div>
+                              <div className="text-xs text-slate-300 mt-1">
+                                {formatDate(item.effectiveNextMaintenance)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/30">
+                  <div className="mb-4 text-sm font-semibold text-white">Manutenções Recentes</div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {recentMaintenance.length === 0 ? (
+                      <div className="text-sm text-slate-400">Nenhuma manutenção recente</div>
+                    ) : (
+                      recentMaintenance.map((record) => (
+                        <div
+                          key={record._id}
+                          className="rounded-lg border border-white/10 bg-slate-900/50 p-3 text-sm"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-semibold text-white text-xs">
+                                {record.itemName || "Item"}
+                              </div>
+                              <div className="text-xs text-slate-400 mt-1">
+                                {record.itemType === "equipment" ? "Equipamento" : "Máquina"} • {formatDate(record.date)}
+                              </div>
+                              {record.type && (
+                                <div className="text-xs text-blue-300 mt-1">
+                                  {record.type}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              {record.cost && record.cost > 0 && (
+                                <div className="text-xs font-semibold text-emerald-300">
+                                  {formatCurrency(record.cost)}
+                                </div>
+                              )}
+                              {record.vendor && (
+                                <div className="text-xs text-slate-400 mt-1">
+                                  {record.vendor}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );

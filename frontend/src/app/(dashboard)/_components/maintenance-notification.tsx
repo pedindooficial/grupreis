@@ -3,6 +3,19 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { apiFetch } from "@/lib/api-client";
 
+interface MaintenanceRecord {
+  _id: string;
+  date: string;
+  type: string;
+  details?: string;
+  cost?: number;
+  vendor?: string;
+  performedBy?: string;
+  nextMaintenanceDate?: string;
+  nextMaintenanceType?: string;
+  notes?: string;
+}
+
 interface MaintenanceItem {
   _id: string;
   name: string;
@@ -11,6 +24,10 @@ interface MaintenanceItem {
   status?: string;
   // Full item data for details
   fullData?: any;
+  // Maintenance history
+  maintenanceHistory?: MaintenanceRecord[];
+  lastMaintenance?: MaintenanceRecord;
+  upcomingMaintenance?: MaintenanceRecord;
 }
 
 export default function MaintenanceNotification() {
@@ -30,57 +47,123 @@ export default function MaintenanceNotification() {
   const getDaysUntil = (dateString: string): number => {
     if (!dateString) return Infinity;
     try {
-      const maintenanceDate = new Date(dateString);
+      let maintenanceDate: Date;
+      
+      // Handle DD/MM/YYYY format
+      if (dateString.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+        const [day, month, year] = dateString.split('/').map(Number);
+        maintenanceDate = new Date(year, month - 1, day);
+      } 
+      // Handle YYYY-MM-DD format (ISO)
+      else if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        maintenanceDate = new Date(dateString);
+      }
+      // Try default Date parsing
+      else {
+        maintenanceDate = new Date(dateString);
+      }
+      
+      // Check if date is valid
+      if (isNaN(maintenanceDate.getTime())) {
+        console.warn("Invalid date format:", dateString);
+        return Infinity;
+      }
+      
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       maintenanceDate.setHours(0, 0, 0, 0);
       const diffTime = maintenanceDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays;
-    } catch {
+    } catch (err) {
+      console.error("Error calculating days until maintenance:", err, dateString);
       return Infinity;
     }
   };
 
+  // Get the effective next maintenance date for an item
+  // Priority: maintenance history nextMaintenanceDate > item's nextMaintenance
+  const getEffectiveNextMaintenance = async (itemId: string, itemNextMaintenance: string | undefined): Promise<string | null> => {
+    try {
+      // First check maintenance history for nextMaintenanceDate
+      const history = await loadMaintenanceHistory(itemId);
+      if (history && history.length > 0) {
+        // Find the most recent maintenance record with a nextMaintenanceDate
+        const sortedHistory = history.sort((a, b) => {
+          const dateA = new Date(a.date).getTime();
+          const dateB = new Date(b.date).getTime();
+          return dateB - dateA; // Most recent first
+        });
+        
+        // Look for nextMaintenanceDate in maintenance records (most recent first)
+        for (const record of sortedHistory) {
+          if (record.nextMaintenanceDate) {
+            return record.nextMaintenanceDate;
+          }
+        }
+      }
+      
+      // Fall back to item's nextMaintenance
+      return itemNextMaintenance || null;
+    } catch (err) {
+      console.error("Error getting effective next maintenance:", err);
+      return itemNextMaintenance || null;
+    }
+  };
+
   // Filter items that need maintenance (within 30 days or overdue)
-  const getMaintenanceAlerts = (equipment: any[], machines: any[]): MaintenanceItem[] => {
+  const getMaintenanceAlerts = async (equipment: any[], machines: any[]): Promise<MaintenanceItem[]> => {
     const alerts: MaintenanceItem[] = [];
 
     // Check equipment
-    equipment.forEach((item) => {
-      if (item.nextMaintenance && item.status === "ativo") {
-        const daysUntil = getDaysUntil(item.nextMaintenance);
-        if (daysUntil <= 30 && daysUntil >= -7) {
-          // Within 30 days or up to 7 days overdue
-          alerts.push({
-            _id: item._id,
-            name: item.name,
-            type: "equipment",
-            nextMaintenance: item.nextMaintenance,
-            status: item.status,
-            fullData: item // Store full data for details
-          });
+    for (const item of equipment) {
+      if (item.status === "ativo") {
+        const effectiveNextMaintenance = await getEffectiveNextMaintenance(item._id, item.nextMaintenance);
+        if (effectiveNextMaintenance) {
+          const daysUntil = getDaysUntil(effectiveNextMaintenance);
+          if (daysUntil <= 30 && daysUntil >= -7) {
+            // Within 30 days or up to 7 days overdue
+            alerts.push({
+              _id: item._id,
+              name: item.name,
+              type: "equipment",
+              nextMaintenance: effectiveNextMaintenance,
+              status: item.status,
+              fullData: item // Store full data for details
+            });
+          }
         }
       }
-    });
+    }
 
     // Check machines
-    machines.forEach((item) => {
-      if (item.nextMaintenance && item.status === "ativa") {
-        const daysUntil = getDaysUntil(item.nextMaintenance);
-        if (daysUntil <= 30 && daysUntil >= -7) {
-          // Within 30 days or up to 7 days overdue
-          alerts.push({
-            _id: item._id,
-            name: item.name,
-            type: "machine",
-            nextMaintenance: item.nextMaintenance,
-            status: item.status,
-            fullData: item // Store full data for details
-          });
+    for (const item of machines) {
+      if (item.status === "ativa") {
+        const effectiveNextMaintenance = await getEffectiveNextMaintenance(item._id, item.nextMaintenance);
+        if (effectiveNextMaintenance) {
+          const daysUntil = getDaysUntil(effectiveNextMaintenance);
+          // Debug log
+          console.log(`Machine ${item.name}: effectiveNextMaintenance="${effectiveNextMaintenance}", daysUntil=${daysUntil}, status="${item.status}"`);
+          if (daysUntil <= 30 && daysUntil >= -7) {
+            // Within 30 days or up to 7 days overdue
+            alerts.push({
+              _id: item._id,
+              name: item.name,
+              type: "machine",
+              nextMaintenance: effectiveNextMaintenance,
+              status: item.status,
+              fullData: item // Store full data for details
+            });
+          } else {
+            console.log(`Machine ${item.name} excluded: daysUntil=${daysUntil} (not within -7 to 30 days range)`);
+          }
+        } else {
+          console.log(`Machine ${item.name} excluded: no effective nextMaintenance date`);
         }
+      } else {
+        console.log(`Machine ${item.name} excluded: status="${item.status}" (expected "ativa")`);
       }
-    });
+    }
 
     // Sort by urgency (overdue first, then by days until)
     return alerts.sort((a, b) => {
@@ -90,6 +173,20 @@ export default function MaintenanceNotification() {
       if (daysA >= 0 && daysB < 0) return 1;
       return daysA - daysB;
     });
+  };
+
+  // Load maintenance history for an item
+  const loadMaintenanceHistory = async (itemId: string): Promise<MaintenanceRecord[]> => {
+    try {
+      const res = await apiFetch(`/maintenance/item/${itemId}`, { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.data) {
+        return Array.isArray(data.data) ? data.data : [];
+      }
+    } catch (err) {
+      console.error("Erro ao carregar histórico de manutenção:", err);
+    }
+    return [];
   };
 
   useEffect(() => {
@@ -107,8 +204,44 @@ export default function MaintenanceNotification() {
         const equipment = Array.isArray(equipmentData?.data) ? equipmentData.data : [];
         const machines = Array.isArray(machinesData?.data) ? machinesData.data : [];
 
-        const alerts = getMaintenanceAlerts(equipment, machines);
-        setItems(alerts);
+        const alerts = await getMaintenanceAlerts(equipment, machines);
+        
+        // Load maintenance history for each alert
+        const alertsWithHistory = await Promise.all(
+          alerts.map(async (alert) => {
+            const history = await loadMaintenanceHistory(alert._id);
+            const sortedHistory = history.sort((a, b) => {
+              const dateA = new Date(a.date).getTime();
+              const dateB = new Date(b.date).getTime();
+              return dateB - dateA; // Most recent first
+            });
+            
+            // Find last maintenance (most recent past maintenance)
+            const lastMaintenance = sortedHistory.find(
+              (m) => new Date(m.date).getTime() <= new Date().getTime()
+            );
+            
+            // Find upcoming maintenance (next future maintenance from history)
+            const upcomingMaintenance = sortedHistory.find(
+              (m) => {
+                const maintenanceDate = new Date(m.date).getTime();
+                const today = new Date().getTime();
+                return maintenanceDate > today;
+              }
+            ) || sortedHistory.find(
+              (m) => m.nextMaintenanceDate && new Date(m.nextMaintenanceDate).getTime() > new Date().getTime()
+            );
+            
+            return {
+              ...alert,
+              maintenanceHistory: sortedHistory,
+              lastMaintenance: lastMaintenance || undefined,
+              upcomingMaintenance: upcomingMaintenance || undefined
+            };
+          })
+        );
+        
+        setItems(alertsWithHistory);
       } catch (err) {
         console.error("Erro ao carregar dados de manutenção:", err);
       } finally {
@@ -267,8 +400,18 @@ export default function MaintenanceNotification() {
                         </div>
                         <div className="mt-1 text-xs sm:text-sm font-medium text-white break-words">{item.name}</div>
                         <div className="mt-1 text-[10px] sm:text-xs text-slate-400 break-words">
-                          Próxima manutenção: {formatDate(item.nextMaintenance)}
+                          Próxima manutenção: {formatDate(item.upcomingMaintenance?.nextMaintenanceDate || item.upcomingMaintenance?.date || item.nextMaintenance)}
                         </div>
+                        {item.upcomingMaintenance?.type && (
+                          <div className="text-xs text-blue-300 mt-1">
+                            Tipo: {item.upcomingMaintenance.type}
+                          </div>
+                        )}
+                        {item.lastMaintenance && (
+                          <div className="text-xs text-emerald-300 mt-1">
+                            Última: {formatDate(item.lastMaintenance.date)} ({item.lastMaintenance.type})
+                          </div>
+                        )}
                       </div>
                       <div className="flex-shrink-0">
                         <svg
@@ -363,13 +506,22 @@ export default function MaintenanceNotification() {
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               {/* Urgency Alert */}
               {(() => {
-                const daysUntil = getDaysUntil(selectedItem.nextMaintenance);
+                // Use maintenance history data if available, otherwise fall back to item data
+                const nextMaintenanceDate = selectedItem.upcomingMaintenance?.nextMaintenanceDate 
+                  || selectedItem.upcomingMaintenance?.date 
+                  || selectedItem.nextMaintenance;
+                const daysUntil = getDaysUntil(nextMaintenanceDate);
                 const urgencyColor = getUrgencyColor(daysUntil);
                 const urgencyLabel = getUrgencyLabel(daysUntil);
                 const isOverdue = daysUntil < 0;
                 const isUrgent = daysUntil <= 7;
-                const maintenanceType = selectedItem.fullData?.nextMaintenanceType;
-                const maintenanceDetails = selectedItem.fullData?.nextMaintenanceDetails;
+                
+                // Priority: maintenance history > item data
+                const maintenanceType = selectedItem.upcomingMaintenance?.nextMaintenanceType 
+                  || selectedItem.upcomingMaintenance?.type
+                  || selectedItem.fullData?.nextMaintenanceType;
+                const maintenanceDetails = selectedItem.upcomingMaintenance?.details
+                  || selectedItem.fullData?.nextMaintenanceDetails;
 
                 return (
                   <div className={`rounded-lg border p-3 sm:p-4 ${
@@ -388,7 +540,7 @@ export default function MaintenanceNotification() {
                           {isOverdue ? "Manutenção Atrasada" : isUrgent ? "Manutenção Urgente" : "Manutenção Próxima"}
                         </div>
                         <div className="text-xs text-slate-300 mt-1 break-words">
-                          {urgencyLabel} • Data: {formatDate(selectedItem.nextMaintenance)}
+                          {urgencyLabel} • Data: {formatDate(nextMaintenanceDate)}
                         </div>
                         {maintenanceType && (
                           <div className="mt-2 text-xs sm:text-sm">
@@ -400,6 +552,12 @@ export default function MaintenanceNotification() {
                           <div className="mt-2 text-xs text-slate-300 break-words">
                             <span className="font-semibold text-slate-200">Detalhes: </span>
                             {maintenanceDetails}
+                          </div>
+                        )}
+                        {selectedItem.upcomingMaintenance?.vendor && (
+                          <div className="mt-2 text-xs text-slate-300">
+                            <span className="font-semibold text-slate-200">Fornecedor: </span>
+                            <span>{selectedItem.upcomingMaintenance.vendor}</span>
                           </div>
                         )}
                       </div>
@@ -491,8 +649,80 @@ export default function MaintenanceNotification() {
                 )}
               </div>
 
-              {/* Maintenance Details Section */}
-              {(selectedItem.fullData?.nextMaintenanceType || selectedItem.fullData?.nextMaintenanceDetails) && (
+              {/* Last Maintenance Record */}
+              {selectedItem.lastMaintenance && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 sm:p-4">
+                  <div className="text-xs sm:text-sm font-semibold text-emerald-300 mb-3">Última Manutenção Realizada</div>
+                  <div className="space-y-2">
+                    <div>
+                      <div className="text-xs text-slate-400 uppercase mb-1">Data</div>
+                      <div className="text-xs sm:text-sm text-emerald-200 font-medium">{formatDate(selectedItem.lastMaintenance.date)}</div>
+                    </div>
+                    {selectedItem.lastMaintenance.type && (
+                      <div>
+                        <div className="text-xs text-slate-400 uppercase mb-1">Tipo</div>
+                        <div className="text-xs sm:text-sm text-emerald-200 font-medium">{selectedItem.lastMaintenance.type}</div>
+                      </div>
+                    )}
+                    {selectedItem.lastMaintenance.details && (
+                      <div>
+                        <div className="text-xs text-slate-400 uppercase mb-1">Detalhes</div>
+                        <div className="text-xs sm:text-sm text-slate-200 whitespace-pre-wrap break-words">{selectedItem.lastMaintenance.details}</div>
+                      </div>
+                    )}
+                    {selectedItem.lastMaintenance.vendor && (
+                      <div>
+                        <div className="text-xs text-slate-400 uppercase mb-1">Fornecedor</div>
+                        <div className="text-xs sm:text-sm text-slate-200">{selectedItem.lastMaintenance.vendor}</div>
+                      </div>
+                    )}
+                    {selectedItem.lastMaintenance.cost && selectedItem.lastMaintenance.cost > 0 && (
+                      <div>
+                        <div className="text-xs text-slate-400 uppercase mb-1">Custo</div>
+                        <div className="text-xs sm:text-sm text-emerald-200 font-medium">
+                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(selectedItem.lastMaintenance.cost)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Maintenance History Summary */}
+              {selectedItem.maintenanceHistory && selectedItem.maintenanceHistory.length > 0 && (
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 sm:p-4">
+                  <div className="text-xs sm:text-sm font-semibold text-blue-300 mb-3">Histórico de Manutenção</div>
+                  <div className="text-xs text-slate-300 mb-2">
+                    Total de {selectedItem.maintenanceHistory.length} registro(s) de manutenção
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {selectedItem.maintenanceHistory.slice(0, 5).map((record) => (
+                      <div key={record._id} className="rounded border border-white/10 bg-white/5 p-2 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-white">{record.type}</span>
+                          <span className="text-slate-400">{formatDate(record.date)}</span>
+                        </div>
+                        {record.details && (
+                          <div className="text-slate-300 text-[10px] mt-1 line-clamp-2">{record.details}</div>
+                        )}
+                        {record.cost && record.cost > 0 && (
+                          <div className="text-emerald-300 text-[10px] mt-1">
+                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(record.cost)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {selectedItem.maintenanceHistory.length > 5 && (
+                      <div className="text-xs text-slate-400 text-center pt-2">
+                        + {selectedItem.maintenanceHistory.length - 5} registro(s) anterior(es)
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Maintenance Details Section (fallback if no history) */}
+              {!selectedItem.lastMaintenance && !selectedItem.upcomingMaintenance && (selectedItem.fullData?.nextMaintenanceType || selectedItem.fullData?.nextMaintenanceDetails) && (
                 <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 sm:p-4">
                   <div className="text-xs sm:text-sm font-semibold text-blue-300 mb-3">Detalhes da Manutenção</div>
                   <div className="space-y-2">
@@ -527,12 +757,16 @@ export default function MaintenanceNotification() {
                   <div className="flex-1 min-w-0">
                     <div className="text-xs sm:text-sm font-semibold text-blue-300 mb-2">O que fazer:</div>
                     <ol className="space-y-2 text-xs sm:text-sm text-slate-200">
-                      {selectedItem.fullData?.nextMaintenanceType && (
+                      {(selectedItem.upcomingMaintenance?.type || selectedItem.upcomingMaintenance?.nextMaintenanceType || selectedItem.fullData?.nextMaintenanceType) && (
                         <li className="flex gap-2">
                           <span className="text-blue-400 font-bold flex-shrink-0">1.</span>
                           <span className="break-words">
-                            Prepare o item para <strong className="text-blue-200">{selectedItem.fullData.nextMaintenanceType}</strong>
-                            {selectedItem.fullData?.nextMaintenanceDetails && `: ${selectedItem.fullData.nextMaintenanceDetails}`}
+                            Prepare o item para <strong className="text-blue-200">
+                              {selectedItem.upcomingMaintenance?.nextMaintenanceType 
+                                || selectedItem.upcomingMaintenance?.type
+                                || selectedItem.fullData?.nextMaintenanceType}
+                            </strong>
+                            {(selectedItem.upcomingMaintenance?.details || selectedItem.fullData?.nextMaintenanceDetails) && `: ${selectedItem.upcomingMaintenance?.details || selectedItem.fullData?.nextMaintenanceDetails}`}
                           </span>
                         </li>
                       )}

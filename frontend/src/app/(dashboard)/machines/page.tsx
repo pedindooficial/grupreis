@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { apiFetch } from "@/lib/api-client";
+import MaintenanceHistory from "./_components/MaintenanceHistory";
 
 type MachineStatus = "ativa" | "inativa";
 type MachineOpStatus = "operando" | "manutencao" | "parada" | "inativa";
@@ -853,6 +854,83 @@ export default function MachinesPage() {
             />
           </div>
 
+          {/* Maintenance History - Only show when editing existing machine */}
+          {editingId && (
+            <div className="mt-6 border-t border-white/10 pt-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white mb-2">Histórico de Manutenção</h3>
+                <p className="text-xs text-slate-400">Gerencie todas as manutenções realizadas nesta máquina</p>
+              </div>
+              <MaintenanceHistory
+                itemId={editingId}
+                itemType="machine"
+                itemName={form.name || "Máquina"}
+                onMaintenanceAdded={() => {
+                  // Reload machines to update nextMaintenance if it was updated
+                  const load = async () => {
+                    try {
+                      const [machinesRes] = await Promise.all([
+                        apiFetch("/machines", { cache: "no-store" })
+                      ]);
+                      const machinesData = await machinesRes.json().catch(() => null);
+                      if (machinesRes.ok && machinesData?.data) {
+                        setMachines(Array.isArray(machinesData.data) ? machinesData.data : []);
+                        // Update form with latest data if still editing
+                        if (editingId) {
+                          const updated = machinesData.data.find((m: any) => m._id === editingId);
+                          if (updated) {
+                            setForm({
+                              name: updated.name || "",
+                              plate: updated.plate || "",
+                              model: updated.model || "",
+                              year: updated.year?.toString() || "",
+                              chassi: updated.chassi || "",
+                              renavam: updated.renavam || "",
+                              category: updated.category || "",
+                              ownerCompany: updated.ownerCompany || "",
+                              internalCode: updated.internalCode || "",
+                              fuelType: updated.fuelType || "",
+                              fuelAverage: updated.fuelAverage?.toString() || "",
+                              fuelUnit: updated.fuelUnit || "L/h",
+                              tankCapacityL: updated.tankCapacityL?.toString() || "",
+                              consumptionKmPerL: updated.consumptionKmPerL?.toString() || "",
+                              useType: (updated.useType || "medio") as MachineUseType,
+                              autonomyEstimated: updated.autonomyEstimated?.toString() || "",
+                              hourmeterStart: updated.hourmeterStart?.toString() || "",
+                              odometerKm: updated.odometerKm?.toString() || "",
+                              weightKg: updated.weightKg?.toString() || "",
+                              loadCapacityKg: updated.loadCapacityKg?.toString() || "",
+                              status: (updated.status || "ativa") as MachineStatus,
+                              statusOperational: (updated.statusOperational || "operando") as MachineOpStatus,
+                              lastMaintenance: updated.lastMaintenance || "",
+                              nextMaintenance: updated.nextMaintenance || "",
+                              nextMaintenanceType: updated.nextMaintenanceType || "",
+                              nextMaintenanceDetails: updated.nextMaintenanceDetails || "",
+                              maintenanceType: updated.maintenanceType || "preventiva",
+                              maintenanceVendor: updated.maintenanceVendor || "",
+                              maintenanceCostAvg: updated.maintenanceCostAvg?.toString() || "",
+                              requiredLicense: updated.requiredLicense || "",
+                              mandatoryTraining: !!updated.mandatoryTraining,
+                              checklistRequired: !!updated.checklistRequired,
+                              lastInspection: updated.lastInspection || "",
+                              laudoValidity: updated.laudoValidity || "",
+                              operatorId: updated.operatorId || "",
+                              operatorName: updated.operatorName || "",
+                              notes: updated.notes || ""
+                            });
+                          }
+                        }
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  };
+                  load();
+                }}
+              />
+            </div>
+          )}
+
           <div className="mt-4 flex justify-end">
             <button
               onClick={handleSubmit}
@@ -951,7 +1029,17 @@ export default function MachinesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-slate-200">
-                      <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-end gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewMachine(machine);
+                          }}
+                          className="rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                        >
+                          Manutenção
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleEdit(machine)}
@@ -1253,6 +1341,39 @@ export default function MachinesPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Histórico de Manutenção */}
+            <div className="border-t border-white/10 pt-6 mb-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white mb-2">Histórico de Manutenção</h3>
+                <p className="text-xs text-slate-400">Gerencie todas as manutenções realizadas nesta máquina</p>
+              </div>
+              <MaintenanceHistory
+                itemId={viewingMachine._id}
+                itemType="machine"
+                itemName={viewingMachine.name}
+                onMaintenanceAdded={() => {
+                  // Reload machines to update nextMaintenance if it was updated
+                  const load = async () => {
+                    try {
+                      const [machinesRes] = await Promise.all([
+                        apiFetch("/machines", { cache: "no-store" })
+                      ]);
+                      const machinesData = await machinesRes.json().catch(() => null);
+                      if (machinesRes.ok && machinesData?.data) {
+                        setMachines(Array.isArray(machinesData.data) ? machinesData.data : []);
+                        // Update viewingMachine with latest data
+                        const updated = machinesData.data.find((m: any) => m._id === viewingMachine._id);
+                        if (updated) setViewingMachine(updated);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  };
+                  load();
+                }}
+              />
             </div>
 
             {/* Ações de Status */}

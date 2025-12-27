@@ -7,14 +7,17 @@ import { apiFetch } from "@/lib/api-client";
 type EquipStatus = "ativo" | "inativo";
 type EquipType = "equipamento" | "epi" | "ferramenta";
 
+import MaintenanceHistory from "./_components/MaintenanceHistory";
+
 export default function EquipmentPage() {
-  const [mode, setMode] = useState<"list" | "form">("list");
+  const [mode, setMode] = useState<"list" | "form" | "detail">("list");
   const [items, setItems] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EquipStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<EquipType | "all">("all");
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingItem, setViewingItem] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     name: "",
@@ -449,6 +452,58 @@ export default function EquipmentPage() {
             </div>
           </div>
 
+          {/* Maintenance History - Only show when editing existing item */}
+          {editingId && (
+            <div className="mt-6 border-t border-white/10 pt-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white mb-2">Histórico de Manutenção</h3>
+                <p className="text-xs text-slate-400">Gerencie todas as manutenções realizadas neste item</p>
+              </div>
+              <MaintenanceHistory
+                itemId={editingId}
+                itemType="equipment"
+                itemName={form.name || "Item"}
+                onMaintenanceAdded={() => {
+                  // Reload items to update nextMaintenance if it was updated
+                  const load = async () => {
+                    try {
+                      const res = await apiFetch("/equipment", { cache: "no-store" });
+                      const data = await res.json().catch(() => null);
+                      if (res.ok && data?.data) {
+                        setItems(Array.isArray(data.data) ? data.data : []);
+                        // Update form with latest data if still editing
+                        if (editingId) {
+                          const updated = data.data.find((i: any) => i._id === editingId);
+                          if (updated) {
+                            setForm({
+                              name: updated.name || "",
+                              type: (updated.type || "equipamento") as EquipType,
+                              category: updated.category || "",
+                              patrimony: updated.patrimony || "",
+                              serialNumber: updated.serialNumber || "",
+                              status: (updated.status || "ativo") as EquipStatus,
+                              quantity: updated.quantity?.toString() || "1",
+                              unit: updated.unit || "un",
+                              assignedTo: updated.assignedTo || "",
+                              location: updated.location || "",
+                              nextMaintenance: updated.nextMaintenance || "",
+                              nextMaintenanceType: updated.nextMaintenanceType || "",
+                              nextMaintenanceDetails: updated.nextMaintenanceDetails || "",
+                              notes: updated.notes || ""
+                            });
+                          }
+                        }
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  };
+                  load();
+                }}
+              />
+            </div>
+          )}
+
           <div className="mt-4 flex justify-end">
             <button
               onClick={handleSubmit}
@@ -527,7 +582,27 @@ export default function EquipmentPage() {
                       {item.nextMaintenance || "-"}
                     </td>
                     <td className="px-4 py-3 text-right text-slate-200">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewingItem(item);
+                            setMode("detail");
+                          }}
+                          className="rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                        >
+                          Manutenção
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewingItem(item);
+                            setMode("detail");
+                          }}
+                          className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-blue-100 transition hover:border-blue-300/40 hover:bg-blue-500/10"
+                        >
+                          Detalhes
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleEdit(item)}
@@ -551,6 +626,113 @@ export default function EquipmentPage() {
           </div>
         )}
       </div>
+
+      {/* Detail View */}
+      {mode === "detail" && viewingItem && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <div className="text-lg font-semibold text-white">{viewingItem.name}</div>
+              <div className="text-xs text-slate-400 mt-1">
+                {viewingItem.type === "epi"
+                  ? "EPI"
+                  : viewingItem.type === "ferramenta"
+                  ? "Ferramenta"
+                  : "Equipamento"}
+                {viewingItem.patrimony && ` • Patrimônio: ${viewingItem.patrimony}`}
+                {viewingItem.serialNumber && ` • Série: ${viewingItem.serialNumber}`}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setViewingItem(null);
+                setMode("list");
+              }}
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+            >
+              Voltar
+            </button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 mb-6">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="text-xs text-slate-400 uppercase mb-1">Status</div>
+              <div className="text-sm font-semibold text-white">
+                {viewingItem.status === "ativo" ? "Ativo" : "Inativo"}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="text-xs text-slate-400 uppercase mb-1">Quantidade</div>
+              <div className="text-sm font-semibold text-white">
+                {viewingItem.quantity || 0} {viewingItem.unit || "un"}
+              </div>
+            </div>
+            {viewingItem.location && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <div className="text-xs text-slate-400 uppercase mb-1">Localização</div>
+                <div className="text-sm font-semibold text-white">{viewingItem.location}</div>
+              </div>
+            )}
+            {viewingItem.assignedTo && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <div className="text-xs text-slate-400 uppercase mb-1">Alocado para</div>
+                <div className="text-sm font-semibold text-white">{viewingItem.assignedTo}</div>
+              </div>
+            )}
+            {viewingItem.nextMaintenance && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <div className="text-xs text-slate-400 uppercase mb-1">Próxima Manutenção</div>
+                <div className="text-sm font-semibold text-white">{viewingItem.nextMaintenance}</div>
+                {viewingItem.nextMaintenanceType && (
+                  <div className="text-xs text-slate-300 mt-1">{viewingItem.nextMaintenanceType}</div>
+                )}
+              </div>
+            )}
+            {viewingItem.nextMaintenanceDetails && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3 md:col-span-2">
+                <div className="text-xs text-slate-400 uppercase mb-1">Detalhes da Próxima Manutenção</div>
+                <div className="text-sm text-slate-200">{viewingItem.nextMaintenanceDetails}</div>
+              </div>
+            )}
+            {viewingItem.notes && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3 md:col-span-2">
+                <div className="text-xs text-slate-400 uppercase mb-1">Observações</div>
+                <div className="text-sm text-slate-200 whitespace-pre-wrap">{viewingItem.notes}</div>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-white/10 pt-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-white mb-2">Histórico de Manutenção</h3>
+              <p className="text-xs text-slate-400">Gerencie todas as manutenções realizadas neste item</p>
+            </div>
+            <MaintenanceHistory
+              itemId={viewingItem._id}
+              itemType="equipment"
+              itemName={viewingItem.name}
+              onMaintenanceAdded={() => {
+                // Reload items to update nextMaintenance if it was updated
+                const load = async () => {
+                  try {
+                    const res = await apiFetch("/equipment", { cache: "no-store" });
+                    const data = await res.json().catch(() => null);
+                    if (res.ok && data?.data) {
+                      setItems(Array.isArray(data.data) ? data.data : []);
+                      // Update viewingItem with latest data
+                      const updated = data.data.find((i: any) => i._id === viewingItem._id);
+                      if (updated) setViewingItem(updated);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                  }
+                };
+                load();
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
