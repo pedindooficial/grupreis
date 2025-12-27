@@ -1007,9 +1007,36 @@ router.get("/:id/pdf", async (req, res) => {
     doc.moveDown(0.5);
     doc.fontSize(10).font("Helvetica");
     
-    if (job.value) {
-      doc.text(`Valor Total: ${formatCurrency(job.value)}`, { align: "left" });
+    // Services subtotal
+    const servicesSubtotal = job.services?.reduce((sum: number, s: any) => {
+      return sum + (s.finalValue || s.value || 0);
+    }, 0) || 0;
+    
+    if (servicesSubtotal > 0) {
+      doc.text(`Subtotal dos Serviços: ${formatCurrency(servicesSubtotal)}`, { align: "left" });
     }
+    
+    // Displacement/Travel cost
+    if (job.travelPrice && job.travelPrice > 0) {
+      const travelInfo = job.travelDistanceKm 
+        ? `Deslocamento (${job.travelDistanceKm} km): ${formatCurrency(job.travelPrice)}`
+        : `Deslocamento: ${formatCurrency(job.travelPrice)}`;
+      doc.text(travelInfo, { align: "left" });
+      
+      if (job.travelDescription) {
+        doc.fontSize(9).font("Helvetica");
+        doc.text(`   ${job.travelDescription}`, { align: "left", indent: 20 });
+        doc.fontSize(10).font("Helvetica");
+      }
+    }
+    
+    // Total value (services + travel)
+    if (job.value) {
+      doc.fontSize(11).font("Helvetica-Bold");
+      doc.text(`Valor Total: ${formatCurrency(job.value)}`, { align: "left" });
+      doc.fontSize(10).font("Helvetica");
+    }
+    
     if (job.discountPercent && job.discountPercent > 0) {
       doc.text(`Desconto (${job.discountPercent}%): ${formatCurrency(job.discountValue || 0)}`, { align: "left" });
     }
