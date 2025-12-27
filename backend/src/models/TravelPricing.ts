@@ -11,6 +11,7 @@ export interface TravelPricing {
   description: string; // e.g., "Até 50km", "Acima de 100km"
   roundTrip: boolean; // ida e volta
   order: number; // for sorting
+  isDefault: boolean; // Use as default when no rule matches
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -23,7 +24,8 @@ const TravelPricingSchema = new Schema<TravelPricing>(
     type: { type: String, enum: ["per_km", "fixed"], required: true },
     description: { type: String, required: true, trim: true },
     roundTrip: { type: Boolean, required: true, default: true },
-    order: { type: Number, required: true, default: 0 }
+    order: { type: Number, required: true, default: 0 },
+    isDefault: { type: Boolean, required: true, default: false }
   },
   { timestamps: true }
 );

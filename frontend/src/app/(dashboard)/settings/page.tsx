@@ -42,7 +42,8 @@ export default function SettingsPage() {
     type: "per_km" as "per_km" | "fixed",
     description: "",
     roundTrip: true,
-    order: 0
+    order: 0,
+    isDefault: false
   });
 
   const [form, setForm] = useState({
@@ -291,7 +292,8 @@ export default function SettingsPage() {
         description: travelPricingForm.description.trim(),
         type: travelPricingForm.type,
         roundTrip: travelPricingForm.roundTrip,
-        order: travelPricingForm.order
+        order: travelPricingForm.order,
+        isDefault: travelPricingForm.isDefault || false
       };
 
       // upToKm can be null for "any distance" pricing
@@ -344,7 +346,8 @@ export default function SettingsPage() {
       type: "per_km",
       description: "",
       roundTrip: true,
-      order: 0
+      order: 0,
+      isDefault: false
     });
     setEditingTravelPricingId(null);
     setTravelPricingMode("list");
@@ -358,7 +361,8 @@ export default function SettingsPage() {
       type: pricing.type || "per_km",
       description: pricing.description || "",
       roundTrip: pricing.roundTrip !== undefined ? pricing.roundTrip : true,
-      order: pricing.order || 0
+      order: pricing.order || 0,
+      isDefault: pricing.isDefault || false
     });
     setEditingTravelPricingId(pricing._id);
     setTravelPricingMode("form");
@@ -903,6 +907,19 @@ export default function SettingsPage() {
                     Ida e Volta
                   </label>
                 </div>
+
+                <div className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    id="isDefault"
+                    checked={travelPricingForm.isDefault}
+                    onChange={(e) => setTravelPricingForm((f) => ({ ...f, isDefault: e.target.checked }))}
+                    className="w-4 h-4 rounded border border-white/10 bg-slate-900/60"
+                  />
+                  <label htmlFor="isDefault" className="text-slate-200 cursor-pointer">
+                    Usar como padrão (quando nenhuma regra corresponder)
+                  </label>
+                </div>
               </div>
 
               <div className="flex gap-2 pt-4 border-t border-white/10">
@@ -936,6 +953,11 @@ export default function SettingsPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-semibold text-white">{pricing.description}</span>
+                          {pricing.isDefault && (
+                            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/50">
+                              Padrão
+                            </span>
+                          )}
                           {pricing.roundTrip && (
                             <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/50">
                               Ida e Volta

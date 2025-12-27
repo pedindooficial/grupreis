@@ -12,7 +12,8 @@ const travelPricingSchema = z.object({
   type: z.enum(["per_km", "fixed"]),
   description: z.string().min(1, "Descrição é obrigatória"),
   roundTrip: z.boolean().default(true),
-  order: z.number().default(0)
+  order: z.number().default(0),
+  isDefault: z.boolean().default(false)
 });
 
 // GET all travel pricing rules
@@ -61,6 +62,12 @@ router.post("/", async (req, res) => {
     }
 
     await connectDB();
+    
+    // If setting as default, unset other defaults
+    if (parsed.data.isDefault) {
+      await TravelPricingModel.updateMany({ isDefault: true }, { $set: { isDefault: false } });
+    }
+    
     const newPricing = await TravelPricingModel.create(parsed.data);
     res.status(201).json({ data: newPricing });
   } catch (error: any) {
@@ -88,6 +95,15 @@ router.put("/:id", async (req, res) => {
     }
 
     await connectDB();
+    
+    // If setting as default, unset other defaults (except the current one)
+    if (parsed.data.isDefault) {
+      await TravelPricingModel.updateMany(
+        { _id: { $ne: req.params.id }, isDefault: true },
+        { $set: { isDefault: false } }
+      );
+    }
+    
     const updatedPricing = await TravelPricingModel.findByIdAndUpdate(
       req.params.id,
       parsed.data,

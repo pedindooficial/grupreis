@@ -156,15 +156,28 @@ router.post("/calculate", async (req, res) => {
     let travelDescription = "";
 
     // Find matching rule
+    let defaultRule = null;
     for (const rule of pricingRules) {
+      // Track default rule for fallback
+      if (rule.isDefault) {
+        defaultRule = rule;
+      }
+      
       if (rule.upToKm === null || rule.upToKm === undefined) {
-        // Rule applies to any distance
-        selectedRule = rule;
-        break;
+        // Rule applies to any distance (but not if it's the default - we want specific rules first)
+        if (!rule.isDefault) {
+          selectedRule = rule;
+          break;
+        }
       } else if (distanceKm <= rule.upToKm) {
         selectedRule = rule;
         break;
       }
+    }
+
+    // If no specific rule found, use default rule
+    if (!selectedRule && defaultRule) {
+      selectedRule = defaultRule;
     }
 
     if (selectedRule) {
@@ -174,14 +187,14 @@ router.post("/calculate", async (req, res) => {
         travelPrice = selectedRule.roundTrip ? basePrice * 2 : basePrice;
         travelDescription = `${distanceKm}km × R$ ${selectedRule.pricePerKm?.toFixed(2)}/km${
           selectedRule.roundTrip ? " × 2 (ida e volta)" : ""
-        }`;
+        }${selectedRule.isDefault ? " (padrão)" : ""}`;
       } else if (selectedRule.type === "fixed") {
         const basePrice = selectedRule.fixedPrice || 0;
         // Multiply by 2 for round trip (ida e volta) if applicable
         travelPrice = selectedRule.roundTrip ? basePrice * 2 : basePrice;
         travelDescription = `${selectedRule.description}${
           selectedRule.roundTrip ? " × 2 (ida e volta)" : ""
-        }`;
+        }${selectedRule.isDefault ? " (padrão)" : ""}`;
       }
     } else {
       // No rule found, return 0

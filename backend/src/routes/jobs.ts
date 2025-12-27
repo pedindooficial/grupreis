@@ -46,7 +46,12 @@ const jobSchema = z.object({
   discountPercent: z.number().min(0).max(100).optional(),
   discountValue: z.number().min(0).optional(),
   finalValue: z.number().min(0).optional(),
-  services: z.array(serviceSchema).min(1, "Adicione pelo menos um serviço")
+  services: z.array(serviceSchema).min(1, "Adicione pelo menos um serviço"),
+  // Travel/Displacement fields
+  selectedAddress: z.string().optional(),
+  travelDistanceKm: z.number().min(0).optional(),
+  travelPrice: z.number().min(0).optional(),
+  travelDescription: z.string().optional()
 });
 
 // Availability check endpoint - MUST be before router.get("/") to avoid route conflicts
@@ -268,6 +273,11 @@ router.get("/", async (_req, res) => {
           clientSignedAt: 1,
           createdAt: 1,
           updatedAt: 1,
+          // Travel/Displacement fields
+          selectedAddress: 1,
+          travelDistanceKm: 1,
+          travelPrice: 1,
+          travelDescription: 1,
           // Apenas serviços resumidos para exibição
           services: {
             $map: {
@@ -417,7 +427,13 @@ router.post("/", async (req, res) => {
       title
     };
 
+    // Add travel price to total if present
+    const travelPrice = parsed.data.travelPrice || 0;
+    const totalWithTravel = totalFinalValue + travelPrice;
+    const totalServiceValueWithTravel = totalServiceValue + travelPrice;
+
     if (parsed.data.value !== undefined && parsed.data.value !== null) {
+      // If value is explicitly provided, use it (it should already include travel if calculated on frontend)
       const value = parsed.data.value;
       const discountPercent =
         parsed.data.discountPercent !== undefined ? parsed.data.discountPercent : 0;
@@ -429,10 +445,29 @@ router.post("/", async (req, res) => {
       createData.discountValue = discountValue;
       createData.finalValue = finalValue;
     } else if (totalFinalValue > 0) {
-      createData.value = totalServiceValue;
+      // Calculate from services + travel
+      createData.value = totalServiceValueWithTravel; // Include travel in total
       createData.discountPercent = totalDiscountPercent;
       createData.discountValue = totalDiscountValue;
-      createData.finalValue = totalFinalValue;
+      createData.finalValue = totalWithTravel; // Include travel in final value
+    } else if (travelPrice > 0) {
+      // If only travel price, set it as the value
+      createData.value = travelPrice;
+      createData.finalValue = travelPrice;
+    }
+    
+    // Explicitly include travel fields
+    if (parsed.data.selectedAddress) {
+      createData.selectedAddress = parsed.data.selectedAddress;
+    }
+    if (parsed.data.travelDistanceKm !== undefined) {
+      createData.travelDistanceKm = parsed.data.travelDistanceKm;
+    }
+    if (parsed.data.travelPrice !== undefined) {
+      createData.travelPrice = parsed.data.travelPrice;
+    }
+    if (parsed.data.travelDescription) {
+      createData.travelDescription = parsed.data.travelDescription;
     }
 
     const created = await JobModel.create(createData);
@@ -566,7 +601,13 @@ router.put("/:id", async (req, res) => {
       title
     };
 
+    // Add travel price to total if present
+    const travelPrice = parsed.data.travelPrice || 0;
+    const totalWithTravel = totalFinalValue + travelPrice;
+    const totalServiceValueWithTravel = totalServiceValue + travelPrice;
+
     if (parsed.data.value !== undefined && parsed.data.value !== null) {
+      // If value is explicitly provided, use it (it should already include travel if calculated on frontend)
       const value = parsed.data.value;
       const discountPercent =
         parsed.data.discountPercent !== undefined ? parsed.data.discountPercent : 0;
@@ -578,10 +619,29 @@ router.put("/:id", async (req, res) => {
       updateData.discountValue = discountValue;
       updateData.finalValue = finalValue;
     } else if (totalFinalValue > 0) {
-      updateData.value = totalServiceValue;
+      // Calculate from services + travel
+      updateData.value = totalServiceValueWithTravel; // Include travel in total
       updateData.discountPercent = totalDiscountPercent;
       updateData.discountValue = totalDiscountValue;
-      updateData.finalValue = totalFinalValue;
+      updateData.finalValue = totalWithTravel; // Include travel in final value
+    } else if (travelPrice > 0) {
+      // If only travel price, set it as the value
+      updateData.value = travelPrice;
+      updateData.finalValue = travelPrice;
+    }
+    
+    // Explicitly include travel fields
+    if (parsed.data.selectedAddress !== undefined) {
+      updateData.selectedAddress = parsed.data.selectedAddress;
+    }
+    if (parsed.data.travelDistanceKm !== undefined) {
+      updateData.travelDistanceKm = parsed.data.travelDistanceKm;
+    }
+    if (parsed.data.travelPrice !== undefined) {
+      updateData.travelPrice = parsed.data.travelPrice;
+    }
+    if (parsed.data.travelDescription !== undefined) {
+      updateData.travelDescription = parsed.data.travelDescription;
     }
 
     const updated = await JobModel.findByIdAndUpdate(

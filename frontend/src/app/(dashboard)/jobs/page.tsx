@@ -2922,6 +2922,32 @@ export default function JobsPage() {
                 )}
               </>
             )}
+            {/* Displacement/Travel Cost - Show prominently if exists */}
+            {selected.travelPrice && selected.travelPrice > 0 && (
+              <div className="rounded-lg border border-blue-400/50 bg-blue-500/10 px-3 py-2 text-sm text-slate-200">
+                <div className="text-[11px] uppercase text-blue-300 flex items-center gap-1">
+                  <span>🚗</span>
+                  Deslocamento
+                </div>
+                <div className="text-blue-100 font-semibold">
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL"
+                  }).format(selected.travelPrice)}
+                </div>
+                {selected.travelDistanceKm && selected.travelDistanceKm > 0 && (
+                  <div className="text-xs text-blue-200/70 mt-0.5">
+                    {selected.travelDistanceKm} km
+                  </div>
+                )}
+                {selected.travelDescription && (
+                  <div className="text-xs text-blue-200/60 mt-0.5">
+                    {selected.travelDescription}
+                  </div>
+                )}
+              </div>
+            )}
+            
             {selected.discountPercent && selected.discountPercent > 0 ? (
               <>
                 <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
