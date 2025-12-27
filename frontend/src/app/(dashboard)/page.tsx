@@ -14,6 +14,7 @@ type Job = {
   finishedAt?: string;
   title?: string;
   services?: any[];
+  team?: string;
 };
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null); // null = all teams
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -72,15 +74,21 @@ export default function Home() {
     loadAllData();
   }, []);
 
+  // Filter jobs by selected team
+  const filteredJobs = useMemo(() => {
+    if (!selectedTeam) return jobs;
+    return jobs.filter((j) => j.team === selectedTeam);
+  }, [jobs, selectedTeam]);
+
   const stats = useMemo(() => {
-    const totalJobs = jobs.length;
-    const jobsActive = jobs.filter((j) => j.status === "em_execucao").length;
-    const jobsPending = jobs.filter((j) => j.status === "pendente").length;
-    const jobsDone = jobs.filter((j) => j.status === "concluida").length;
-    const jobsCanceled = jobs.filter((j) => j.status === "cancelada").length;
+    const totalJobs = filteredJobs.length;
+    const jobsActive = filteredJobs.filter((j) => j.status === "em_execucao").length;
+    const jobsPending = filteredJobs.filter((j) => j.status === "pendente").length;
+    const jobsDone = filteredJobs.filter((j) => j.status === "concluida").length;
+    const jobsCanceled = filteredJobs.filter((j) => j.status === "cancelada").length;
 
     // Serviços concluídos com dados de tempo
-    const completedJobs = jobs.filter((j) => j.status === "concluida" && j.startedAt && j.finishedAt);
+    const completedJobs = filteredJobs.filter((j) => j.status === "concluida" && j.startedAt && j.finishedAt);
     
     // Calcular tempos de execução
     const executionTimes = completedJobs.map((j) => {
@@ -105,11 +113,11 @@ export default function Home() {
     };
 
     // Valores financeiros das OS
-    const totalValue = jobs.reduce((sum, j) => sum + (j.value || 0), 0);
-    const completedValue = jobs
+    const totalValue = filteredJobs.reduce((sum, j) => sum + (j.value || 0), 0);
+    const completedValue = filteredJobs
       .filter((j) => j.status === "concluida")
       .reduce((sum, j) => sum + (j.finalValue || j.value || 0), 0);
-    const pendingValue = jobs
+    const pendingValue = filteredJobs
       .filter((j) => j.status === "pendente" || j.status === "em_execucao")
       .reduce((sum, j) => sum + (j.finalValue || j.value || 0), 0);
 
@@ -176,12 +184,12 @@ export default function Home() {
       maxExecutionTime,
       formatDuration
     };
-  }, [jobs, employees, teams, machines, equipment, transactions]);
+  }, [filteredJobs, employees, teams, machines, equipment, transactions]);
 
   const weekData = useMemo(() => {
     const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
     const counts = Array(7).fill(0);
-    jobs.forEach((j) => {
+    filteredJobs.forEach((j) => {
       if (j.plannedDate) {
         const d = new Date(j.plannedDate);
         const dow = isNaN(d.getTime()) ? null : d.getDay();
@@ -194,7 +202,7 @@ export default function Home() {
       value: counts[idx],
       pct: Math.round((counts[idx] / max) * 100)
     }));
-  }, [jobs]);
+  }, [filteredJobs]);
 
   const monthData = useMemo(() => {
     const now = new Date();
@@ -208,7 +216,7 @@ export default function Home() {
       };
     });
     const map = new Map(months.map((m) => [m.key, m]));
-    jobs.forEach((j) => {
+    filteredJobs.forEach((j) => {
       if (j.plannedDate) {
         const d = new Date(j.plannedDate);
         if (!isNaN(d.getTime())) {
@@ -229,21 +237,21 @@ export default function Home() {
       pct: Math.round((m.count / maxCount) * 100),
       valuePct: Math.round((m.value / maxValue) * 100)
     }));
-  }, [jobs]);
+  }, [filteredJobs]);
 
   const recentJobs = useMemo(() => {
-    return jobs
+    return filteredJobs
       .sort((a, b) => {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
       })
       .slice(0, 5);
-  }, [jobs]);
+  }, [filteredJobs]);
 
   const topClients = useMemo(() => {
     const clientMap = new Map<string, { name: string; count: number; value: number }>();
-    jobs.forEach((j) => {
+    filteredJobs.forEach((j) => {
       if (j.clientName) {
         const existing = clientMap.get(j.clientName) || { name: j.clientName, count: 0, value: 0 };
         existing.count += 1;
@@ -254,11 +262,11 @@ export default function Home() {
     return Array.from(clientMap.values())
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [jobs]);
+  }, [filteredJobs]);
 
   // Estatísticas de tempo por período
   const executionTimeByPeriod = useMemo(() => {
-    const completedJobs = jobs.filter((j) => j.status === "concluida" && j.startedAt && j.finishedAt);
+    const completedJobs = filteredJobs.filter((j) => j.status === "concluida" && j.startedAt && j.finishedAt);
     const now = new Date();
     const periods = {
       hoje: { count: 0, totalTime: 0 },
@@ -292,14 +300,14 @@ export default function Home() {
     });
 
     return periods;
-  }, [jobs]);
+  }, [filteredJobs]);
 
   // Taxa de conclusão
   const completionRate = useMemo(() => {
-    const total = jobs.length;
-    const completed = jobs.filter((j) => j.status === "concluida").length;
+    const total = filteredJobs.length;
+    const completed = filteredJobs.filter((j) => j.status === "concluida").length;
     return total > 0 ? Math.round((completed / total) * 100) : 0;
-  }, [jobs]);
+  }, [filteredJobs]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -550,9 +558,28 @@ export default function Home() {
 
       {/* Estatísticas de Tempo de Execução */}
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-        <div className="mb-4">
-          <div className="text-sm font-semibold text-white">Estatísticas de Execução</div>
-          <div className="text-xs text-slate-300">Análise de tempo de execução dos serviços concluídos</div>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">Estatísticas de Execução</div>
+            <div className="text-xs text-slate-300">Análise de tempo de execução dos serviços concluídos</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-slate-300">Filtrar por equipe:</label>
+            <select
+              value={selectedTeam || ""}
+              onChange={(e) => setSelectedTeam(e.target.value || null)}
+              className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+            >
+              <option value="">Todas as equipes</option>
+              {teams
+                .filter((t) => t.status === "ativa")
+                .map((team) => (
+                  <option key={team._id} value={team.name}>
+                    {team.name}
+                  </option>
+                ))}
+            </select>
+          </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4">

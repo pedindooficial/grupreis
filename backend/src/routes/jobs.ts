@@ -271,6 +271,8 @@ router.get("/", async (_req, res) => {
           receivedAt: 1,
           receipt: 1,
           receiptFileKey: 1,
+          startedAt: 1,
+          finishedAt: 1,
           clientSignature: 1,
           clientSignedAt: 1,
           createdAt: 1,
