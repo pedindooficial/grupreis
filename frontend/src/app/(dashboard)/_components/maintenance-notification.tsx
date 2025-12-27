@@ -38,10 +38,38 @@ export default function MaintenanceNotification() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right?: number; left?: number; width?: number } | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Calculate dropdown position when it opens
+  useEffect(() => {
+    if (showDropdown && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const isMobile = window.innerWidth < 768; // md breakpoint
+      
+      if (isMobile) {
+        // On mobile: center the dropdown with proper spacing
+        const dropdownWidth = Math.min(340, window.innerWidth - 32); // Max 340px or screen width minus padding
+        const leftPosition = (window.innerWidth - dropdownWidth) / 2; // Center horizontally
+        
+        setDropdownPosition({
+          top: Math.max(80, Math.min(rect.bottom + 8, window.innerHeight - 200)), // At least 80px from top, but not too low
+          left: leftPosition,
+          width: dropdownWidth
+        });
+      } else {
+        // On desktop: position relative to button
+        setDropdownPosition({
+          top: rect.bottom + 8, // 8px = mt-2
+          right: window.innerWidth - rect.right
+        });
+      }
+    }
+  }, [showDropdown]);
 
   // Calculate days until maintenance
   const getDaysUntil = (dateString: string): number => {
@@ -320,6 +348,7 @@ export default function MaintenanceNotification() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        ref={buttonRef}
         onClick={() => setShowDropdown(!showDropdown)}
         className="relative flex items-center justify-center rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white touch-manipulation min-h-[44px] min-w-[44px]"
         title="Manutenções próximas"
@@ -344,8 +373,23 @@ export default function MaintenanceNotification() {
         )}
       </button>
 
-      {showDropdown && (
-        <div className="absolute right-0 top-full z-[100] mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-white/10 bg-slate-900 shadow-2xl">
+      {showDropdown && dropdownPosition && typeof window !== 'undefined' && createPortal(
+        <>
+          {/* Mobile backdrop */}
+          <div 
+            className="fixed inset-0 z-[9997] bg-black/50 md:hidden"
+            onClick={() => setShowDropdown(false)}
+          />
+          <div 
+            className="fixed z-[9998] rounded-lg border border-white/10 bg-slate-900 shadow-2xl md:w-80 md:max-w-[calc(100vw-2rem)]"
+            style={{
+              top: `${dropdownPosition.top}px`,
+              ...(dropdownPosition.right !== undefined && { right: `${dropdownPosition.right}px` }),
+              ...(dropdownPosition.left !== undefined && { left: `${dropdownPosition.left}px` }),
+              ...(dropdownPosition.width !== undefined && { width: `${dropdownPosition.width}px` }),
+              maxHeight: 'calc(100vh - ' + (dropdownPosition.top + 20) + 'px)'
+            }}
+          >
           <div className="border-b border-white/10 p-3">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-white">Manutenções Próximas</div>
@@ -453,6 +497,8 @@ export default function MaintenanceNotification() {
             </div>
           )}
         </div>
+        </>,
+        document.body
       )}
 
       {/* Detail Modal - Rendered via Portal at document body level */}
