@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Swal from "sweetalert2";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, apiUrl } from "@/lib/api-client";
 import { Status, TeamData, Job, ViewTab, DateFilter } from "../types";
 import { encodePassword, decodePassword, matchesDateFilter, groupJobsByDate } from "../utils";
 import { PAYMENT_METHODS } from "../constants";
@@ -443,11 +443,8 @@ export function useOperations(teamId: string) {
 
   const handleDownloadPDF = async (jobId: string) => {
     try {
-      let apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      if (apiUrl.endsWith("/api")) {
-        apiUrl = apiUrl.slice(0, -4);
-      }
-      const pdfUrl = `${apiUrl}/api/jobs/${jobId}/pdf`;
+      // Use apiUrl helper to construct the correct API URL
+      const pdfUrl = apiUrl(`/jobs/${jobId}/pdf`);
       window.open(pdfUrl, "_blank");
     } catch (err: any) {
       console.error(err);
