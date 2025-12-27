@@ -36,8 +36,20 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
 export default function LocationCapturePage() {
   const { token } = useParams<{ token: string }>();
+  
+  console.log("📍 LocationCapturePage rendered, token:", token);
+  
   if (!token) {
-    return <div>Token não encontrado</div>;
+    console.log("❌ No token found");
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-red-800 to-slate-900 flex items-center justify-center p-4 relative z-50">
+        <div className="max-w-md w-full text-center bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
+          <div className="text-7xl mb-4">⚠️</div>
+          <h1 className="text-3xl font-bold text-white mb-3">Token não encontrado</h1>
+          <p className="text-red-200 text-lg mb-2">O token não foi fornecido na URL.</p>
+        </div>
+      </div>
+    );
   }
   
   const [loading, setLoading] = useState(true);
@@ -141,6 +153,17 @@ export default function LocationCapturePage() {
   // Validate token on mount
   useEffect(() => {
     validateToken();
+    
+    // Timeout fallback - if loading takes too long, show error
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("Token validation timeout");
+        setLoading(false);
+        setTokenStatus("invalid");
+      }
+    }, 10000); // 10 second timeout
+    
+    return () => clearTimeout(timeout);
   }, [token]);
 
   // Initialize map when loaded
@@ -153,17 +176,28 @@ export default function LocationCapturePage() {
   const validateToken = async () => {
     try {
       setLoading(true);
+      console.log("Validating token:", token);
       const res = await apiFetch(`/location-capture/${token}`);
-      const data = await res.json();
-
+      
       if (!res.ok) {
-        console.error("Token validation error:", data);
-        if (data.status === "expired" || data.status === "captured") {
-          setTokenStatus(data.status === "captured" ? "used" : "invalid");
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        console.error("Token validation error:", errorData, "Status:", res.status);
+        if (errorData.status === "expired" || errorData.status === "captured") {
+          setTokenStatus(errorData.status === "captured" ? "used" : "invalid");
         } else {
           setTokenStatus("invalid");
         }
         setTokenData(null);
+        setLoading(false);
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      if (!data || !data.data) {
+        console.error("Invalid response format:", data);
+        setTokenStatus("invalid");
+        setTokenData(null);
+        setLoading(false);
         return;
       }
 
@@ -171,13 +205,16 @@ export default function LocationCapturePage() {
       if (data.data.status !== "pending") {
         setTokenStatus(data.data.status === "captured" ? "used" : "invalid");
         setTokenData(null);
+        setLoading(false);
         return;
       }
 
+      console.log("Token validated successfully:", data.data);
       setTokenData(data.data);
       setTokenStatus("valid");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error validating token:", error);
+      // Show error but don't block the page - allow user to see what's happening
       setTokenStatus("invalid");
       setTokenData(null);
     } finally {
@@ -402,12 +439,16 @@ export default function LocationCapturePage() {
     }
   };
 
+  // Always show something - don't return null
+  console.log("Render state:", { loading, tokenStatus, hasTokenData: !!tokenData });
+  
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 flex items-center justify-center">
+      <div className="fixed inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 flex items-center justify-center z-50">
         <div className="text-center bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-400 mx-auto mb-4"></div>
           <p className="text-white text-lg font-semibold">Carregando...</p>
+          <p className="text-blue-200 text-sm mt-2">Validando token...</p>
         </div>
       </div>
     );
@@ -415,7 +456,7 @@ export default function LocationCapturePage() {
 
   if (tokenStatus === "used") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-900 via-green-800 to-slate-900 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-gradient-to-br from-green-900 via-green-800 to-slate-900 flex items-center justify-center p-4 z-50">
         <div className="max-w-md w-full text-center bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
           <div className="text-7xl mb-4">✅</div>
           <h1 className="text-3xl font-bold text-white mb-3">Localização Salva!</h1>
@@ -427,20 +468,24 @@ export default function LocationCapturePage() {
   }
 
   if (tokenStatus === "invalid" || !tokenData) {
+    console.log("Showing invalid token error");
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-900 via-red-800 to-slate-900 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-gradient-to-br from-red-900 via-red-800 to-slate-900 flex items-center justify-center p-4 z-50">
         <div className="max-w-md w-full text-center bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
           <div className="text-7xl mb-4">⚠️</div>
           <h1 className="text-3xl font-bold text-white mb-3">Link Inválido</h1>
           <p className="text-red-200 text-lg mb-2">Este link é inválido ou expirou.</p>
-          <p className="text-red-300/70 text-sm">Entre em contato para obter um novo link.</p>
+          <p className="text-red-300/70 text-sm mb-4">Entre em contato para obter um novo link.</p>
+          <p className="text-red-300/50 text-xs mt-4">Token: {token?.substring(0, 20)}...</p>
+          <p className="text-red-300/30 text-xs mt-2">Status: {tokenStatus}</p>
         </div>
       </div>
     );
   }
 
+  console.log("Rendering main location capture interface");
   return (
-    <div className="h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 flex flex-col overflow-hidden z-50">
       {/* Header - Fixed */}
       <div className="bg-white/10 backdrop-blur-md border-b border-white/20 shadow-xl p-3 sm:p-4 flex-shrink-0">
         <div className="max-w-7xl mx-auto">
