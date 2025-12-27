@@ -12,6 +12,8 @@ export interface Equipment {
   assignedTo?: string;
   location?: string;
   nextMaintenance?: string;
+  nextMaintenanceType?: string; // e.g., "Troca de óleo", "Revisão geral", "Calibração", etc.
+  nextMaintenanceDetails?: string; // Additional details about the maintenance
   notes?: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -30,6 +32,8 @@ const EquipmentSchema = new Schema<Equipment>(
     assignedTo: { type: String, trim: true },
     location: { type: String, trim: true },
     nextMaintenance: { type: String, trim: true },
+    nextMaintenanceType: { type: String, trim: true },
+    nextMaintenanceDetails: { type: String, trim: true },
     notes: { type: String, trim: true }
   },
   { timestamps: true }

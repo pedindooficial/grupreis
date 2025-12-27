@@ -28,6 +28,8 @@ export default function EquipmentPage() {
     assignedTo: "",
     location: "",
     nextMaintenance: "",
+    nextMaintenanceType: "",
+    nextMaintenanceDetails: "",
     notes: ""
   });
 
@@ -79,6 +81,8 @@ export default function EquipmentPage() {
       assignedTo: "",
       location: "",
       nextMaintenance: "",
+      nextMaintenanceType: "",
+      nextMaintenanceDetails: "",
       notes: ""
     });
 
@@ -100,7 +104,9 @@ export default function EquipmentPage() {
       unit: form.unit,
       assignedTo: form.assignedTo,
       location: form.location,
-      nextMaintenance: form.nextMaintenance,
+        nextMaintenance: form.nextMaintenance,
+        nextMaintenanceType: form.nextMaintenanceType || undefined,
+        nextMaintenanceDetails: form.nextMaintenanceDetails || undefined,
       notes: form.notes
     };
 
@@ -156,7 +162,9 @@ export default function EquipmentPage() {
       unit: item.unit || "un",
       assignedTo: item.assignedTo || "",
       location: item.location || "",
-      nextMaintenance: item.nextMaintenance || "",
+        nextMaintenance: item.nextMaintenance || "",
+        nextMaintenanceType: item.nextMaintenanceType || "",
+        nextMaintenanceDetails: item.nextMaintenanceDetails || "",
       notes: item.notes || ""
     });
   };
@@ -399,14 +407,44 @@ export default function EquipmentPage() {
                 className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
               />
             </div>
+            <div className="space-y-1 text-sm">
+              <label className="text-slate-200">Tipo de manutenção</label>
+              <select
+                value={form.nextMaintenanceType}
+                onChange={(e) => setForm((f) => ({ ...f, nextMaintenanceType: e.target.value }))}
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+              >
+                <option value="">Selecione o tipo</option>
+                <option value="Troca de óleo">Troca de óleo</option>
+                <option value="Revisão geral">Revisão geral</option>
+                <option value="Calibração">Calibração</option>
+                <option value="Troca de filtros">Troca de filtros</option>
+                <option value="Lubrificação">Lubrificação</option>
+                <option value="Inspeção">Inspeção</option>
+                <option value="Limpeza">Limpeza</option>
+                <option value="Reparo">Reparo</option>
+                <option value="Substituição de peças">Substituição de peças</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
             <div className="space-y-1 text-sm md:col-span-2">
-              <label className="text-slate-200">Observações</label>
+              <label className="text-slate-200">Detalhes da manutenção</label>
+              <textarea
+                value={form.nextMaintenanceDetails}
+                onChange={(e) => setForm((f) => ({ ...f, nextMaintenanceDetails: e.target.value }))}
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                rows={3}
+                placeholder="Detalhes específicos sobre a manutenção a ser realizada (ex: trocar óleo do motor, revisar sistema hidráulico, calibrar instrumentos...)"
+              />
+            </div>
+            <div className="space-y-1 text-sm md:col-span-2">
+              <label className="text-slate-200">Observações gerais</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
                 rows={3}
-                placeholder="Detalhes sobre manutenção, uso, restrições..."
+                placeholder="Observações gerais sobre o item, uso, restrições..."
               />
             </div>
           </div>

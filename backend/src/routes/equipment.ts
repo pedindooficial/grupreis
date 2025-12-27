@@ -17,6 +17,8 @@ const equipmentSchema = z.object({
   assignedTo: z.string().optional(),
   location: z.string().optional(),
   nextMaintenance: z.string().optional(),
+  nextMaintenanceType: z.string().optional(),
+  nextMaintenanceDetails: z.string().optional(),
   notes: z.string().optional()
 });
 
@@ -39,6 +41,8 @@ router.get("/", async (_req, res) => {
           assignedTo: 1,
           location: 1,
           nextMaintenance: 1,
+          nextMaintenanceType: 1,
+          nextMaintenanceDetails: 1,
           notes: 1,
           createdAt: 1,
           updatedAt: 1

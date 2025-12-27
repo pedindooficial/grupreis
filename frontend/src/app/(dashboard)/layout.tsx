@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/auth-context";
 import SidebarAvatar from "./_components/sidebar-avatar";
 import SidebarNav from "./_components/sidebar-nav";
 import MobileNav from "./_components/mobile-nav";
+import MaintenanceNotification from "./_components/maintenance-notification";
 
 const ICONS = {
   dashboard: (
@@ -235,8 +236,11 @@ function Topbar() {
           <div className="text-xs text-slate-300">Painel operacional</div>
         </div>
       </div>
-      <div className="text-[11px] text-slate-400">
-        Sessão: {user?.email ?? "admin"}
+      <div className="flex items-center gap-4">
+        <MaintenanceNotification />
+        <div className="text-[11px] text-slate-400">
+          Sessão: {user?.email ?? "admin"}
+        </div>
       </div>
     </header>
   );

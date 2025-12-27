@@ -27,6 +27,9 @@ export interface Machine {
   maintenanceType?: "preventiva" | "corretiva";
   maintenanceVendor?: string;
   maintenanceCostAvg?: number;
+  nextMaintenance?: string;
+  nextMaintenanceType?: string; // e.g., "Troca de óleo", "Revisão geral", "Troca de filtros", etc.
+  nextMaintenanceDetails?: string; // Additional details about the maintenance
   requiredLicense?: string;
   mandatoryTraining?: boolean;
   checklistRequired?: boolean;
@@ -71,6 +74,9 @@ const MachineSchema = new Schema<Machine>(
     maintenanceType: { type: String, enum: ["preventiva", "corretiva"], default: "preventiva" },
     maintenanceVendor: { type: String, trim: true },
     maintenanceCostAvg: { type: Number },
+    nextMaintenance: { type: String, trim: true },
+    nextMaintenanceType: { type: String, trim: true },
+    nextMaintenanceDetails: { type: String, trim: true },
     requiredLicense: { type: String, trim: true },
     mandatoryTraining: { type: Boolean, default: false },
     checklistRequired: { type: Boolean, default: false },

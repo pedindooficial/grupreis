@@ -69,6 +69,8 @@ export default function MachinesPage() {
     statusOperational: "operando" as MachineOpStatus,
     lastMaintenance: "",
     nextMaintenance: "",
+    nextMaintenanceType: "",
+    nextMaintenanceDetails: "",
     maintenanceType: "preventiva",
     maintenanceVendor: "",
     maintenanceCostAvg: "",
@@ -151,6 +153,8 @@ export default function MachinesPage() {
       statusOperational: "operando",
       lastMaintenance: "",
       nextMaintenance: "",
+      nextMaintenanceType: "",
+      nextMaintenanceDetails: "",
       maintenanceType: "preventiva",
       maintenanceVendor: "",
       maintenanceCostAvg: "",
@@ -255,6 +259,8 @@ export default function MachinesPage() {
       statusOperational: (machine.statusOperational || "operando") as MachineOpStatus,
       lastMaintenance: machine.lastMaintenance || "",
       nextMaintenance: machine.nextMaintenance || "",
+      nextMaintenanceType: machine.nextMaintenanceType || "",
+      nextMaintenanceDetails: machine.nextMaintenanceDetails || "",
       maintenanceType: machine.maintenanceType || "preventiva",
       maintenanceVendor: machine.maintenanceVendor || "",
       maintenanceCostAvg: machine.maintenanceCostAvg?.toString() || "",
@@ -706,7 +712,29 @@ export default function MachinesPage() {
                 />
               </div>
               <div className="space-y-1 text-sm">
-                <label className="text-slate-200">Tipo de Manutenção</label>
+                <label className="text-slate-200">Tipo da Próxima Manutenção</label>
+                <select
+                  value={form.nextMaintenanceType}
+                  onChange={(e) => setForm((f) => ({ ...f, nextMaintenanceType: e.target.value }))}
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                >
+                  <option value="">Selecione o tipo</option>
+                  <option value="Troca de óleo">Troca de óleo</option>
+                  <option value="Revisão geral">Revisão geral</option>
+                  <option value="Troca de filtros">Troca de filtros</option>
+                  <option value="Lubrificação">Lubrificação</option>
+                  <option value="Troca de pneus">Troca de pneus</option>
+                  <option value="Alinhamento e balanceamento">Alinhamento e balanceamento</option>
+                  <option value="Inspeção">Inspeção</option>
+                  <option value="Reparo">Reparo</option>
+                  <option value="Substituição de peças">Substituição de peças</option>
+                  <option value="Calibração">Calibração</option>
+                  <option value="Limpeza">Limpeza</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+              <div className="space-y-1 text-sm">
+                <label className="text-slate-200">Tipo de Manutenção (Geral)</label>
                 <select
                   value={form.maintenanceType}
                   onChange={(e) => setForm((f) => ({ ...f, maintenanceType: e.target.value }))}
@@ -715,6 +743,16 @@ export default function MachinesPage() {
                   <option value="preventiva">Preventiva</option>
                   <option value="corretiva">Corretiva</option>
                 </select>
+              </div>
+              <div className="space-y-1 text-sm md:col-span-2 lg:col-span-3">
+                <label className="text-slate-200">Detalhes da Próxima Manutenção</label>
+                <textarea
+                  value={form.nextMaintenanceDetails}
+                  onChange={(e) => setForm((f) => ({ ...f, nextMaintenanceDetails: e.target.value }))}
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  rows={3}
+                  placeholder="Detalhes específicos sobre a manutenção a ser realizada (ex: trocar óleo do motor, revisar sistema hidráulico, calibrar instrumentos, trocar filtros de ar e combustível...)"
+                />
               </div>
               <div className="space-y-1 text-sm">
                 <label className="text-slate-200">Fornecedor de Manutenção</label>
