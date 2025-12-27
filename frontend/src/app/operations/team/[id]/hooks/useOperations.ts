@@ -789,6 +789,110 @@ export function useOperations(teamId: string) {
     loadHeadquarters();
   }, []);
 
+  // Real-time updates using Server-Sent Events (SSE) with MongoDB Change Streams
+  useEffect(() => {
+    if (!data || !password || !teamId) return; // Only connect when authenticated
+
+    const API_BASE = import.meta.env.VITE_API_URL || 
+      (import.meta.env.DEV ? "https://localhost:4000/api" : "https://gruporeis.cloud/api");
+    
+    // Remove /api suffix if present
+    const baseUrl = API_BASE.endsWith("/api") ? API_BASE.slice(0, -4) : API_BASE;
+    const sseUrl = `${baseUrl}/api/operations/team/${teamId}/watch?password=${encodeURIComponent(password)}`;
+
+    let eventSource: EventSource | null = null;
+
+    try {
+      eventSource = new EventSource(sseUrl);
+
+      eventSource.onopen = () => {
+        console.log("✅ Connected to real-time updates");
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          
+          if (message.type === "update" && message.jobs) {
+            const previousJobCount = data.jobs?.length || 0;
+            const newJobCount = message.jobs.length;
+            
+            // Update data with new jobs
+            setData((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                jobs: message.jobs
+              };
+            });
+
+            // Show notification if new jobs were added
+            if (newJobCount > previousJobCount) {
+              const newJobsCount = newJobCount - previousJobCount;
+              Swal.fire({
+                icon: "info",
+                title: "Nova OS disponível!",
+                text: `${newJobsCount} nova${newJobsCount > 1 ? 's' : ''} ordem${newJobsCount > 1 ? 'ens' : ''} de serviço ${newJobsCount > 1 ? 'foram' : 'foi'} adicionada${newJobsCount > 1 ? 's' : ''}.`,
+                toast: true,
+                position: "top-end",
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Error parsing SSE message:", err);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error("SSE connection error:", error);
+        // EventSource will automatically try to reconnect
+      };
+
+      // Handle visibility change - close when tab is hidden to save resources
+      const handleVisibilityChange = () => {
+        if (document.hidden && eventSource) {
+          eventSource.close();
+          eventSource = null;
+        } else if (!document.hidden && !eventSource && data && password) {
+          // Reconnect when tab becomes visible
+          try {
+            eventSource = new EventSource(sseUrl);
+            eventSource.onmessage = (event) => {
+              try {
+                const message = JSON.parse(event.data);
+                if (message.type === "update" && message.jobs) {
+                  setData((prev) => {
+                    if (!prev) return prev;
+                    return { ...prev, jobs: message.jobs };
+                  });
+                }
+              } catch (err) {
+                console.error("Error parsing SSE message:", err);
+              }
+            };
+          } catch (err) {
+            console.error("Error reconnecting SSE:", err);
+          }
+        }
+      };
+
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+
+      // Cleanup on unmount
+      return () => {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        if (eventSource) {
+          eventSource.close();
+        }
+      };
+    } catch (err) {
+      console.error("Error setting up SSE connection:", err);
+    }
+  }, [data, password, teamId]);
+
   const assignedJobs = useMemo(() => data?.jobs || [], [data]);
 
   // Jobs filtered only by date (for status card counts)
