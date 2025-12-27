@@ -144,9 +144,8 @@ export function useOperations(teamId: string) {
       if (status === "em_execucao") payload.startedAt = now;
       if (status === "concluida") payload.finishedAt = now;
       
-      const res = await fetch(`/api/operations/jobs/${jobId}`, {
+      const res = await apiFetch(`/operations/jobs/${jobId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       
