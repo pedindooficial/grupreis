@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { apiFetch } from "@/lib/api-client";
@@ -8,8 +6,11 @@ import { apiFetch } from "@/lib/api-client";
 type Status = "pendente" | "em_execucao" | "concluida" | "cancelada";
 type ViewTab = "disponiveis" | "execucao" | "concluidas";
 
-export default function TeamJobsPage({ params }: { params: { id: string } }) {
-  const teamId = params.id;
+export default function TeamJobsPage() {
+  const { id: teamId } = useParams<{ id: string }>();
+  if (!teamId) {
+    return <div>Team ID não encontrado</div>;
+  }
   const [team, setTeam] = useState<any>(null);
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +99,7 @@ export default function TeamJobsPage({ params }: { params: { id: string } }) {
     return (
       <div className="space-y-4 text-slate-200">
         <div className="text-xl font-semibold">Equipe não encontrada</div>
-        <Link href="/teams" className="text-emerald-300 underline">
+        <Link to="/teams" className="text-emerald-300 underline">
           Voltar para equipes
         </Link>
       </div>
@@ -116,7 +117,7 @@ export default function TeamJobsPage({ params }: { params: { id: string } }) {
           </div>
         </div>
         <Link
-          href="/teams"
+          to="/teams"
           className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
         >
           Voltar

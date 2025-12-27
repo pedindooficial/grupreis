@@ -1,11 +1,5 @@
-import Link from "next/link";
-import Image from "next/image";
-import { ReactNode } from "react";
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import type { Session } from "next-auth";
-import "@/app/globals.css";
-import { authOptions } from "@/lib/auth";
+import { ReactNode, useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 import SidebarAvatar from "./_components/sidebar-avatar";
 import SidebarNav from "./_components/sidebar-nav";
 import MobileNav from "./_components/mobile-nav";
@@ -176,14 +170,15 @@ const ICONS = {
   )
 };
 
-async function getJobsPendingCount() {
-  // TODO: When jobs API is fully moved to the backend service,
-  // call it here to get the real pending count.
-  return 0;
-}
+function Sidebar() {
+  const { user } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
 
-async function Sidebar({ session }: { session: Session }) {
-  const pendingCount = await getJobsPendingCount();
+  useEffect(() => {
+    // TODO: When jobs API is fully moved to the backend service,
+    // call it here to get the real pending count.
+    setPendingCount(0);
+  }, []);
   const items = [
     { label: "Dashboard", href: "/", icon: ICONS.dashboard },
     {
@@ -207,37 +202,32 @@ async function Sidebar({ session }: { session: Session }) {
     <aside className="fixed left-0 top-0 hidden h-screen w-64 flex-col justify-between border-r border-white/10 bg-slate-900 px-5 py-7 md:flex">
       <div className="space-y-6">
         <div className="flex justify-start px-1">
-          <Image
+          <img
             src="/logoreis.png"
             alt="Reis Fundações"
-            width={170}
-            height={48}
-              className="object-contain"
-              style={{ width: "auto", height: "auto" }}
-            priority
+            className="h-12 object-contain"
           />
         </div>
         <SidebarNav items={items} />
       </div>
       <div className="border-t border-white/10 pt-5">
-        <SidebarAvatar name={session.user?.name ?? "Usuário"} email={session.user?.email} />
+        <SidebarAvatar name={user?.name ?? "Usuário"} email={user?.email} />
       </div>
     </aside>
   );
 }
 
-function Topbar({ session }: { session: Session }) {
+function Topbar() {
+  const { user } = useAuth();
+  
   return (
     <header className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-3 backdrop-blur">
       <div className="flex items-center gap-2">
         <div className="h-9 w-9 overflow-hidden rounded-lg bg-slate-800">
-          <Image
+          <img
             src="/logoreis.png"
             alt="Reis Fundações"
-            width={48}
-            height={48}
             className="h-9 w-9 object-cover"
-            priority
           />
         </div>
         <div>
@@ -246,29 +236,22 @@ function Topbar({ session }: { session: Session }) {
         </div>
       </div>
       <div className="text-[11px] text-slate-400">
-        Sessão: {session.user?.email ?? "admin"}
+        Sessão: {user?.email ?? "admin"}
       </div>
     </header>
   );
 }
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children
 }: {
   children: ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
-
-  // Garantia extra (além do middleware) para rotas server components
-  if (!session) {
-    redirect("/login");
-  }
-
   return (
     <div className="flex min-h-screen bg-slate-950">
-      <Sidebar session={session} />
+      <Sidebar />
       <div className="flex w-full flex-col gap-4 px-4 pb-24 pt-6 md:ml-64 md:px-8 md:pb-8">
-        <Topbar session={session} />
+        <Topbar />
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
           {children}
         </div>

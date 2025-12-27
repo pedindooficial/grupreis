@@ -566,7 +566,7 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
   };
 
   const downloadPDF = (budgetId: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
     const url = apiUrl + "/budgets/" + budgetId + "/pdf";
     window.open(url, "_blank");
   };

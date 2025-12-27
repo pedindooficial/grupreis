@@ -2,21 +2,20 @@
   "name": "gruporeis",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "set NEXT_PUBLIC_API_URL=https://localhost:4000/api&& node server.js",
-    "dev:http": "set NEXT_PUBLIC_API_URL=http://localhost:4000/api&& next dev",
-    "build": "next build",
-    "build:dev": "set NEXT_PUBLIC_API_URL=https://localhost:4000/api&& next build",
-    "build:prod": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "cross-env VITE_API_URL=https://localhost:4000/api vite",
+    "dev:http": "cross-env VITE_API_URL=http://localhost:4000/api vite",
+    "build": "vite build",
+    "build:dev": "cross-env VITE_API_URL=https://localhost:4000/api vite build",
+    "build:prod": "cross-env VITE_API_URL=https://gruporeis.cloud/api vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "mongoose": "^8.5.1",
-    "next": "^14.2.35",
-    "next-auth": "^4.24.5",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "react-router-dom": "^6.26.0",
     "sweetalert2": "^11.26.4",
     "zod": "^3.23.8"
   },
@@ -24,12 +23,14 @@
     "@types/node": "20.14.2",
     "@types/react": "18.3.2",
     "@types/react-dom": "18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "10.4.19",
+    "cross-env": "^7.0.3",
     "eslint": "8.57.0",
-    "eslint-config-next": "14.2.33",
     "postcss": "8.4.38",
     "tailwindcss": "3.4.4",
-    "typescript": "5.4.5"
+    "typescript": "5.4.5",
+    "vite": "^5.4.0"
   },
   "overrides": {
     "glob": "^10.4.6"

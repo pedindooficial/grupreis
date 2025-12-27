@@ -773,7 +773,7 @@ export default function ClientsPage() {
     if (!selectedClient) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
       
       // Create location capture token
       const res = await apiFetch("/location-capture/create", {

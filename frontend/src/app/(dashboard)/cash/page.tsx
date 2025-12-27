@@ -1109,8 +1109,8 @@ export default function CashPage() {
                 <button
                   onClick={async () => {
                     try {
-                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-                      const downloadUrl = `${apiUrl}/api/s3/download/${selected.receiptFileKey}`;
+                      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+                      const downloadUrl = `${apiUrl}/s3/download/${selected.receiptFileKey}`;
                       window.open(downloadUrl, "_blank");
                     } catch (err) {
                       console.error("Erro ao baixar comprovante:", err);

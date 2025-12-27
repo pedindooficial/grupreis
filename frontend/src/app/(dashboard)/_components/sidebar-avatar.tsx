@@ -1,6 +1,3 @@
-"use client";
-
-import Image from "next/image";
 import { useState } from "react";
 import AccountCard from "./account-card";
 
@@ -25,13 +22,10 @@ export default function SidebarAvatar({
         className="flex w-full items-center gap-3 rounded-full border border-white/10 bg-white/5 px-2 py-2 transition hover:border-emerald-300/40 hover:bg-white/10"
       >
         <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-slate-800">
-          <Image
+          <img
             src="/logoreis.png"
             alt="Reis Fundações"
-            width={48}
-            height={48}
             className="h-12 w-12 object-cover"
-            priority
           />
         </div>
         <div className="flex-1 text-left text-xs text-slate-200">

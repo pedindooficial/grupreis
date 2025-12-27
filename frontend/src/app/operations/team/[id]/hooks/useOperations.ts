@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Swal from "sweetalert2";
 import { apiFetch } from "@/lib/api-client";
@@ -32,9 +30,8 @@ export function useOperations(teamId: string) {
     }
     try {
       setAuthLoading(true);
-      const res = await fetch(`/api/operations/team/${teamId}`, {
+      const res = await apiFetch(`/operations/team/${teamId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pass })
       });
       const json = await res.json().catch(() => null);

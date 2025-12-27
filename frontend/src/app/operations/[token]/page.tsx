@@ -1,8 +1,6 @@
-"use client";
-
 import "@/app/globals.css";
-import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 import RouteMap from "./_components/RouteMap";
 import { apiFetch } from "@/lib/api-client";
@@ -62,8 +60,11 @@ const ICONS = {
   )
 };
 
-export default function OperationPublicPage({ params }: { params: { token: string } }) {
-  const token = params.token;
+export default function OperationPublicPage() {
+  const { token } = useParams<{ token: string }>();
+  if (!token) {
+    return <div>Token não encontrado</div>;
+  }
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(true); // Inicia como true para verificar autenticação
   const [data, setData] = useState<{ team: any; jobs: any[] } | null>(null);
@@ -90,9 +91,8 @@ export default function OperationPublicPage({ params }: { params: { token: strin
     }
     try {
       setAuthLoading(true);
-      const res = await fetch(`/api/operations/${token}`, {
+      const res = await apiFetch(`/operations/${token}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pass })
       });
       const json = await res.json().catch(() => null);
@@ -690,11 +690,8 @@ export default function OperationPublicPage({ params }: { params: { token: strin
 
   const handleDownloadPDF = async (jobId: string) => {
     try {
-      let apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      // Remove trailing /api if present to avoid duplication
-      if (apiUrl.endsWith("/api")) {
-        apiUrl = apiUrl.slice(0, -4);
-      }
+      const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "https://localhost:4000/api" : "https://api.reisfundacoes.com/api");
+      let apiUrl = API_BASE.replace('/api', '');
       const pdfUrl = `${apiUrl}/api/jobs/${jobId}/pdf`;
       
       // Open PDF in new tab
@@ -944,13 +941,10 @@ export default function OperationPublicPage({ params }: { params: { token: strin
         <div className="relative mx-auto flex max-w-lg flex-col gap-6 rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-emerald-500/10 backdrop-blur">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-400/40">
-              <Image
+              <img
                 src="/logoreis.png"
                 alt="Reis Fundações"
-                width={42}
-                height={42}
-                className="rounded-lg object-contain"
-                priority
+                className="h-[42px] w-[42px] rounded-lg object-contain"
               />
             </div>
             <div className="flex-1">
@@ -1398,7 +1392,7 @@ export default function OperationPublicPage({ params }: { params: { token: strin
                       loading="lazy"
                       allowFullScreen
                       referrerPolicy="no-referrer-when-downgrade"
-                      src={`https://www.google.com/maps/embed/v1/directions?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&origin=${encodeURIComponent(headquartersAddress)}&destination=${encodeURIComponent(selectedJob.site)}&mode=driving`}
+                      src={`https://www.google.com/maps/embed/v1/directions?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}&origin=${encodeURIComponent(headquartersAddress)}&destination=${encodeURIComponent(selectedJob.site)}&mode=driving`}
                     />
                   </div>
                 </div>

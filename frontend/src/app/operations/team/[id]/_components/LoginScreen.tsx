@@ -1,6 +1,3 @@
-"use client";
-
-import Image from "next/image";
 
 interface LoginScreenProps {
   password: string;
@@ -34,13 +31,10 @@ export default function LoginScreen({
       <div className="relative mx-auto flex max-w-lg flex-col gap-6 rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-emerald-500/10 backdrop-blur">
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-400/40">
-            <Image
+            <img
               src="/logoreis.png"
               alt="Reis Fundações"
-              width={42}
-              height={42}
-              className="rounded-lg object-contain"
-              priority
+              className="h-[42px] w-[42px] rounded-lg object-contain"
             />
           </div>
           <div className="flex-1">

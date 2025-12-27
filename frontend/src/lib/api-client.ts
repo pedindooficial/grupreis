@@ -1,10 +1,8 @@
-import { getSession } from "next-auth/react";
-
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "development"
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV
     ? "https://localhost:4000/api"
-    : "https://api.reisfundacoes.com/api");
+    : "https://gruporeis.cloud/api");
 
 export function apiUrl(path: string) {
   if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -40,19 +38,17 @@ export async function apiFetch(
     headers["Content-Type"] = "application/json";
   }
   
-  // Add user info from session for authentication
-  // Note: getSession() only works in client components
-  // For server components, use getServerSession() instead
+  // Add user info from localStorage for authentication
   if (typeof window !== "undefined") {
     try {
-      const session = await getSession();
-      if (session?.user) {
-        const user = session.user as any;
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
         headers["x-user-id"] = user.id || "";
         headers["x-user-email"] = user.email || "";
       }
     } catch (err) {
-      // Session not available, continue without auth headers
+      // User not available, continue without auth headers
       // This is expected in some cases (e.g., public routes)
     }
   }

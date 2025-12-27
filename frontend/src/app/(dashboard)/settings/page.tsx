@@ -1,9 +1,7 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import { apiFetch } from "@/lib/api-client";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/lib/auth-context";
 import SignatureCanvas from "@/components/SignatureCanvas";
 
 const BRAZIL_STATES = [
@@ -15,8 +13,8 @@ const BRAZIL_STATES = [
 type UserRole = "admin" | "user";
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
-  const userRole = (session?.user as any)?.role || "user";
+  const { user: currentUser } = useAuth();
+  const userRole = currentUser?.role || "user";
   const isAdmin = userRole === "admin";
 
   const [loading, setLoading] = useState(true);
@@ -715,7 +713,7 @@ export default function SettingsPage() {
               ) : (
                 <div className="space-y-2">
                   {users.map((user) => {
-                    const isCurrentUser = user._id === (session?.user as any)?.id;
+                    const isCurrentUser = user._id === currentUser?.id;
                     return (
                       <div
                         key={user._id}

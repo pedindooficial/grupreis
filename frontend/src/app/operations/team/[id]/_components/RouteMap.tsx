@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 
 interface RouteMapProps {
@@ -40,7 +38,7 @@ export default function RouteMap({ origin, destination, jobTitle }: RouteMapProp
   const vehicleMarkerRef = useRef<any>(null);
   const routePathRef = useRef<any[]>([]);
 
-  const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
   const initializeMap = () => {
     if (!mapRef.current || !window.google || !window.google.maps) {

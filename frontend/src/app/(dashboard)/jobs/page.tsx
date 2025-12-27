@@ -2555,12 +2555,8 @@ export default function JobsPage() {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
               <button
                 onClick={() => {
-                  let apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-                  // Remove trailing /api if present to avoid duplication
-                  if (apiUrl.endsWith("/api")) {
-                    apiUrl = apiUrl.slice(0, -4);
-                  }
-                  const pdfUrl = `${apiUrl}/api/jobs/${selected._id}/pdf`;
+                  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+                  const pdfUrl = `${apiUrl}/jobs/${selected._id}/pdf`;
                   window.open(pdfUrl, "_blank");
                 }}
                 className="w-full sm:w-auto rounded-lg border border-blue-400/50 bg-blue-500/20 px-3 py-2 text-xs font-semibold text-blue-300 transition hover:border-blue-400 hover:bg-blue-500/30"

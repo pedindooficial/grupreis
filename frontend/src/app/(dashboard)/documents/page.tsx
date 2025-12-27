@@ -1,8 +1,6 @@
-"use client";
-
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api-client";
 
 type DocumentType = "contrato" | "proposta" | "nota_fiscal" | "recibo" | "outro";
@@ -24,8 +22,8 @@ const DOCUMENT_STATUSES: { value: DocumentStatus; label: string; color: string }
 ];
 
 export default function DocumentsPage() {
-  const { data: session } = useSession();
-  const userRole = (session?.user as any)?.role || "user";
+  const { user } = useAuth();
+  const userRole = user?.role || "user";
   const isAdmin = userRole === "admin";
 
   const [mode, setMode] = useState<"list" | "form">("list");

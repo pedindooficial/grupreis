@@ -2,7 +2,7 @@
  * Helper functions for Location Capture functionality
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
 export interface CreateLocationCaptureParams {
   description?: string;

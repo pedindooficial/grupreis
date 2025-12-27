@@ -1,6 +1,5 @@
-"use client";
-
-import { signOut } from "next-auth/react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/auth-context";
 
 export default function AccountCard({
   name,
@@ -9,12 +8,20 @@ export default function AccountCard({
   name: string;
   email?: string | null;
 }) {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  
   const initials = (name || "U")
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
     .map((n) => n[0]?.toUpperCase())
     .join("") || "U";
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-100">
@@ -32,18 +39,14 @@ export default function AccountCard({
         </div>
       </div>
       <div className="mt-3 flex gap-2 text-xs">
-        <a
-          href="/settings"
+        <button
+          onClick={() => navigate("/settings")}
           className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-center font-semibold text-slate-100 transition hover:border-emerald-300/50 hover:text-white"
-          onClick={(e) => {
-            e.preventDefault();
-            window.location.href = "/settings";
-          }}
         >
           Configurações
-        </a>
+        </button>
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={handleLogout}
           className="flex-1 rounded-md border border-emerald-400/50 bg-emerald-500/20 px-3 py-2 font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30"
         >
           Sair

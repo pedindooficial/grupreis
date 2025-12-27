@@ -1,7 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import { ReactNode } from "react";
 
 interface NavItem {
@@ -11,7 +8,8 @@ interface NavItem {
 }
 
 export default function MobileNav({ items }: { items: NavItem[] }) {
-  const pathname = usePathname();
+  const location = useLocation();
+  const pathname = location.pathname;
 
   return (
     <>
@@ -22,7 +20,7 @@ export default function MobileNav({ items }: { items: NavItem[] }) {
         return (
           <Link
             key={item.href}
-            href={item.href as any}
+            to={item.href}
             className={`flex flex-col items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
               isActive
                 ? "text-emerald-300 bg-emerald-500/10"

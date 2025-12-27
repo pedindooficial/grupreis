@@ -1,8 +1,7 @@
-"use client";
-
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import Swal from "sweetalert2";
+import { apiFetch } from "@/lib/api-client";
 
 // TypeScript declarations for Google Maps
 declare global {
@@ -33,12 +32,13 @@ declare global {
 }
 
 // Google Maps API Key
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
 export default function LocationCapturePage() {
-  const params = useParams();
-  const token = params.token as string;
+  const { token } = useParams<{ token: string }>();
+  if (!token) {
+    return <div>Token não encontrado</div>;
+  }
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -153,7 +153,7 @@ export default function LocationCapturePage() {
   const validateToken = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/location-capture/${token}`);
+      const res = await apiFetch(`/location-capture/${token}`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -269,9 +269,8 @@ export default function LocationCapturePage() {
   const reverseGeocode = async (lat: number, lng: number) => {
     try {
       console.log("Reverse geocoding:", lat, lng);
-      const res = await fetch(`${API_URL}/distance/geocode`, {
+      const res = await apiFetch(`/distance/geocode`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lat, lng }),
       });
 
@@ -352,9 +351,8 @@ export default function LocationCapturePage() {
     try {
       setSaving(true);
       
-      const res = await fetch(`${API_URL}/location-capture/${token}/capture`, {
+      const res = await apiFetch(`/location-capture/${token}/capture`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           latitude: location.lat,
           longitude: location.lng,

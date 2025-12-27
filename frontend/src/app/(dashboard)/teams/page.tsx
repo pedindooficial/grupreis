@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { apiFetch } from "@/lib/api-client";
@@ -627,7 +625,7 @@ export default function TeamsPage() {
                             Editar
                           </button>
                           <Link
-                            href={`/teams/${team._id}/jobs`}
+                            to={`/teams/${team._id}/jobs`}
                             onClick={(e) => e.stopPropagation()}
                             className="rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/80 hover:bg-emerald-500/20"
                           >
