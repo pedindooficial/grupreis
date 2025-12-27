@@ -425,12 +425,28 @@ export default function MaintenanceNotification() {
                 return (
                   <button
                     key={`${item.type}-${item._id}`}
-                    onClick={() => {
-                      setSelectedItem(item);
-                      setShowDetailModal(true);
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log("Item clicked:", item);
+                      // Close dropdown first
                       setShowDropdown(false);
+                      // Then set item and open modal after a brief delay to ensure dropdown closes
+                      setTimeout(() => {
+                        setSelectedItem(item);
+                        setShowDetailModal(true);
+                        console.log("Modal should open - showDetailModal:", true, "selectedItem:", item);
+                      }, 100);
                     }}
-                    className="w-full text-left border-b border-white/5 p-3 transition hover:bg-white/5 active:bg-white/10 touch-manipulation min-h-[60px]"
+                    onMouseDown={(e) => {
+                      // Prevent any mouse down events from interfering
+                      e.stopPropagation();
+                    }}
+                    onTouchStart={(e) => {
+                      // Prevent touch events from interfering on mobile
+                      e.stopPropagation();
+                    }}
+                    className="w-full text-left border-b border-white/5 p-3 transition hover:bg-white/5 active:bg-white/10 touch-manipulation min-h-[60px] relative z-[9999]"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -502,7 +518,7 @@ export default function MaintenanceNotification() {
       )}
 
       {/* Detail Modal - Rendered via Portal at document body level */}
-      {mounted && showDetailModal && selectedItem && createPortal(
+      {mounted && showDetailModal && selectedItem && typeof window !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/70 p-4 pt-6 sm:pt-8 md:items-center overflow-y-auto">
           <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-900 shadow-2xl max-h-[calc(100vh-2rem)] sm:max-h-[90vh] my-auto overflow-y-auto">
             <div className="border-b border-white/10 p-4 sm:p-6">
