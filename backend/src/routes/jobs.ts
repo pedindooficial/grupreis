@@ -8,6 +8,7 @@ import ClientModel from "../models/Client";
 import CashierModel from "../models/Cashier";
 import CashTransactionModel from "../models/CashTransaction";
 import SettingsModel from "../models/Settings";
+import TeamModel from "../models/Team";
 
 const router = Router();
 
@@ -35,7 +36,8 @@ const jobSchema = z.object({
   clientId: z.string().optional().nullable(),
   clientName: z.string().optional(),
   site: z.string().optional(),
-  team: z.string().optional(),
+  team: z.string().optional(), // Team name (kept for backward compatibility)
+  teamId: z.string().optional(), // Team ID (preferred)
   status: z.enum(["pendente", "em_execucao", "concluida", "cancelada"]).optional(),
   plannedDate: z.string().optional(),
   estimatedDuration: z.number().min(0).optional(), // Total estimated duration in minutes
@@ -485,6 +487,26 @@ router.post("/", async (req, res) => {
       createData.travelDescription = parsed.data.travelDescription;
     }
 
+    // Handle team assignment: if teamId is provided, use it; otherwise, look up by team name
+    if (parsed.data.teamId) {
+      createData.teamId = parsed.data.teamId;
+      // Also store team name for backward compatibility
+      const team = await TeamModel.findById(parsed.data.teamId).lean();
+      if (team) {
+        createData.team = team.name;
+      }
+    } else if (parsed.data.team) {
+      // Look up team by name and store both teamId and team name
+      const team = await TeamModel.findOne({ name: parsed.data.team }).lean();
+      if (team) {
+        createData.teamId = team._id;
+        createData.team = team.name;
+      } else {
+        // Team not found, just store the name (backward compatibility)
+        createData.team = parsed.data.team;
+      }
+    }
+
     const created = await JobModel.create(createData);
     res.status(201).json({ data: created });
   } catch (error: any) {
@@ -499,7 +521,8 @@ const updateSchema = z.object({
   status: z.enum(["pendente", "em_execucao", "concluida", "cancelada"]).optional(),
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),
-  team: z.string().optional(),
+  team: z.string().optional(), // Team name (kept for backward compatibility)
+  teamId: z.string().optional(), // Team ID (preferred)
   notes: z.string().optional(),
   value: z.number().min(0).optional(),
   discountPercent: z.number().min(0).max(100).optional(),
@@ -672,6 +695,34 @@ router.put("/:id", async (req, res) => {
       updateData.travelDescription = parsed.data.travelDescription;
     }
 
+    // Handle team assignment: if teamId is provided, use it; otherwise, look up by team name
+    if (parsed.data.teamId) {
+      updateData.teamId = parsed.data.teamId;
+      // Also store team name for backward compatibility
+      const team = await TeamModel.findById(parsed.data.teamId).lean();
+      if (team) {
+        updateData.team = team.name;
+      }
+    } else if (parsed.data.team !== undefined) {
+      if (parsed.data.team) {
+        // Look up team by name and store both teamId and team name
+        const team = await TeamModel.findOne({ name: parsed.data.team }).lean();
+        if (team) {
+          updateData.teamId = team._id;
+          updateData.team = team.name;
+        } else {
+          // Team not found, just store the name (backward compatibility)
+          updateData.team = parsed.data.team;
+          // Clear teamId if team name doesn't exist
+          updateData.teamId = null;
+        }
+      } else {
+        // Team is being cleared
+        updateData.team = null;
+        updateData.teamId = null;
+      }
+    }
+
     const updated = await JobModel.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -715,6 +766,40 @@ router.patch("/:id", async (req, res) => {
       updateData.discountPercent = discountPercent;
       updateData.discountValue = discountValue;
       updateData.finalValue = finalValue;
+    }
+
+    // Handle team assignment: if teamId is provided, use it; otherwise, look up by team name
+    if (parsed.data.teamId !== undefined) {
+      if (parsed.data.teamId) {
+        updateData.teamId = parsed.data.teamId;
+        // Also store team name for backward compatibility
+        const team = await TeamModel.findById(parsed.data.teamId).lean();
+        if (team) {
+          updateData.team = team.name;
+        }
+      } else {
+        // Team is being cleared
+        updateData.teamId = null;
+        updateData.team = null;
+      }
+    } else if (parsed.data.team !== undefined) {
+      if (parsed.data.team) {
+        // Look up team by name and store both teamId and team name
+        const team = await TeamModel.findOne({ name: parsed.data.team }).lean();
+        if (team) {
+          updateData.teamId = team._id;
+          updateData.team = team.name;
+        } else {
+          // Team not found, just store the name (backward compatibility)
+          updateData.team = parsed.data.team;
+          // Clear teamId if team name doesn't exist
+          updateData.teamId = null;
+        }
+      } else {
+        // Team is being cleared
+        updateData.team = null;
+        updateData.teamId = null;
+      }
     }
 
     const updated = await JobModel.findByIdAndUpdate(req.params.id, updateData, {

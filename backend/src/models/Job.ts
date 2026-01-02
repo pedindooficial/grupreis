@@ -30,7 +30,8 @@ export interface Job {
   site?: string;
   siteLatitude?: number;
   siteLongitude?: number;
-  team?: string;
+  team?: string; // Team name (kept for backward compatibility)
+  teamId?: Types.ObjectId | string; // Team ID (preferred)
   status: JobStatus;
   plannedDate?: string;
   estimatedDuration?: number;
@@ -89,7 +90,8 @@ const JobSchema = new Schema<Job>(
     site: { type: String, trim: true },
     siteLatitude: { type: Number }, // Latitude da localização da obra
     siteLongitude: { type: Number }, // Longitude da localização da obra
-    team: { type: String, trim: true },
+    team: { type: String, trim: true }, // Team name (kept for backward compatibility)
+    teamId: { type: Schema.Types.ObjectId, ref: "Team" }, // Team ID (preferred)
     status: {
       type: String,
       enum: ["pendente", "em_execucao", "concluida", "cancelada"],
@@ -123,6 +125,7 @@ const JobSchema = new Schema<Job>(
 
 JobSchema.index({ seq: 1 }, { unique: false });
 JobSchema.index({ clientId: 1, status: 1 });
+JobSchema.index({ teamId: 1 }); // Index for team queries
 
 const JobModel = (models.Job as Model<Job>) || model<Job>("Job", JobSchema);
 

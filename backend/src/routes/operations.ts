@@ -47,8 +47,12 @@ router.post("/team/:id", async (req, res) => {
       return res.status(401).json({ error: "Senha incorreta" });
     }
 
+    // Query by teamId (preferred) or fallback to team name for backward compatibility
     const jobs = await JobModel.find({
-      team: team.name
+      $or: [
+        { teamId: team._id },
+        { team: team.name }
+      ]
     })
       .sort({ plannedDate: 1 })
       .lean();
@@ -84,8 +88,12 @@ router.post("/:token", async (req, res) => {
       return res.status(401).json({ error: "Senha incorreta" });
     }
 
+    // Query by teamId (preferred) or fallback to team name for backward compatibility
     const jobs = await JobModel.find({
-      team: team.name
+      $or: [
+        { teamId: team._id },
+        { team: team.name }
+      ]
     })
       .sort({ plannedDate: 1 })
       .lean();
@@ -186,20 +194,27 @@ router.get("/team/:id/watch", async (req, res) => {
     // For updates and deletes, we check in code because:
     // - Updates: We need to catch all updates (status changes, etc.), not just team field updates
     // - Deletes: We can't filter by team at DB level without the deleted document
+    const teamIdStr = team._id.toString();
     const changeStream = JobModel.watch(
       [
         {
           $match: {
             $or: [
-              // Filter inserts by team at database level (most efficient)
+              // Filter inserts by teamId (preferred) or team name at database level
               { 
                 operationType: "insert",
-                "fullDocument.team": team.name 
+                $or: [
+                  { "fullDocument.teamId": teamIdStr },
+                  { "fullDocument.team": team.name }
+                ]
               },
-              // Filter updates where team field is changed to our team
+              // Filter updates where teamId or team field is changed to our team
               { 
                 operationType: "update",
-                "updateDescription.updatedFields.team": team.name 
+                $or: [
+                  { "updateDescription.updatedFields.teamId": teamIdStr },
+                  { "updateDescription.updatedFields.team": team.name }
+                ]
               },
               // Allow all other updates and deletes through (we'll check in code)
               { operationType: "update" },
@@ -216,30 +231,32 @@ router.get("/team/:id/watch", async (req, res) => {
         let isRelevant = false;
         let jobId: string | null = null;
         
+        const teamIdStr = team._id.toString();
         if (change.operationType === "insert") {
           // Insert: fullDocument should already be filtered by pipeline
           const job = change.fullDocument;
-          if (job && job.team === team.name) {
+          if (job && (job.teamId?.toString() === teamIdStr || job.team === team.name)) {
             isRelevant = true;
             jobId = job._id?.toString() || null;
           }
         } else if (change.operationType === "update") {
           jobId = change.documentKey?._id?.toString() || null;
           
-          // Check if team field was updated to our team
-          if (change.updateDescription?.updatedFields?.team === team.name) {
+          // Check if teamId or team field was updated to our team
+          const updatedFields = change.updateDescription?.updatedFields || {};
+          if (updatedFields.teamId?.toString() === teamIdStr || updatedFields.team === team.name) {
             // Team was updated to our team - relevant
             isRelevant = true;
           } else if (change.fullDocument) {
             // If fullDocument is available, check if it belongs to our team
-            if (change.fullDocument.team === team.name) {
+            if (change.fullDocument.teamId?.toString() === teamIdStr || change.fullDocument.team === team.name) {
               isRelevant = true;
             }
           } else {
             // Team field wasn't updated, but other fields were - fetch to check current team
             if (jobId) {
               const job = await JobModel.findById(jobId).lean();
-              if (job && job.team === team.name) {
+              if (job && (job.teamId?.toString() === teamIdStr || job.team === team.name)) {
                 isRelevant = true;
               }
             }
@@ -253,8 +270,12 @@ router.get("/team/:id/watch", async (req, res) => {
 
         if (isRelevant) {
           // Fetch all jobs for the team to send complete updated list
+          // Query by teamId (preferred) or fallback to team name for backward compatibility
           const jobs = await JobModel.find({
-            team: team.name
+            $or: [
+              { teamId: team._id },
+              { team: team.name }
+            ]
           })
             .sort({ plannedDate: 1 })
             .lean();

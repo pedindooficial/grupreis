@@ -266,7 +266,8 @@ export default function JobsPage() {
     clientId: "",
     clientName: "",
     site: "",
-    team: "",
+    team: "", // Team name (kept for display/backward compatibility)
+    teamId: "", // Team ID (preferred)
     status: "pendente" as Status,
     plannedDate: "",
     notes: "",
@@ -533,6 +534,7 @@ export default function JobsPage() {
       clientName: "",
       site: "",
       team: "",
+      teamId: "",
       status: "pendente",
       plannedDate: "",
       notes: "",
@@ -568,6 +570,7 @@ export default function JobsPage() {
       clientName: job.clientName || "",
       site: job.site || "",
       team: job.team || "",
+      teamId: job.teamId || "",
       status: job.status || "pendente",
       plannedDate: job.plannedDate || "",
       notes: job.notes || "",
@@ -863,12 +866,20 @@ export default function JobsPage() {
         return serviceData;
       });
       
+      const { team, ...restFormWithoutTeam } = restForm;
       const payload: any = {
-        ...restForm,
+        ...restFormWithoutTeam,
         services: processedServices,
         clientName,
         status: "pendente"
       };
+      
+      // Include teamId if available, otherwise fall back to team name for backward compatibility
+      if (form.teamId) {
+        payload.teamId = form.teamId;
+      } else if (form.team) {
+        payload.team = form.team;
+      }
       
       // Include travel/displacement data if calculated
       if (form.travelDistanceKm && form.travelDistanceKm > 0) {
@@ -1639,13 +1650,20 @@ export default function JobsPage() {
             <div className="space-y-1 text-sm">
               <label className="text-slate-200">Equipe</label>
               <select
-                value={form.team}
-                onChange={(e) => setForm((f) => ({ ...f, team: e.target.value }))}
+                value={form.teamId}
+                onChange={(e) => {
+                  const selectedTeam = teams.find((t) => t._id === e.target.value);
+                  setForm((f) => ({
+                    ...f,
+                    teamId: e.target.value,
+                    team: selectedTeam?.name || ""
+                  }));
+                }}
                 className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Selecione uma equipe</option>
                 {teams.map((t) => (
-                  <option key={t._id} value={t.name}>
+                  <option key={t._id} value={t._id}>
                     {t.name}
                   </option>
                 ))}
