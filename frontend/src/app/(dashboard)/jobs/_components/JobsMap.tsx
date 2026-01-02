@@ -31,7 +31,6 @@ export default function JobsMap({ jobs }: JobsMapProps) {
   const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
   const addDebug = (msg: string) => {
-    console.log(`[JobsMap] ${msg}`);
     setDebugInfo((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${msg}`]);
   };
 
@@ -427,36 +426,36 @@ export default function JobsMap({ jobs }: JobsMapProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-white">Mapa de Locais de Serviço</h3>
-          <p className="text-xs text-slate-400">
+      <div className="flex flex-col gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-base sm:text-lg font-semibold text-white">Mapa de Locais de Serviço</h3>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
             {jobs.filter((j) => j.site && j.site.trim()).length} local(is) com endereço
           </p>
         </div>
         {!loading && !error && (
-          <div className="flex gap-2 text-xs">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <span className="text-slate-300">Pendente</span>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-yellow-500 flex-shrink-0"></div>
+              <span className="text-slate-300 whitespace-nowrap text-[11px] sm:text-xs">Pendente</span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <span className="text-slate-300">Em execução</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-blue-500 flex-shrink-0"></div>
+              <span className="text-slate-300 whitespace-nowrap text-[11px] sm:text-xs">Em execução</span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-              <span className="text-slate-300">Concluída</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-500 flex-shrink-0"></div>
+              <span className="text-slate-300 whitespace-nowrap text-[11px] sm:text-xs">Concluída</span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span className="text-slate-300">Cancelada</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+              <span className="text-slate-300 whitespace-nowrap text-[11px] sm:text-xs">Cancelada</span>
             </div>
           </div>
         )}
       </div>
       
-      <div className="relative h-[300px] sm:h-[400px] md:h-[500px] rounded-lg border border-white/10 overflow-hidden bg-slate-800">
+      <div className="relative h-[300px] sm:h-[350px] md:h-[450px] lg:h-[500px] rounded-lg border border-white/10 overflow-hidden bg-slate-800">
         {/* Elemento do mapa - sempre presente no DOM */}
         <div ref={mapRef} className="w-full h-full" />
         

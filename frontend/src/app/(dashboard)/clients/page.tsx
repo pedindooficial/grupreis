@@ -904,28 +904,28 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Clientes e Obras</h1>
-          <p className="text-sm text-slate-300">
+          <h1 className="text-xl sm:text-2xl font-semibold text-white">Clientes e Obras</h1>
+          <p className="text-xs sm:text-sm text-slate-300">
             Cadastro de clientes, contatos e endereços de obra. Dados serão
             carregados do banco assim que a API estiver conectada.
           </p>
         </div>
         {mode === null && (
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+            <div className="relative flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 flex-1 sm:flex-initial">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar por nome, CPF/CNPJ ou telefone"
-                className="w-56 bg-transparent text-sm text-white outline-none placeholder:text-slate-400"
+                className="w-full sm:w-56 bg-transparent text-sm text-white outline-none placeholder:text-slate-400"
               />
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setFilterOpen((s) => !s)}
-                  className="flex items-center gap-2 rounded-md border border-white/10 bg-slate-900 px-3 py-2 pr-7 text-xs font-semibold text-white transition hover:border-emerald-300/50 focus:border-emerald-400 focus:outline-none"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md border border-white/10 bg-slate-900 px-3 py-2.5 pr-7 text-xs font-semibold text-white transition hover:border-emerald-300/50 focus:border-emerald-400 focus:outline-none touch-manipulation"
                 >
                   {filterType === "all"
                     ? "Todos"
@@ -948,7 +948,7 @@ export default function ClientsPage() {
                           setFilterType(opt.value as any);
                           setFilterOpen(false);
                         }}
-                        className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 transition hover:bg-white/10"
+                        className="block w-full px-3 py-2.5 text-left text-xs font-semibold text-slate-200 transition hover:bg-white/10 touch-manipulation"
                       >
                         {opt.label}
                       </button>
@@ -959,7 +959,7 @@ export default function ClientsPage() {
             </div>
             <button
               onClick={openNewClient}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500"
+              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500 touch-manipulation active:scale-95"
             >
               + Novo cliente/obra
             </button>
@@ -969,16 +969,16 @@ export default function ClientsPage() {
 
       {mode === null && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             {stats.map((item) => (
               <div
                 key={item.label}
-                className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/20"
+                className="rounded-xl border border-white/10 bg-white/5 p-3 shadow-inner shadow-black/20"
               >
-                <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
                   {item.label}
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
+                <div className="mt-1.5 text-xl sm:text-2xl font-semibold text-white">
                   {item.value}
                 </div>
               </div>
@@ -999,88 +999,158 @@ export default function ClientsPage() {
                 <p className="text-sm">Carregando clientes...</p>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="px-6 py-4 text-slate-300">
-                Nenhum cliente cadastrado. Clique em “+ Novo cliente/obra” para adicionar.
+              <div className="px-4 sm:px-6 py-4 text-slate-300 text-sm">
+                Nenhum cliente cadastrado. Clique em "+ Novo cliente/obra" para adicionar.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-white/5 text-xs uppercase text-slate-300">
-                    <tr>
-                      <th className="px-4 py-3">Nome</th>
-                      <th className="px-4 py-3">Documento</th>
-                      <th className="px-4 py-3">Telefone</th>
-                      <th className="px-4 py-3">E-mail</th>
-                      <th className="px-4 py-3">Endereço</th>
-                      <th className="px-4 py-3 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((c) => (
-                      <tr
-                        key={c._id}
-                        className="border-t border-white/5 hover:bg-white/5 cursor-pointer"
-                        onClick={() => setSelectedClient(c)}
-                      >
-                        <td className="px-4 py-3 text-white">{c.name}</td>
-                        <td className="px-4 py-3 text-slate-200">
-                          {c.personType === "cnpj" ? "CNPJ" : "CPF"}{" "}
-                          {c.docNumber
-                            ? (c.personType === "cnpj"
-                                ? formatCNPJ(c.docNumber.replace(/\D/g, ""))
-                                : formatCPF(c.docNumber.replace(/\D/g, "")))
-                            : "-"}
-                        </td>
-                        <td className="px-4 py-3 text-slate-200">
-                          {c.phone
-                            ? formatPhone(c.phone.replace(/\D/g, ""))
-                            : "-"}
-                        </td>
-                        <td className="px-4 py-3 text-slate-200">
-                          {c.email || "-"}
-                        </td>
-                        <td className="px-4 py-3 text-slate-200">
-                          {(() => {
-                            if (c.addresses && Array.isArray(c.addresses) && c.addresses.length > 0) {
-                              return c.addresses[0].address || c.addresses[0].label || "Endereço cadastrado";
-                            }
-                            return c.address || "-";
-                          })()}
-                        </td>
-                        <td className="px-4 py-3 text-right text-slate-200">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedClient(c);
-                            }}
-                            className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
-                          >
-                            Detalhes
-                          </button>
-                        </td>
+              <>
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3 px-4 pb-4">
+                  {filtered.map((c) => (
+                    <div
+                      key={c._id}
+                      className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3 cursor-pointer transition hover:bg-white/10 active:bg-white/15"
+                      onClick={() => setSelectedClient(c)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base font-semibold text-white truncate">{c.name}</h3>
+                          <div className="mt-1 text-xs text-slate-300">
+                            {c.personType === "cnpj" ? "CNPJ" : "CPF"}{" "}
+                            {c.docNumber
+                              ? (c.personType === "cnpj"
+                                  ? formatCNPJ(c.docNumber.replace(/\D/g, ""))
+                                  : formatCPF(c.docNumber.replace(/\D/g, "")))
+                              : "-"}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedClient(c);
+                          }}
+                          className="ml-2 flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation"
+                        >
+                          Detalhes
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 text-sm">
+                        {c.phone && (
+                          <div className="flex items-center gap-2 text-slate-300">
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                            <span className="truncate">{formatPhone(c.phone.replace(/\D/g, ""))}</span>
+                          </div>
+                        )}
+                        {c.email && (
+                          <div className="flex items-center gap-2 text-slate-300">
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            <span className="truncate">{c.email}</span>
+                          </div>
+                        )}
+                        <div className="flex items-start gap-2 text-slate-300">
+                          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span className="text-xs line-clamp-2">
+                            {(() => {
+                              if (c.addresses && Array.isArray(c.addresses) && c.addresses.length > 0) {
+                                return c.addresses[0].address || c.addresses[0].label || "Endereço cadastrado";
+                              }
+                              return c.address || "-";
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-white/5 text-xs uppercase text-slate-300">
+                      <tr>
+                        <th className="px-4 py-3">Nome</th>
+                        <th className="px-4 py-3">Documento</th>
+                        <th className="px-4 py-3">Telefone</th>
+                        <th className="px-4 py-3">E-mail</th>
+                        <th className="px-4 py-3">Endereço</th>
+                        <th className="px-4 py-3 text-right">Ações</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {filtered.map((c) => (
+                        <tr
+                          key={c._id}
+                          className="border-t border-white/5 hover:bg-white/5 cursor-pointer"
+                          onClick={() => setSelectedClient(c)}
+                        >
+                          <td className="px-4 py-3 text-white">{c.name}</td>
+                          <td className="px-4 py-3 text-slate-200">
+                            {c.personType === "cnpj" ? "CNPJ" : "CPF"}{" "}
+                            {c.docNumber
+                              ? (c.personType === "cnpj"
+                                  ? formatCNPJ(c.docNumber.replace(/\D/g, ""))
+                                  : formatCPF(c.docNumber.replace(/\D/g, "")))
+                              : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-200">
+                            {c.phone
+                              ? formatPhone(c.phone.replace(/\D/g, ""))
+                              : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-200">
+                            {c.email || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-200">
+                            {(() => {
+                              if (c.addresses && Array.isArray(c.addresses) && c.addresses.length > 0) {
+                                return c.addresses[0].address || c.addresses[0].label || "Endereço cadastrado";
+                              }
+                              return c.address || "-";
+                            })()}
+                          </td>
+                          <td className="px-4 py-3 text-right text-slate-200">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedClient(c);
+                              }}
+                              className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
+                            >
+                              Detalhes
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </>
       )}
 
       {mode === "select" && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 shadow-inner shadow-black/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">Novo cliente</div>
-              <p className="text-sm text-slate-300">
+              <div className="text-base sm:text-lg font-semibold text-white">Novo cliente</div>
+              <p className="text-xs sm:text-sm text-slate-300">
                 Escolha se o cliente é Pessoa Física (CPF) ou Pessoa Jurídica (CNPJ).
               </p>
             </div>
             <button
               onClick={cancelFlow}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="w-full sm:w-auto rounded-lg border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Cancelar
             </button>
@@ -1091,10 +1161,10 @@ export default function ClientsPage() {
                 setPersonType("cpf");
                 setMode("form");
               }}
-              className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
+              className="rounded-lg border border-white/10 bg-white/5 px-4 py-4 text-left text-sm font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
             >
               Pessoa Física (CPF)
-              <div className="text-xs font-normal text-slate-300">
+              <div className="text-xs font-normal text-slate-300 mt-1">
                 CPF, nome completo e contato.
               </div>
             </button>
@@ -1103,10 +1173,10 @@ export default function ClientsPage() {
                 setPersonType("cnpj");
                 setMode("form");
               }}
-              className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
+              className="rounded-lg border border-white/10 bg-white/5 px-4 py-4 text-left text-sm font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
             >
               Pessoa Jurídica (CNPJ)
-              <div className="text-xs font-normal text-slate-300">
+              <div className="text-xs font-normal text-slate-300 mt-1">
                 CNPJ, razão social, contato e obra.
               </div>
             </button>
@@ -1115,10 +1185,10 @@ export default function ClientsPage() {
       )}
 
       {mode === "form" && personType && (
-        <div className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-          <div className="flex items-center justify-between">
+        <div className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 shadow-inner shadow-black/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">
+              <div className="text-base sm:text-lg font-semibold text-white">
                 Cadastro de cliente ({personType === "cpf" ? "CPF" : "CNPJ"})
               </div>
               <p className="text-xs text-slate-300">
@@ -1127,7 +1197,7 @@ export default function ClientsPage() {
             </div>
             <button
               onClick={cancelFlow}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="w-full sm:w-auto rounded-lg border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Cancelar
             </button>
@@ -1141,7 +1211,7 @@ export default function ClientsPage() {
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder={
                   personType === "cpf" ? "João da Silva" : "Reis Fundações LTDA"
                 }
@@ -1159,7 +1229,7 @@ export default function ClientsPage() {
                   setForm((f) => ({ ...f, docNumber: formatted }));
                 }}
                 maxLength={personType === "cpf" ? 14 : 18}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder={personType === "cpf" ? "000.000.000-00" : "00.000.000/0000-00"}
               />
             </div>
@@ -1172,7 +1242,7 @@ export default function ClientsPage() {
                   setForm((f) => ({ ...f, phone: formatted }));
                 }}
                 maxLength={15}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="(11) 99999-9999"
               />
             </div>
@@ -1182,7 +1252,7 @@ export default function ClientsPage() {
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="contato@cliente.com"
               />
             </div>
@@ -1190,7 +1260,7 @@ export default function ClientsPage() {
 
           {/* Seção de Endereços */}
           <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-white">Endereços</div>
                 <div className="text-xs text-slate-400">Adicione um ou mais endereços para este cliente</div>
@@ -1198,7 +1268,7 @@ export default function ClientsPage() {
               <button
                 type="button"
                 onClick={openNewAddressForm}
-                className="rounded-md border border-emerald-400/50 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30"
+                className="w-full sm:w-auto rounded-md border border-emerald-400/50 bg-emerald-500/20 px-4 py-2.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30 touch-manipulation active:scale-95"
               >
                 + Novo Endereço
               </button>
@@ -1264,7 +1334,7 @@ export default function ClientsPage() {
                     <input
                       value={newAddressForm.label}
                       onChange={(e) => setNewAddressForm((f) => ({ ...f, label: e.target.value }))}
-                      className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                      className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                       placeholder="Endereço Principal"
                     />
                   </div>
@@ -1273,7 +1343,7 @@ export default function ClientsPage() {
                     <input
                       value={newAddressForm.addressStreet}
                       onChange={(e) => setNewAddressForm((f) => ({ ...f, addressStreet: e.target.value }))}
-                      className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                      className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                       placeholder="Rua, Avenida, etc."
                     />
                   </div>
@@ -1283,7 +1353,7 @@ export default function ClientsPage() {
                           <input
                             value={newAddressForm.addressNumber}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressNumber: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                             placeholder="123"
                           />
                         </div>
@@ -1292,7 +1362,7 @@ export default function ClientsPage() {
                           <input
                             value={newAddressForm.addressNeighborhood}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressNeighborhood: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                             placeholder="Centro"
                           />
                         </div>
@@ -1303,7 +1373,7 @@ export default function ClientsPage() {
                           <input
                             value={newAddressForm.addressCity}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressCity: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                             placeholder="São Paulo"
                           />
                         </div>
@@ -1312,7 +1382,7 @@ export default function ClientsPage() {
                           <select
                             value={newAddressForm.addressState}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressState: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                           >
                             <option value="">Selecione</option>
                             {BRAZIL_STATES.map((uf) => (
@@ -1327,7 +1397,7 @@ export default function ClientsPage() {
                           <input
                             value={newAddressForm.addressZip}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressZip: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                             placeholder="00000-000"
                           />
                         </div>
@@ -1400,7 +1470,7 @@ export default function ClientsPage() {
                         <button
                           type="button"
                           onClick={saveEditAddress}
-                          className="rounded-md border border-emerald-400/50 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30"
+                          className="w-full sm:w-auto rounded-md border border-emerald-400/50 bg-emerald-500/20 px-4 py-2.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30 touch-manipulation active:scale-95"
                         >
                           {editingAddressIndex !== null ? "Salvar" : "Adicionar"}
                         </button>
@@ -1414,7 +1484,7 @@ export default function ClientsPage() {
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation active:scale-95"
             >
               {saving ? "Salvando..." : "Salvar"}
             </button>
@@ -1469,7 +1539,7 @@ export default function ClientsPage() {
                     onChange={(e) =>
                       setEditForm((f) => ({ ...f, name: e.target.value }))
                     }
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   />
                 </div>
                 <div className="space-y-1 text-sm">
@@ -1484,7 +1554,7 @@ export default function ClientsPage() {
                       setEditForm((f) => ({ ...f, docNumber: formatted }));
                     }}
                     maxLength={editForm.personType === "cpf" ? 14 : 18}
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                     placeholder={editForm.personType === "cpf" ? "000.000.000-00" : "00.000.000/0000-00"}
                   />
                 </div>
@@ -1498,7 +1568,7 @@ export default function ClientsPage() {
                         personType: e.target.value as PersonType
                       }))
                     }
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   >
                     <option value="cpf">CPF</option>
                     <option value="cnpj">CNPJ</option>
@@ -1513,7 +1583,7 @@ export default function ClientsPage() {
                       setEditForm((f) => ({ ...f, phone: formatted }));
                     }}
                     maxLength={15}
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                     placeholder="(11) 99999-9999"
                   />
                 </div>
@@ -1524,7 +1594,7 @@ export default function ClientsPage() {
                     onChange={(e) =>
                       setEditForm((f) => ({ ...f, email: e.target.value }))
                     }
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   />
                 </div>
               </div>
@@ -1539,7 +1609,7 @@ export default function ClientsPage() {
                   <button
                     type="button"
                     onClick={openNewAddressForm}
-                    className="rounded-md border border-emerald-400/50 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30"
+                    className="w-full sm:w-auto rounded-md border border-emerald-400/50 bg-emerald-500/20 px-4 py-2.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30 touch-manipulation active:scale-95"
                   >
                     + Novo Endereço
                   </button>
@@ -1604,7 +1674,7 @@ export default function ClientsPage() {
                         <input
                           value={newAddressForm.label || ""}
                           onChange={(e) => setNewAddressForm((f) => ({ ...f, label: e.target.value }))}
-                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                           placeholder="Endereço Principal"
                         />
                       </div>
@@ -1613,7 +1683,7 @@ export default function ClientsPage() {
                         <input
                           value={newAddressForm.addressStreet}
                           onChange={(e) => setNewAddressForm((f) => ({ ...f, addressStreet: e.target.value }))}
-                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                           placeholder="Rua, Avenida, etc."
                         />
                       </div>
@@ -1623,7 +1693,7 @@ export default function ClientsPage() {
                           <input
                             value={newAddressForm.addressNumber}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressNumber: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                             placeholder="123"
                           />
                         </div>
@@ -1632,7 +1702,7 @@ export default function ClientsPage() {
                           <input
                             value={newAddressForm.addressNeighborhood}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressNeighborhood: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                             placeholder="Centro"
                           />
                         </div>
@@ -1643,7 +1713,7 @@ export default function ClientsPage() {
                           <input
                             value={newAddressForm.addressCity}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressCity: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                             placeholder="São Paulo"
                           />
                         </div>
@@ -1652,7 +1722,7 @@ export default function ClientsPage() {
                           <select
                             value={newAddressForm.addressState}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressState: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                           >
                             <option value="">Selecione</option>
                             {BRAZIL_STATES.map((uf) => (
@@ -1667,7 +1737,7 @@ export default function ClientsPage() {
                           <input
                             value={newAddressForm.addressZip}
                             onChange={(e) => setNewAddressForm((f) => ({ ...f, addressZip: e.target.value }))}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                             placeholder="00000-000"
                           />
                         </div>
@@ -1740,7 +1810,7 @@ export default function ClientsPage() {
                         <button
                           type="button"
                           onClick={saveEditAddress}
-                          className="rounded-md border border-emerald-400/50 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30"
+                          className="w-full sm:w-auto rounded-md border border-emerald-400/50 bg-emerald-500/20 px-4 py-2.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-300 hover:bg-emerald-500/30 touch-manipulation active:scale-95"
                         >
                           {editingAddressIndex !== null ? "Salvar" : "Adicionar"}
                         </button>

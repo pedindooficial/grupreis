@@ -1267,7 +1267,7 @@ export default function JobsPage() {
         {mode === "list" && (
           <button
             onClick={startNew}
-            className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500"
+            className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500 touch-manipulation active:scale-95"
           >
             + Nova OS
           </button>
@@ -1281,7 +1281,7 @@ export default function JobsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por título, cliente ou obra"
-              className="w-full sm:w-64 bg-transparent text-sm text-white outline-none placeholder:text-slate-400 px-2 py-2 sm:px-0"
+              className="w-full sm:w-64 bg-transparent text-sm text-white outline-none placeholder:text-slate-400 px-2 py-3 sm:px-0 touch-manipulation"
             />
             <div className="flex items-center gap-2 text-xs text-slate-200">
               <span className="hidden sm:inline">Status:</span>
@@ -1289,7 +1289,7 @@ export default function JobsPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="w-full sm:w-auto appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-2 pr-7 text-xs font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400"
+                  className="w-full sm:w-auto appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-3 pr-7 text-xs font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
                 >
                   <option value="all">Todos</option>
                   <option value="pendente">Pendente</option>
@@ -1527,7 +1527,7 @@ export default function JobsPage() {
                 resetForm();
                 setSelected(null);
               }}
-              className="w-full sm:w-auto rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="w-full sm:w-auto rounded-lg border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Cancelar
             </button>
@@ -1547,7 +1547,7 @@ export default function JobsPage() {
                     site: "" // Limpar endereço para permitir seleção
                   }));
                 }}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Selecione um cliente</option>
                 {clients.map((c) => (
@@ -1583,7 +1583,7 @@ export default function JobsPage() {
                   <select
                     value={form.site}
                     onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   >
                     <option value="">Selecione um endereço</option>
                     {addresses.map((addr: any, index: number) => {
@@ -1629,7 +1629,7 @@ export default function JobsPage() {
               <select
                 value={form.team}
                 onChange={(e) => setForm((f) => ({ ...f, team: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Selecione uma equipe</option>
                 {teams.map((t) => (
@@ -1683,7 +1683,7 @@ export default function JobsPage() {
                     ]
                   }))
                 }
-                className="w-full sm:w-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
+                className="w-full sm:w-auto rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
               >
                 + Adicionar serviço
               </button>
@@ -2560,7 +2560,7 @@ export default function JobsPage() {
             <button
               onClick={saveJob}
               disabled={saving}
-              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation active:scale-95"
             >
               {saving 
                 ? (mode === "edit" ? "Atualizando..." : "Salvando...") 

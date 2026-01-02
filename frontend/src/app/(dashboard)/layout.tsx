@@ -171,8 +171,7 @@ const ICONS = {
   )
 };
 
-function Sidebar() {
-  const { user } = useAuth();
+export function usePendingCount() {
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
@@ -180,6 +179,13 @@ function Sidebar() {
     // call it here to get the real pending count.
     setPendingCount(0);
   }, []);
+
+  return pendingCount;
+}
+
+function Sidebar() {
+  const { user } = useAuth();
+  const pendingCount = usePendingCount();
   const items = [
     { label: "Dashboard", href: "/", icon: ICONS.dashboard },
     {
@@ -222,24 +228,34 @@ function Topbar() {
   const { user } = useAuth();
   
   return (
-    <header className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-3 backdrop-blur">
-      <div className="flex items-center gap-2">
-        <div className="h-9 w-9 overflow-hidden rounded-lg bg-slate-800">
+    <header className="flex items-center justify-between rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 px-3 sm:px-5 py-2.5 sm:py-3 backdrop-blur">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="h-7 w-7 sm:h-9 sm:w-9 overflow-hidden rounded-lg bg-slate-800 flex-shrink-0">
           <img
             src="/logoreis.png"
             alt="Reis Fundações"
-            className="h-9 w-9 object-cover"
+            className="h-7 w-7 sm:h-9 sm:w-9 object-cover"
           />
         </div>
-        <div>
-          <div className="text-sm font-semibold text-white">Reis Fundações</div>
-          <div className="text-xs text-slate-300">Painel operacional</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs sm:text-sm font-semibold text-white truncate">Reis Fundações</div>
+          <div className="text-[10px] sm:text-xs text-slate-300 truncate hidden sm:block">Painel operacional</div>
         </div>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
         <MaintenanceNotification />
-        <div className="text-[11px] text-slate-400">
-          Sessão: {user?.email ?? "admin"}
+        <div className="hidden sm:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10">
+          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400"></div>
+          <div className="text-[10px] sm:text-[11px] text-slate-300 whitespace-nowrap">
+            <span className="hidden md:inline">Sessão: </span>
+            <span className="truncate max-w-[140px] lg:max-w-none">{user?.email ?? "admin"}</span>
+          </div>
+        </div>
+        <div className="sm:hidden flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10">
+          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400"></div>
+          <div className="text-[10px] text-slate-300 truncate max-w-[100px]">
+            {user?.email?.split("@")[0] ?? "admin"}
+          </div>
         </div>
       </div>
     </header>
@@ -251,29 +267,39 @@ export default function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
+  const pendingCount = usePendingCount();
+  
   return (
     <div className="flex min-h-screen bg-slate-950">
       <Sidebar />
-      <div className="flex w-full flex-col gap-4 px-4 pb-24 pt-6 md:ml-64 md:px-8 md:pb-8">
+      <div className="flex w-full flex-col gap-4 px-4 pb-8 pt-6 md:ml-64 md:px-8 md:pb-8">
         <Topbar />
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
           {children}
         </div>
       </div>
-      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-8 border-t border-white/10 bg-slate-900/95 px-2 py-2 text-xs font-semibold text-slate-200 backdrop-blur md:hidden">
+      <div className="fixed top-2 right-2 z-30 md:hidden">
         <MobileNav
           items={[
             { label: "Dashboard", href: "/", icon: ICONS.dashboard },
+            {
+              label: "Ordens de Serviço",
+              href: "/jobs",
+              icon: ICONS.jobs,
+              badge: pendingCount > 0 ? pendingCount : null
+            },
             { label: "Clientes", href: "/clients", icon: ICONS.clients },
-            { label: "Func.", href: "/employees", icon: ICONS.employees },
-            { label: "OS", href: "/jobs", icon: ICONS.jobs },
-            { label: "Equip.", href: "/equipment", icon: ICONS.equipment },
-            { label: "Máq.", href: "/machines", icon: ICONS.machines },
+            { label: "Funcionários", href: "/employees", icon: ICONS.employees },
+            { label: "Equipes", href: "/teams", icon: ICONS.teams },
+            { label: "Equipamentos", href: "/equipment", icon: ICONS.equipment },
+            { label: "Máquinas", href: "/machines", icon: ICONS.machines },
             { label: "Financeiro", href: "/cash", icon: ICONS.cash },
-            { label: "Equipes", href: "/teams", icon: ICONS.teams }
+            { label: "Documentos", href: "/documents", icon: ICONS.documents },
+            { label: "Auditoria", href: "/audit", icon: ICONS.audit },
+            { label: "Catálogo", href: "/catalog", icon: ICONS.catalog }
           ]}
         />
-      </nav>
+      </div>
     </div>
   );
 }
