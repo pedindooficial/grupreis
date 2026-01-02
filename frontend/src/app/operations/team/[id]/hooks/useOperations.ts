@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Swal from "sweetalert2";
 import { apiFetch, apiUrl } from "@/lib/api-client";
 import { Status, TeamData, Job, ViewTab, DateFilter } from "../types";
@@ -17,6 +17,7 @@ export function useOperations(teamId: string) {
   const [headquartersAddress, setHeadquartersAddress] = useState<string>("");
   const [transactions, setTransactions] = useState<any[]>([]);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [locationInterval, setLocationInterval] = useState<NodeJS.Timeout | null>(null);
   
   const storageKey = `ops-auth-team-${teamId}`;
 
@@ -68,12 +69,115 @@ export function useOperations(teamId: string) {
       }
       
       if (!silent) Swal.fire("Liberado", "Painel carregado.", "success");
+      
+      // Start location tracking
+      startLocationTracking();
     } catch (err) {
       console.error(err);
       setCheckingAuth(false);
       if (!silent) Swal.fire("Erro", "Falha ao autenticar.", "error");
     } finally {
       setAuthLoading(false);
+    }
+  };
+
+  const updateTeamLocation = async (latitude: number, longitude: number) => {
+    try {
+      // Get address via reverse geocoding
+      let address = "";
+      try {
+        const geocodeRes = await apiFetch("/distance/geocode", {
+          method: "POST",
+          body: JSON.stringify({ lat: latitude, lng: longitude })
+        });
+        const geocodeData = await geocodeRes.json().catch(() => null);
+        if (geocodeRes.ok && geocodeData?.data?.formattedAddress) {
+          address = geocodeData.data.formattedAddress;
+        }
+      } catch (err) {
+        console.error("Geocoding error:", err);
+      }
+
+      // Update team location
+      await apiFetch(`/teams/${teamId}/location`, {
+        method: "POST",
+        body: JSON.stringify({ latitude, longitude, address })
+      });
+    } catch (err) {
+      console.error("Error updating team location:", err);
+    }
+  };
+
+  const startLocationTracking = () => {
+    // Clear any existing interval
+    if (locationInterval) {
+      clearInterval(locationInterval);
+    }
+
+    // Geolocation options - optimized for reliability over precision
+    // Using lower accuracy for faster response and fewer timeouts
+    const geoOptions = {
+      enableHighAccuracy: false, // Use network location (faster, more reliable)
+      timeout: 30000, // 30 seconds timeout (increased from 10s)
+      maximumAge: 60000 // Accept cached location up to 1 minute old
+    };
+
+    // Error handler that only logs non-timeout errors
+    const handleGeoError = (error: GeolocationPositionError, context: string = "") => {
+      // Only log errors that aren't timeouts (timeouts are common and expected)
+      if (error.code !== error.TIMEOUT) {
+        console.warn(`Geolocation ${context} error (code ${error.code}):`, error.message);
+      }
+      // Timeout errors are silent - they're expected in poor signal areas
+    };
+
+    // Get location immediately
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          updateTeamLocation(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+          handleGeoError(error, "initial");
+          // Fallback: try with even more lenient settings if first attempt fails
+          if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                updateTeamLocation(position.coords.latitude, position.coords.longitude);
+              },
+              () => {
+                // Silent fail on fallback attempt
+              },
+              { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 } // 5 min cache
+            );
+          }
+        },
+        geoOptions
+      );
+    }
+
+    // Update location every 5 minutes
+    const interval = setInterval(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            updateTeamLocation(position.coords.latitude, position.coords.longitude);
+          },
+          (error) => {
+            handleGeoError(error, "periodic");
+          },
+          geoOptions
+        );
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    setLocationInterval(interval);
+  };
+
+  const stopLocationTracking = () => {
+    if (locationInterval) {
+      clearInterval(locationInterval);
+      setLocationInterval(null);
     }
   };
 
@@ -453,6 +557,7 @@ export function useOperations(teamId: string) {
   };
 
   const handleLogout = () => {
+    stopLocationTracking();
     localStorage.removeItem(storageKey);
     setData(null);
     setPassword("");
@@ -481,74 +586,108 @@ export function useOperations(teamId: string) {
     
     // Function to open Google Maps app on mobile
     const openGoogleMapsApp = (destination: string, origin?: string) => {
+      // Build web URL as universal fallback (always works)
+      const webUrl = origin
+        ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
+
       if (isAndroid) {
-        // Android: Use google.navigation: scheme for route navigation
-        let appUrl: string;
-        if (origin) {
-          // With origin (route navigation)
-          appUrl = `google.navigation:q=${destination}`;
-        } else {
-          // Just destination
-          appUrl = `google.navigation:q=${destination}`;
+        // Android: Try Google Maps app, fallback to web
+        const appUrl = `google.navigation:q=${encodeURIComponent(destination)}`;
+        
+        // Track if page loses focus (app opened)
+        let appOpened = false;
+        const blurHandler = () => {
+          appOpened = true;
+          window.removeEventListener('blur', blurHandler);
+        };
+        window.addEventListener('blur', blurHandler);
+        
+        // Try to open app (this is called from a user gesture, so it should work)
+        try {
+          window.location.href = appUrl;
+        } catch (err) {
+          // If that fails, try with a link click
+          const link = document.createElement('a');
+          link.href = appUrl;
+          link.target = '_self';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         }
         
-        // Create a hidden link and click it to open the app
-        const link = document.createElement('a');
-        link.href = appUrl;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Fallback to web version after a short delay
+        // Fallback to web after short delay if app didn't open
         setTimeout(() => {
-          const webUrl = origin
-            ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
-            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
-          window.open(webUrl, '_blank');
+          window.removeEventListener('blur', blurHandler);
+          if (!appOpened) {
+            window.open(webUrl, '_blank');
+          }
         }, 1000);
       } else if (isIOS) {
-        // iOS: Use comgooglemaps:// scheme (Google Maps app)
-        let appUrl: string;
-        if (origin) {
-          appUrl = `comgooglemaps://?daddr=${destination}&saddr=${origin}&directionsmode=driving`;
-        } else {
-          appUrl = `comgooglemaps://?daddr=${destination}&directionsmode=driving`;
+        // iOS: Try Google Maps app, then Apple Maps, then web
+        const googleMapsUrl = origin
+          ? `comgooglemaps://?daddr=${encodeURIComponent(destination)}&saddr=${encodeURIComponent(origin)}&directionsmode=driving`
+          : `comgooglemaps://?daddr=${encodeURIComponent(destination)}&directionsmode=driving`;
+        
+        // Track if page loses focus (app opened)
+        let appOpened = false;
+        const blurHandler = () => {
+          appOpened = true;
+          window.removeEventListener('blur', blurHandler);
+        };
+        window.addEventListener('blur', blurHandler);
+        
+        // Try Google Maps app
+        try {
+          window.location.href = googleMapsUrl;
+        } catch (err) {
+          // If that fails, try with a link click
+          const link = document.createElement('a');
+          link.href = googleMapsUrl;
+          link.target = '_self';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         }
         
-        // Create a hidden link and click it to open the app
-        const link = document.createElement('a');
-        link.href = appUrl;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Fallback to Apple Maps if Google Maps not installed, then web
+        // If Google Maps didn't open, try Apple Maps
         setTimeout(() => {
-          const appleMapsUrl = origin
-            ? `maps://?daddr=${destination}&saddr=${origin}`
-            : `maps://?daddr=${destination}`;
-          const appleLink = document.createElement('a');
-          appleLink.href = appleMapsUrl;
-          appleLink.style.display = 'none';
-          document.body.appendChild(appleLink);
-          appleLink.click();
-          document.body.removeChild(appleLink);
+          window.removeEventListener('blur', blurHandler);
           
-          // Final fallback to web
-          setTimeout(() => {
-            const webUrl = origin
-              ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
-              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
-            window.open(webUrl, '_blank');
-          }, 1000);
+          if (!appOpened) {
+            const appleMapsUrl = origin
+              ? `maps://?daddr=${encodeURIComponent(destination)}&saddr=${encodeURIComponent(origin)}`
+              : `maps://?daddr=${encodeURIComponent(destination)}`;
+            
+            let appleAppOpened = false;
+            const appleBlurHandler = () => {
+              appleAppOpened = true;
+              window.removeEventListener('blur', appleBlurHandler);
+            };
+            window.addEventListener('blur', appleBlurHandler);
+            
+            try {
+              window.location.href = appleMapsUrl;
+            } catch (err) {
+              const link = document.createElement('a');
+              link.href = appleMapsUrl;
+              link.target = '_self';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }
+            
+            // Final fallback to web
+            setTimeout(() => {
+              window.removeEventListener('blur', appleBlurHandler);
+              if (!appleAppOpened) {
+                window.open(webUrl, '_blank');
+              }
+            }, 1000);
+          }
         }, 1000);
       } else {
-        // Desktop or other: open in web browser
-        const webUrl = origin
-          ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`
-          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
+        // Desktop or other: open in web browser directly
         window.open(webUrl, '_blank');
       }
     };
@@ -628,7 +767,7 @@ export function useOperations(teamId: string) {
           };
         }
 
-        // Use watchPosition (most reliable for GPS)
+        // Use watchPosition with optimized settings for better reliability
         watchId = navigator.geolocation.watchPosition(
           (position) => {
             if (positionObtained) return;
@@ -663,7 +802,7 @@ export function useOperations(teamId: string) {
                   break;
                 case 3: // TIMEOUT
                   errorMessage = "Tempo esgotado";
-                  errorDetails = "Não foi possível obter sua localização em tempo hábil. Verifique se o GPS está ativado.";
+                  errorDetails = "Não foi possível obter sua localização em tempo hábil. Você ainda pode abrir o destino no Google Maps.";
                   break;
               }
             }
@@ -719,9 +858,9 @@ export function useOperations(teamId: string) {
             });
           },
           {
-            enableHighAccuracy: true,
-            timeout: 20000,
-            maximumAge: 0
+            enableHighAccuracy: false, // Use network location (faster, more reliable)
+            timeout: 30000, // 30 seconds (increased from 20s)
+            maximumAge: 60000 // Accept cached location up to 1 minute old
           }
         );
       },
@@ -789,9 +928,15 @@ export function useOperations(teamId: string) {
     loadHeadquarters();
   }, []);
 
+  // Ref to track previous job IDs for comparison
+  const previousJobIdsRef = useRef<Set<string>>(new Set());
+
   // Real-time updates using Server-Sent Events (SSE) with MongoDB Change Streams
   useEffect(() => {
     if (!data || !password || !teamId) return; // Only connect when authenticated
+
+    // Initialize previous job IDs
+    previousJobIdsRef.current = new Set((data.jobs || []).map((j: any) => j._id));
 
     const API_BASE = import.meta.env.VITE_API_URL || 
       (import.meta.env.DEV ? "https://localhost:4000/api" : "https://gruporeis.cloud/api");
@@ -802,37 +947,48 @@ export function useOperations(teamId: string) {
 
     let eventSource: EventSource | null = null;
 
-    try {
-      eventSource = new EventSource(sseUrl);
-
-      eventSource.onopen = () => {
-        console.log("✅ Connected to real-time updates");
-      };
-
-      eventSource.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        
+        if (message.type === "update" && message.jobs) {
+          const currentJobIds = new Set(message.jobs.map((j: any) => j._id));
+          const previousJobIds = previousJobIdsRef.current;
           
-          if (message.type === "update" && message.jobs) {
-            const previousJobCount = data.jobs?.length || 0;
-            const newJobCount = message.jobs.length;
+          // Find new jobs (jobs that weren't in the previous set)
+          const newJobs = message.jobs.filter((j: any) => !previousJobIds.has(j._id));
+          
+          // Update data with new jobs
+          setData((prev) => {
+            if (!prev) return prev;
             
-            // Update data with new jobs
-            setData((prev) => {
-              if (!prev) return prev;
-              return {
-                ...prev,
-                jobs: message.jobs
-              };
+            // Store previous jobs for comparison
+            const prevJobs = prev.jobs || [];
+            
+            // Find updated jobs (check for status changes)
+            const updatedJobs = message.jobs.filter((j: any) => {
+              const previousJob = prevJobs.find((pj: any) => pj._id === j._id);
+              return previousJob && previousJob.status !== j.status;
             });
-
+            
+            // If selectedJob was updated, update it too
+            let updatedSelectedJob = prev.selectedJob;
+            if (prev.selectedJob) {
+              const updatedJob = message.jobs.find((j: any) => j._id === prev.selectedJob?._id);
+              if (updatedJob) {
+                updatedSelectedJob = updatedJob;
+              }
+            }
+            
+            // Update previous job IDs for next comparison
+            previousJobIdsRef.current = currentJobIds;
+            
             // Show notification if new jobs were added
-            if (newJobCount > previousJobCount) {
-              const newJobsCount = newJobCount - previousJobCount;
+            if (newJobs.length > 0) {
               Swal.fire({
                 icon: "info",
                 title: "Nova OS disponível!",
-                text: `${newJobsCount} nova${newJobsCount > 1 ? 's' : ''} ordem${newJobsCount > 1 ? 'ens' : ''} de serviço ${newJobsCount > 1 ? 'foram' : 'foi'} adicionada${newJobsCount > 1 ? 's' : ''}.`,
+                text: `${newJobs.length} nova${newJobs.length > 1 ? 's' : ''} ordem${newJobs.length > 1 ? 'ens' : ''} de serviço ${newJobs.length > 1 ? 'foram' : 'foi'} adicionada${newJobs.length > 1 ? 's' : ''}.`,
                 toast: true,
                 position: "top-end",
                 showConfirmButton: false,
@@ -840,11 +996,50 @@ export function useOperations(teamId: string) {
                 timerProgressBar: true
               });
             }
-          }
-        } catch (err) {
-          console.error("Error parsing SSE message:", err);
+            
+            // Show notification for status changes (but not for changes made by this user)
+            if (updatedJobs.length > 0 && message.operationType === "update") {
+              updatedJobs.forEach((job: any) => {
+                const statusLabels: Record<string, string> = {
+                  pendente: "Pendente",
+                  em_execucao: "Em execução",
+                  concluida: "Concluída",
+                  cancelada: "Cancelada"
+                };
+                
+                Swal.fire({
+                  icon: "info",
+                  title: "OS atualizada",
+                  text: `A OS "${job.title?.substring(0, 30)}..." foi atualizada para: ${statusLabels[job.status] || job.status}`,
+                  toast: true,
+                  position: "top-end",
+                  showConfirmButton: false,
+                  timer: 3000,
+                  timerProgressBar: true
+                });
+              });
+            }
+            
+            return {
+              ...prev,
+              jobs: message.jobs,
+              selectedJob: updatedSelectedJob
+            };
+          });
         }
+      } catch (err) {
+        console.error("Error parsing SSE message:", err);
+      }
+    };
+
+    try {
+      eventSource = new EventSource(sseUrl);
+
+      eventSource.onopen = () => {
+        console.log("✅ Connected to real-time updates");
       };
+
+      eventSource.onmessage = handleMessage;
 
       eventSource.onerror = (error) => {
         console.error("SSE connection error:", error);
@@ -860,18 +1055,9 @@ export function useOperations(teamId: string) {
           // Reconnect when tab becomes visible
           try {
             eventSource = new EventSource(sseUrl);
-            eventSource.onmessage = (event) => {
-              try {
-                const message = JSON.parse(event.data);
-                if (message.type === "update" && message.jobs) {
-                  setData((prev) => {
-                    if (!prev) return prev;
-                    return { ...prev, jobs: message.jobs };
-                  });
-                }
-              } catch (err) {
-                console.error("Error parsing SSE message:", err);
-              }
+            eventSource.onmessage = handleMessage;
+            eventSource.onopen = () => {
+              console.log("✅ Reconnected to real-time updates");
             };
           } catch (err) {
             console.error("Error reconnecting SSE:", err);
@@ -886,12 +1072,26 @@ export function useOperations(teamId: string) {
         document.removeEventListener("visibilitychange", handleVisibilityChange);
         if (eventSource) {
           eventSource.close();
+          eventSource = null;
         }
       };
     } catch (err) {
       console.error("Error setting up SSE connection:", err);
     }
-  }, [data, password, teamId]);
+  }, [data, password, teamId]); // Keep data in dependencies to initialize previousJobIds correctly
+
+  // Start location tracking when authenticated
+  useEffect(() => {
+    if (data && password) {
+      startLocationTracking();
+    } else {
+      stopLocationTracking();
+    }
+    
+    return () => {
+      stopLocationTracking();
+    };
+  }, [data, password]);
 
   const assignedJobs = useMemo(() => data?.jobs || [], [data]);
 
@@ -919,6 +1119,20 @@ export function useOperations(teamId: string) {
 
   const groupedJobsByDate = useMemo(() => groupJobsByDate(filteredJobs), [filteredJobs]);
 
+  // Get the next job (first pending job sorted by planned date)
+  const nextJob = useMemo(() => {
+    if (!data) return null;
+    const pendingJobs = assignedJobs
+      .filter((j) => j.status === "pendente")
+      .sort((a, b) => {
+        // Sort by planned date (earliest first)
+        const dateA = a.plannedDate ? new Date(a.plannedDate).getTime() : Infinity;
+        const dateB = b.plannedDate ? new Date(b.plannedDate).getTime() : Infinity;
+        return dateA - dateB;
+      });
+    return pendingJobs.length > 0 ? pendingJobs[0] : null;
+  }, [assignedJobs, data]);
+
   return {
     password,
     setPassword,
@@ -939,6 +1153,7 @@ export function useOperations(teamId: string) {
     dateFilteredJobs,
     filteredJobs,
     groupedJobsByDate,
+    nextJob,
     authWithPassword,
     handleStartJob,
     updateJobStatus,

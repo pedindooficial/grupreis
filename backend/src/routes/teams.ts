@@ -160,6 +160,78 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+// Update team location
+const locationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  address: z.string().optional()
+});
+
+router.post("/:id/location", async (req, res) => {
+  try {
+    const parsed = locationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: "Dados inválidos", issues: parsed.error.flatten() });
+    }
+
+    await connectDB();
+
+    const updated = await TeamModel.findByIdAndUpdate(
+      req.params.id,
+      {
+        currentLocation: {
+          latitude: parsed.data.latitude,
+          longitude: parsed.data.longitude,
+          address: parsed.data.address,
+          timestamp: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: "Equipe não encontrada" });
+    }
+
+    res.json({ data: updated.currentLocation });
+  } catch (error: any) {
+    console.error("POST /api/teams/:id/location error", error);
+    res.status(500).json({
+      error: "Falha ao atualizar localização",
+      detail: error?.message || "Erro interno"
+    });
+  }
+});
+
+// Get team location
+router.get("/:id/location", async (req, res) => {
+  try {
+    await connectDB();
+
+    const team = await TeamModel.findById(req.params.id)
+      .select("currentLocation name")
+      .lean();
+
+    if (!team) {
+      return res.status(404).json({ error: "Equipe não encontrada" });
+    }
+
+    if (!team.currentLocation) {
+      return res.json({ data: null });
+    }
+
+    res.json({ data: team.currentLocation });
+  } catch (error: any) {
+    console.error("GET /api/teams/:id/location error", error);
+    res.status(500).json({
+      error: "Falha ao obter localização",
+      detail: error?.message || "Erro interno"
+    });
+  }
+});
+
 export default router;
 
 

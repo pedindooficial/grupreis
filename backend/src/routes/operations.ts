@@ -181,26 +181,73 @@ router.get("/team/:id/watch", async (req, res) => {
     // Send initial connection message
     res.write(`: connected\n\n`);
 
-    // Watch for changes in jobs collection
-    // We'll filter by team in the change handler
+    // Watch for changes in jobs collection using MongoDB Change Streams
+    // We use a pipeline to filter inserts at the database level for efficiency
+    // For updates and deletes, we check in code because:
+    // - Updates: We need to catch all updates (status changes, etc.), not just team field updates
+    // - Deletes: We can't filter by team at DB level without the deleted document
     const changeStream = JobModel.watch(
-      [],
+      [
+        {
+          $match: {
+            $or: [
+              // Filter inserts by team at database level (most efficient)
+              { 
+                operationType: "insert",
+                "fullDocument.team": team.name 
+              },
+              // Filter updates where team field is changed to our team
+              { 
+                operationType: "update",
+                "updateDescription.updatedFields.team": team.name 
+              },
+              // Allow all other updates and deletes through (we'll check in code)
+              { operationType: "update" },
+              { operationType: "delete" }
+            ]
+          }
+        }
+      ],
       { fullDocument: "updateLookup" }
     );
 
     changeStream.on("change", async (change) => {
       try {
-        // Check if this change is relevant to our team
         let isRelevant = false;
+        let jobId: string | null = null;
         
-        if (change.operationType === "insert" || change.operationType === "update") {
+        if (change.operationType === "insert") {
+          // Insert: fullDocument should already be filtered by pipeline
           const job = change.fullDocument;
           if (job && job.team === team.name) {
             isRelevant = true;
+            jobId = job._id?.toString() || null;
+          }
+        } else if (change.operationType === "update") {
+          jobId = change.documentKey?._id?.toString() || null;
+          
+          // Check if team field was updated to our team
+          if (change.updateDescription?.updatedFields?.team === team.name) {
+            // Team was updated to our team - relevant
+            isRelevant = true;
+          } else if (change.fullDocument) {
+            // If fullDocument is available, check if it belongs to our team
+            if (change.fullDocument.team === team.name) {
+              isRelevant = true;
+            }
+          } else {
+            // Team field wasn't updated, but other fields were - fetch to check current team
+            if (jobId) {
+              const job = await JobModel.findById(jobId).lean();
+              if (job && job.team === team.name) {
+                isRelevant = true;
+              }
+            }
           }
         } else if (change.operationType === "delete") {
-          // For deletes, we need to check if the deleted job belonged to this team
-          // We'll refresh the list anyway to be safe
+          // For deletes, we need to refresh the list
+          // The pipeline will catch all deletes, but we should verify it was our team's job
+          // Since we can't check the deleted document, we'll refresh anyway
           isRelevant = true;
         }
 
@@ -213,7 +260,7 @@ router.get("/team/:id/watch", async (req, res) => {
             .lean();
 
           // Send update to client
-          res.write(`data: ${JSON.stringify({ type: "update", jobs })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: "update", jobs, jobId, operationType: change.operationType })}\n\n`);
         }
       } catch (error) {
         console.error("Error in change stream:", error);

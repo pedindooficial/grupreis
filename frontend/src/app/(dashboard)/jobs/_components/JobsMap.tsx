@@ -13,20 +13,39 @@ interface JobsMapProps {
   jobs: Job[];
 }
 
+interface JobSite {
+  address: string;
+  position: { lat: number; lng: number };
+  jobs: Job[];
+  marker: any;
+}
+
 declare global {
   interface Window {
     google: any;
   }
 }
 
+interface JobSite {
+  address: string;
+  position: { lat: number; lng: number };
+  jobs: Job[];
+  marker: any;
+}
+
 export default function JobsMap({ jobs }: JobsMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const jobSitesRef = useRef<Map<string, JobSite>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [mapReady, setMapReady] = useState(false);
+  const [jobSites, setJobSites] = useState<JobSite[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
@@ -213,6 +232,8 @@ export default function JobsMap({ jobs }: JobsMapProps) {
       if (marker) marker.setMap(null);
     });
     markersRef.current = [];
+    jobSitesRef.current.clear();
+    jobSitesRef.current.clear();
 
     const geocoder = new window.google.maps.Geocoder();
     const bounds = new window.google.maps.LatLngBounds();
@@ -370,8 +391,16 @@ export default function JobsMap({ jobs }: JobsMapProps) {
 
               markersRef.current.push(marker);
               bounds.extend(position);
+              
+              // Store job site for shortcuts (use cleanAddress from outer scope)
+              jobSitesRef.current.set(cleanAddress.toLowerCase(), {
+                address: cleanAddress,
+                position,
+                jobs: addressJobs,
+                marker
+              });
             } else {
-              addDebug(`⚠️ Erro na geocodificação (${status}): ${cleanAddress}`);
+              addDebug(`⚠️ Erro na geocodificação (${status}): ${cleanAddress || addressKey}`);
             }
             resolve();
           });
@@ -380,20 +409,215 @@ export default function JobsMap({ jobs }: JobsMapProps) {
         // Pequeno delay entre requisições
         await new Promise((resolve) => setTimeout(resolve, 200));
       } catch (err: any) {
-        addDebug(`ERRO ao geocodificar ${cleanAddress}: ${err.message}`);
+        const errorAddress = addressJobs[0]?.site || addressKey;
+        addDebug(`ERRO ao geocodificar ${errorAddress}: ${err.message}`);
       }
     }
 
-    // Ajustar zoom
+    // Ajustar zoom e atualizar lista de job sites
     if (markersRef.current.length > 0) {
       mapInstance.fitBounds(bounds);
       if (markersRef.current.length === 1) {
         mapInstance.setZoom(15);
       }
+      
+      // Atualizar lista de job sites para shortcuts
+      setJobSites(Array.from(jobSitesRef.current.values()));
+      
+      // Aplicar filtros iniciais
+      applyFilters();
+      
       addDebug(`✅ ${markersRef.current.length} marcador(es) adicionado(s)`);
     } else {
       addDebug("⚠️ Nenhum marcador foi criado");
+      setJobSites([]);
     }
+  };
+
+  // Obter lista de equipes únicas
+  const getTeams = (): string[] => {
+    const teams = new Set<string>();
+    jobs.forEach((job) => {
+      if (job.team && job.team.trim()) {
+        teams.add(job.team.trim());
+      }
+    });
+    return Array.from(teams).sort();
+  };
+
+  // Obter jobs filtrados por equipe e status
+  const getFilteredJobs = (): Job[] => {
+    let filtered = jobs;
+    
+    if (selectedTeam) {
+      filtered = filtered.filter((job) => job.team === selectedTeam);
+    }
+    
+    if (selectedStatus) {
+      filtered = filtered.filter((job) => job.status === selectedStatus);
+    }
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (job) =>
+          job.title?.toLowerCase().includes(query) ||
+          job.site?.toLowerCase().includes(query) ||
+          job.clientName?.toLowerCase().includes(query) ||
+          job.team?.toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered;
+  };
+
+  // Filtrar job sites baseado nos filtros
+  const getFilteredJobSites = (): JobSite[] => {
+    if (!selectedTeam && !selectedStatus && !searchQuery.trim()) {
+      return jobSites;
+    }
+    
+    const filteredJobs = getFilteredJobs();
+    const filteredJobIds = new Set(filteredJobs.map((j) => j._id));
+    
+    return jobSites.filter((site) =>
+      site.jobs.some((job) => filteredJobIds.has(job._id))
+    );
+  };
+
+  // Navegar para uma equipe (mostrar todos os jobs da equipe)
+  const navigateToTeam = (team: string) => {
+    if (!mapInstanceRef.current) return;
+    
+    const mapInstance = mapInstanceRef.current;
+    const teamJobs = jobSites.filter((site) =>
+      site.jobs.some((job) => job.team === team)
+    );
+    
+    if (teamJobs.length === 0) return;
+    
+    // Criar bounds para incluir todos os jobs da equipe
+    const bounds = new window.google.maps.LatLngBounds();
+    teamJobs.forEach((site) => {
+      bounds.extend(site.position);
+    });
+    
+    mapInstance.fitBounds(bounds);
+    if (teamJobs.length === 1) {
+      mapInstance.setZoom(15);
+    }
+    
+    // Filtrar para mostrar apenas esta equipe
+    setSelectedTeam(team);
+  };
+
+  // Aplicar filtros aos marcadores
+  const applyFilters = () => {
+    if (!mapInstanceRef.current || markersRef.current.length === 0) return;
+    
+    const filteredJobs = getFilteredJobs();
+    const filteredJobIds = new Set(filteredJobs.map((j) => j._id));
+    
+    // Mostrar/ocultar marcadores baseado nos filtros
+    markersRef.current.forEach((marker) => {
+      const jobSite = Array.from(jobSitesRef.current.values()).find(
+        (site) => site.marker === marker
+      );
+      
+      if (jobSite) {
+        const hasVisibleJobs = jobSite.jobs.some((job) => filteredJobIds.has(job._id));
+        marker.setVisible(hasVisibleJobs);
+      }
+    });
+  };
+
+  // Atualizar filtros quando mudarem
+  useEffect(() => {
+    if (mapReady && markersRef.current.length > 0) {
+      applyFilters();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTeam, selectedStatus, searchQuery, mapReady]);
+  
+  // Função para navegar para um job site
+  const navigateToJobSite = (jobSite: JobSite) => {
+    if (!mapInstanceRef.current) return;
+    
+    const mapInstance = mapInstanceRef.current;
+    
+    // Centralizar e dar zoom no local
+    mapInstance.setCenter(jobSite.position);
+    mapInstance.setZoom(16);
+    
+    // Abrir info window do marcador
+    const infoWindow = new window.google.maps.InfoWindow({
+      content: `
+        <div style="color: #1f2937; padding: 8px; min-width: 220px; max-width: 260px;">
+          <h3 style="margin: 0 0 6px 0; font-size: 14px; font-weight: bold; color: #111827;">
+            ${jobSite.jobs.length === 1 ? "Ordem de Serviço" : `${jobSite.jobs.length} Ordens de Serviço`}
+          </h3>
+          <p style="margin: 4px 0 8px 0; font-size: 12px; color: #4b5563;">
+            <strong>Local:</strong> ${jobSite.address}
+          </p>
+          <div style="max-height: 160px; overflow-y: auto; padding-right: 4px;">
+            ${jobSite.jobs
+              .map(
+                (j) => `
+              <div style="margin-bottom: 8px; padding: 6px; border-radius: 6px; background: #f9fafb; border: 1px solid #e5e7eb;">
+                <div style="font-size: 12px; font-weight: 600; color: #111827; margin-bottom: 2px;">
+                  ${j.title}
+                </div>
+                <div style="font-size: 11px; color: #4b5563; margin-bottom: 1px;">
+                  <strong>Cliente:</strong> ${j.clientName || "N/A"}
+                </div>
+                <div style="font-size: 11px; color: #4b5563; margin-bottom: 1px;">
+                  <strong>Status:</strong> ${j.status}
+                </div>
+                ${
+                  j.team
+                    ? `<div style="font-size: 11px; color: #4b5563;"><strong>Equipe:</strong> ${j.team}</div>`
+                    : ""
+                }
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+        </div>
+      `
+    });
+    
+    infoWindow.open(mapInstance, jobSite.marker);
+  };
+  
+  // Determinar cor do status mais prioritário para cada job site
+  const getStatusColor = (site: JobSite): string => {
+    const statusPriority: Record<string, number> = {
+      pendente: 4,
+      em_execucao: 3,
+      concluida: 2,
+      cancelada: 1
+    };
+    
+    const statusColors: Record<string, string> = {
+      pendente: "#fbbf24",
+      em_execucao: "#3b82f6",
+      concluida: "#10b981",
+      cancelada: "#ef4444"
+    };
+    
+    let bestPriority = 0;
+    let bestStatus = "cancelada";
+    
+    site.jobs.forEach((job) => {
+      const priority = statusPriority[job.status] || 0;
+      if (priority > bestPriority) {
+        bestPriority = priority;
+        bestStatus = job.status;
+      }
+    });
+    
+    return statusColors[bestStatus] || "#6b7280";
   };
 
   // Atualizar marcadores quando jobs mudarem OU quando o mapa ficar pronto
@@ -454,6 +678,255 @@ export default function JobsMap({ jobs }: JobsMapProps) {
           </div>
         )}
       </div>
+      
+      {/* Filters Section */}
+      {!loading && !error && jobs.length > 0 && (
+        <div className="bg-slate-800/50 border border-white/10 rounded-lg p-2 sm:p-3 space-y-2">
+          {/* Search Bar */}
+          <div className="relative">
+            <svg className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Buscar por OS, endereço, cliente ou equipe..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Filter Buttons */}
+          <div className="flex flex-wrap gap-1.5">
+            {/* Team Filter */}
+            {getTeams().length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] sm:text-xs text-slate-400 font-medium">Equipe:</span>
+                <button
+                  onClick={() => setSelectedTeam(null)}
+                  className={`px-2 py-1 rounded text-[10px] sm:text-xs font-medium transition-all touch-manipulation ${
+                    selectedTeam === null
+                      ? "bg-emerald-500 text-white"
+                      : "bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10"
+                  }`}
+                >
+                  Todas
+                </button>
+                {getTeams().map((team) => {
+                  const teamJobCount = jobs.filter((j) => j.team === team).length;
+                  return (
+                    <button
+                      key={team}
+                      onClick={() => setSelectedTeam(team)}
+                      className={`px-2 py-1 rounded text-[10px] sm:text-xs font-medium transition-all touch-manipulation flex items-center gap-1 ${
+                        selectedTeam === team
+                          ? "bg-emerald-500 text-white"
+                          : "bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10"
+                      }`}
+                    >
+                      {team}
+                      <span className="text-[9px] opacity-75">({teamJobCount})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] sm:text-xs text-slate-400 font-medium">Status:</span>
+              <button
+                onClick={() => setSelectedStatus(null)}
+                className={`px-2 py-1 rounded text-[10px] sm:text-xs font-medium transition-all touch-manipulation ${
+                  selectedStatus === null
+                    ? "bg-emerald-500 text-white"
+                    : "bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10"
+                }`}
+              >
+                Todos
+              </button>
+              {[
+                { value: "pendente", label: "Pendente", color: "#fbbf24" },
+                { value: "em_execucao", label: "Em execução", color: "#3b82f6" },
+                { value: "concluida", label: "Concluída", color: "#10b981" },
+                { value: "cancelada", label: "Cancelada", color: "#ef4444" }
+              ].map((status) => {
+                const statusJobCount = jobs.filter((j) => j.status === status.value).length;
+                return (
+                  <button
+                    key={status.value}
+                    onClick={() => setSelectedStatus(status.value)}
+                    className={`px-2 py-1 rounded text-[10px] sm:text-xs font-medium transition-all touch-manipulation flex items-center gap-1 ${
+                      selectedStatus === status.value
+                        ? "bg-emerald-500 text-white"
+                        : "bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10"
+                    }`}
+                    style={
+                      selectedStatus === status.value
+                        ? {}
+                        : { borderLeftColor: status.color, borderLeftWidth: "2px" }
+                    }
+                  >
+                    <div
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: status.color }}
+                    ></div>
+                    {status.label}
+                    <span className="text-[9px] opacity-75">({statusJobCount})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Active Filters Display */}
+          {(selectedTeam || selectedStatus || searchQuery.trim()) && (
+            <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-white/10">
+              <span className="text-[10px] text-slate-400">Filtros:</span>
+              {selectedTeam && (
+                <button
+                  onClick={() => setSelectedTeam(null)}
+                  className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] flex items-center gap-1 hover:bg-emerald-500/30 touch-manipulation"
+                >
+                  {selectedTeam}
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+              {selectedStatus && (
+                <button
+                  onClick={() => setSelectedStatus(null)}
+                  className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] flex items-center gap-1 hover:bg-emerald-500/30 touch-manipulation"
+                >
+                  {selectedStatus}
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+              {searchQuery.trim() && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] flex items-center gap-1 hover:bg-emerald-500/30 touch-manipulation"
+                >
+                  {searchQuery.length > 15 ? `${searchQuery.substring(0, 15)}...` : searchQuery}
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setSelectedTeam(null);
+                  setSelectedStatus(null);
+                  setSearchQuery("");
+                }}
+                className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 text-[10px] hover:bg-slate-600 touch-manipulation"
+              >
+                Limpar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Team Shortcuts Section */}
+      {!loading && !error && getTeams().length > 0 && (
+        <div className="bg-slate-800/50 border border-white/10 rounded-lg p-2 sm:p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <h4 className="text-xs sm:text-sm font-semibold text-white">Filtrar por Equipe</h4>
+            <span className="text-[10px] text-slate-400 ml-auto">({getTeams().length})</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {getTeams().map((team) => {
+              const teamJobs = jobs.filter((j) => j.team === team);
+              const teamJobSites = jobSites.filter((site) =>
+                site.jobs.some((job) => job.team === team)
+              );
+              return (
+                <button
+                  key={team}
+                  onClick={() => navigateToTeam(team)}
+                  className={`group relative flex items-center gap-1.5 px-2 py-1.5 rounded border transition-all duration-200 text-left touch-manipulation active:scale-95 ${
+                    selectedTeam === team
+                      ? "bg-blue-500/20 border-blue-500/50 text-blue-300"
+                      : "border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                  }`}
+                >
+                  <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] sm:text-xs font-medium truncate">{team}</div>
+                    <div className="text-[9px] text-slate-400">
+                      {teamJobs.length} OS • {teamJobSites.length} locais
+                    </div>
+                  </div>
+                  <svg className="w-3 h-3 text-slate-400 group-hover:text-blue-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Job Sites Shortcuts Section */}
+      {!loading && !error && getFilteredJobSites().length > 0 && (
+        <div className="bg-slate-800/50 border border-white/10 rounded-lg p-2 sm:p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <h4 className="text-xs sm:text-sm font-semibold text-white">Atalhos para Locais</h4>
+            <span className="text-[10px] text-slate-400 ml-auto">
+              ({getFilteredJobSites().length}/{jobSites.length})
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {getFilteredJobSites().map((site, index) => {
+              const statusColor = getStatusColor(site);
+              return (
+                <button
+                  key={index}
+                  onClick={() => navigateToJobSite(site)}
+                  className="group relative flex items-center gap-1.5 px-2 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition-all duration-200 text-left touch-manipulation active:scale-95"
+                  style={{
+                    borderLeftColor: statusColor,
+                    borderLeftWidth: "2px"
+                  }}
+                >
+                  <div
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: statusColor }}
+                  ></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] sm:text-xs font-medium text-white truncate max-w-[180px] sm:max-w-none">
+                      {site.address}
+                    </div>
+                    <div className="text-[9px] text-slate-400">
+                      {site.jobs.length} OS
+                      {site.jobs.some((j) => j.team) && (
+                        <span className="ml-1">
+                          • {Array.from(new Set(site.jobs.map((j) => j.team).filter(Boolean))).join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <svg className="w-3 h-3 text-slate-400 group-hover:text-emerald-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       
       <div className="relative h-[300px] sm:h-[350px] md:h-[450px] lg:h-[500px] rounded-lg border border-white/10 overflow-hidden bg-slate-800">
         {/* Elemento do mapa - sempre presente no DOM */}

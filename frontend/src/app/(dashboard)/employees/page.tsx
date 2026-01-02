@@ -279,41 +279,43 @@ export default function EmployeesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Funcionários</h1>
-          <p className="text-sm text-slate-300">
+          <h1 className="text-xl sm:text-2xl font-semibold text-white">Funcionários</h1>
+          <p className="text-xs sm:text-sm text-slate-300">
             Cadastre colaboradores, funções, status e vincule a equipes.
           </p>
         </div>
         {mode === "list" ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome, função, documento..."
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+              className="w-full sm:w-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
             />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-            >
-              <option value="all">Todos</option>
-              <option value="ativo">Ativos</option>
-              <option value="inativo">Inativos</option>
-            </select>
-            <button
-              onClick={() => {
-                resetForm();
-                setEditingId(null);
-                setMode("form");
-              }}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500"
-            >
-              + Novo funcionário
-            </button>
+            <div className="flex gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="flex-1 sm:flex-none rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
+              >
+                <option value="all">Todos</option>
+                <option value="ativo">Ativos</option>
+                <option value="inativo">Inativos</option>
+              </select>
+              <button
+                onClick={() => {
+                  resetForm();
+                  setEditingId(null);
+                  setMode("form");
+                }}
+                className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500 touch-manipulation active:scale-95"
+              >
+                + Novo funcionário
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex gap-2">
@@ -323,7 +325,7 @@ export default function EmployeesPage() {
                 setEditingId(null);
                 setMode("list");
               }}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Cancelar
             </button>
@@ -332,10 +334,10 @@ export default function EmployeesPage() {
       </div>
 
       {mode === "form" && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-5 shadow-inner shadow-black/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">
+              <div className="text-base sm:text-lg font-semibold text-white">
                 {editingId ? "Editar funcionário" : "Novo funcionário"}
               </div>
               <p className="text-xs text-slate-300">
@@ -349,20 +351,20 @@ export default function EmployeesPage() {
                   setEditingId(null);
                   setMode("list");
                 }}
-                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
               >
                 Cancelar edição
               </button>
             )}
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:gap-4 md:grid-cols-2">
             <div className="space-y-1 text-sm">
               <label className="text-slate-200">Nome</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Nome completo"
               />
             </div>
@@ -371,7 +373,7 @@ export default function EmployeesPage() {
               <input
                 value={form.role}
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Operador, Supervisor, Financeiro..."
               />
             </div>
@@ -380,24 +382,24 @@ export default function EmployeesPage() {
               <input
                 value={form.document}
                 onChange={(e) => setForm((f) => ({ ...f, document: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Documento"
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 md:col-span-2">
               <div className="space-y-1 text-sm">
                 <label className="text-slate-200">RG (link/arquivo)</label>
                 <input
                   value={form.docRg}
                   onChange={(e) => setForm((f) => ({ ...f, docRg: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   placeholder="URL ou referência"
                 />
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                   onChange={(e) => handleFile(e.target.files?.[0] || null, "docRgFile")}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/80 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white file:hover:bg-emerald-500/90"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/80 file:px-3 file:py-1.5 sm:file:py-1 file:text-xs sm:file:text-sm file:font-semibold file:text-white file:hover:bg-emerald-500/90 touch-manipulation"
                 />
               </div>
               <div className="space-y-1 text-sm">
@@ -405,14 +407,14 @@ export default function EmployeesPage() {
                 <input
                   value={form.docCnh}
                   onChange={(e) => setForm((f) => ({ ...f, docCnh: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   placeholder="URL ou referência"
                 />
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                   onChange={(e) => handleFile(e.target.files?.[0] || null, "docCnhFile")}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/80 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white file:hover:bg-emerald-500/90"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/80 file:px-3 file:py-1.5 sm:file:py-1 file:text-xs sm:file:text-sm file:font-semibold file:text-white file:hover:bg-emerald-500/90 touch-manipulation"
                 />
               </div>
             </div>
@@ -424,7 +426,7 @@ export default function EmployeesPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, docAddressProof: e.target.value }))
                   }
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   placeholder="URL ou referência"
                 />
                 <input
@@ -433,7 +435,7 @@ export default function EmployeesPage() {
                   onChange={(e) =>
                     handleFile(e.target.files?.[0] || null, "docAddressProofFile")
                   }
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/80 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white file:hover:bg-emerald-500/90"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/80 file:px-3 file:py-1.5 sm:file:py-1 file:text-xs sm:file:text-sm file:font-semibold file:text-white file:hover:bg-emerald-500/90 touch-manipulation"
                 />
               </div>
               <div className="space-y-1 text-sm">
@@ -441,14 +443,14 @@ export default function EmployeesPage() {
                 <input
                   value={form.docCv}
                   onChange={(e) => setForm((f) => ({ ...f, docCv: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   placeholder="URL ou referência"
                 />
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                   onChange={(e) => handleFile(e.target.files?.[0] || null, "docCvFile")}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/80 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white file:hover:bg-emerald-500/90"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/80 file:px-3 file:py-1.5 sm:file:py-1 file:text-xs sm:file:text-sm file:font-semibold file:text-white file:hover:bg-emerald-500/90 touch-manipulation"
                 />
               </div>
             </div>
@@ -457,7 +459,7 @@ export default function EmployeesPage() {
               <input
                 value={form.phone}
                 onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="(11) 99999-9999"
               />
             </div>
@@ -467,7 +469,7 @@ export default function EmployeesPage() {
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="contato@empresa.com"
               />
             </div>
@@ -476,7 +478,7 @@ export default function EmployeesPage() {
               <select
                 value={form.status}
                 onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as EmployeeStatus }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="ativo">Ativo</option>
                 <option value="inativo">Inativo</option>
@@ -488,7 +490,7 @@ export default function EmployeesPage() {
                 type="date"
                 value={form.hireDate}
                 onChange={(e) => setForm((f) => ({ ...f, hireDate: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               />
             </div>
             <div className="space-y-1 text-sm">
@@ -499,7 +501,7 @@ export default function EmployeesPage() {
                 min="0"
                 value={form.salary}
                 onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="0.00"
               />
               <div className="text-[11px] text-slate-400">
@@ -519,7 +521,7 @@ export default function EmployeesPage() {
                     teamName: team?.name || ""
                   }));
                 }}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Sem equipe</option>
                 {teams.map((t) => (
@@ -542,7 +544,7 @@ export default function EmployeesPage() {
                     machineName: machine?.name || ""
                   }));
                 }}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Sem máquina</option>
                 {machines
@@ -562,7 +564,7 @@ export default function EmployeesPage() {
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 rows={3}
                 placeholder="Documentos pendentes, treinamentos, etc."
               />
@@ -573,7 +575,7 @@ export default function EmployeesPage() {
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-3 sm:py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation active:scale-95"
             >
               {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Criar funcionário"}
             </button>
@@ -582,92 +584,188 @@ export default function EmployeesPage() {
       )}
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-0 text-sm text-slate-200 shadow-inner shadow-black/20">
-        <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
-          <div className="font-semibold text-white">Funcionários cadastrados</div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-white/5 px-3 sm:px-6 py-3 sm:py-4 gap-2">
+          <div className="font-semibold text-white text-sm sm:text-base">Funcionários cadastrados</div>
           <span className="text-xs text-slate-300">
             {loading ? "Carregando..." : `${filtered.length} registro(s)`}
           </span>
         </div>
         {loading ? (
-          <div className="px-6 py-8 text-center text-slate-300">
+          <div className="px-3 sm:px-6 py-8 text-center text-slate-300">
             <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-400" />
             <p className="text-sm">Carregando funcionários...</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="px-6 py-4 text-slate-300">
-            Nenhum funcionário cadastrado. Clique em “+ Novo funcionário” para adicionar.
+          <div className="px-3 sm:px-6 py-4 text-slate-300 text-sm">
+            Nenhum funcionário cadastrado. Clique em "+ Novo funcionário" para adicionar.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-white/5 text-xs uppercase text-slate-300">
-                <tr>
-                  <th className="px-4 py-3">Nome</th>
-                  <th className="px-4 py-3">Função</th>
-                  <th className="px-4 py-3">Documento</th>
-                  <th className="px-4 py-3">E-mail</th>
-                  <th className="px-4 py-3">Telefone</th>
-                  <th className="px-4 py-3">Equipe</th>
-                  <th className="px-4 py-3">Máquina</th>
-                  <th className="px-4 py-3">Salário</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Admissão</th>
-                  <th className="px-4 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((emp) => (
-                  <tr key={emp._id} className="border-t border-white/5 hover:bg-white/5">
-                    <td className="px-4 py-3 text-white">{emp.name}</td>
-                    <td className="px-4 py-3 text-slate-200">{emp.role || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">{emp.document || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">{emp.email || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">{emp.phone || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">{emp.teamName || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">{emp.machineName || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">
-                      {emp.salary
-                        ? new Intl.NumberFormat("pt-BR", {
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-white/5 text-xs uppercase text-slate-300">
+                  <tr>
+                    <th className="px-4 py-3">Nome</th>
+                    <th className="px-4 py-3">Função</th>
+                    <th className="px-4 py-3">Documento</th>
+                    <th className="px-4 py-3">E-mail</th>
+                    <th className="px-4 py-3">Telefone</th>
+                    <th className="px-4 py-3">Equipe</th>
+                    <th className="px-4 py-3">Máquina</th>
+                    <th className="px-4 py-3">Salário</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Admissão</th>
+                    <th className="px-4 py-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((emp) => (
+                    <tr key={emp._id} className="border-t border-white/5 hover:bg-white/5">
+                      <td className="px-4 py-3 text-white">{emp.name}</td>
+                      <td className="px-4 py-3 text-slate-200">{emp.role || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">{emp.document || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">{emp.email || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">{emp.phone || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">{emp.teamName || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">{emp.machineName || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {emp.salary
+                          ? new Intl.NumberFormat("pt-BR", {
+                              style: "currency",
+                              currency: "BRL"
+                            }).format(emp.salary)
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            emp.status === "ativo"
+                              ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                              : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
+                          }`}
+                        >
+                          {emp.status === "ativo" ? "Ativo" : "Inativo"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-200">{emp.hireDate || "-"}</td>
+                      <td className="px-4 py-3 text-right text-slate-200">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(emp)}
+                            className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(emp)}
+                            className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10 touch-manipulation active:scale-95"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3 p-3">
+              {filtered.map((emp) => (
+                <div
+                  key={emp._id}
+                  className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-white truncate">{emp.name}</h3>
+                      <p className="text-xs text-slate-300 mt-0.5">{emp.role || "Sem função"}</p>
+                    </div>
+                    <span
+                      className={`flex-shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                        emp.status === "ativo"
+                          ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                          : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
+                      }`}
+                    >
+                      {emp.status === "ativo" ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {emp.document && (
+                      <div>
+                        <span className="text-slate-400">Documento:</span>
+                        <p className="text-slate-200 break-words">{emp.document}</p>
+                      </div>
+                    )}
+                    {emp.email && (
+                      <div>
+                        <span className="text-slate-400">E-mail:</span>
+                        <p className="text-slate-200 break-words">{emp.email}</p>
+                      </div>
+                    )}
+                    {emp.phone && (
+                      <div>
+                        <span className="text-slate-400">Telefone:</span>
+                        <p className="text-slate-200">{emp.phone}</p>
+                      </div>
+                    )}
+                    {emp.teamName && (
+                      <div>
+                        <span className="text-slate-400">Equipe:</span>
+                        <p className="text-slate-200">{emp.teamName}</p>
+                      </div>
+                    )}
+                    {emp.machineName && (
+                      <div>
+                        <span className="text-slate-400">Máquina:</span>
+                        <p className="text-slate-200">{emp.machineName}</p>
+                      </div>
+                    )}
+                    {emp.salary && (
+                      <div>
+                        <span className="text-slate-400">Salário:</span>
+                        <p className="text-slate-200">
+                          {new Intl.NumberFormat("pt-BR", {
                             style: "currency",
                             currency: "BRL"
-                          }).format(emp.salary)
-                        : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          emp.status === "ativo"
-                            ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
-                            : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
-                        }`}
-                      >
-                        {emp.status === "ativo" ? "Ativo" : "Inativo"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-200">{emp.hireDate || "-"}</td>
-                    <td className="px-4 py-3 text-right text-slate-200">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(emp)}
-                          className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(emp)}
-                          className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10"
-                        >
-                          Excluir
-                        </button>
+                          }).format(emp.salary)}
+                        </p>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    )}
+                    {emp.hireDate && (
+                      <div>
+                        <span className="text-slate-400">Admissão:</span>
+                        <p className="text-slate-200">{emp.hireDate}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(emp)}
+                      className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(emp)}
+                      className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10 touch-manipulation active:scale-95"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

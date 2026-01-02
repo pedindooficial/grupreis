@@ -468,11 +468,11 @@ export default function CashPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
-          <h1 className="text-2xl font-semibold text-white">Financeiro</h1>
-        <p className="text-sm text-slate-300">
+          <h1 className="text-xl sm:text-2xl font-semibold text-white">Financeiro</h1>
+        <p className="text-xs sm:text-sm text-slate-300">
             Controle financeiro completo: serviços realizados, pagamentos, salários e movimentações.
           </p>
         </div>
@@ -480,7 +480,7 @@ export default function CashPage() {
           <button
             onClick={startNew}
             disabled={!currentCashier || currentCashier.status !== "aberto"}
-            className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation active:scale-95"
           >
             + Nova transação
           </button>
@@ -489,23 +489,23 @@ export default function CashPage() {
 
       {/* Cashier Status */}
       {mode === "list" && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/20">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex-1 min-w-64">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3">
                 <div
-                  className={`h-3 w-3 rounded-full ${
+                  className={`h-3 w-3 flex-shrink-0 rounded-full ${
                     currentCashier?.status === "aberto"
                       ? "bg-emerald-400 animate-pulse"
                       : "bg-slate-500"
                   }`}
                 />
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold text-white">
                     Caixa: {currentCashier?.status === "aberto" ? "Aberto" : "Fechado"}
                   </div>
                   {currentCashier && (
-                    <div className="text-xs text-slate-300">
+                    <div className="text-xs text-slate-300 break-words">
                       {currentCashier.status === "aberto"
                         ? `Aberto em ${formatDateTime(currentCashier.openedAt)}`
                         : `Fechado em ${formatDateTime(currentCashier.closedAt || "")}`}
@@ -515,7 +515,7 @@ export default function CashPage() {
                 </div>
               </div>
               {currentCashier?.status === "aberto" && (
-                <div className="mt-2 text-lg font-semibold text-emerald-300">
+                <div className="mt-2 text-base sm:text-lg font-semibold text-emerald-300">
                   Saldo Atual: {formatCurrency(currentCashier.currentBalance || 0)}
                 </div>
               )}
@@ -525,12 +525,12 @@ export default function CashPage() {
                 </div>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               {(!currentCashier || currentCashier.status === "fechado") && (
                 <button
                   onClick={openCashier}
                   disabled={cashierLoading}
-                  className="rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-emerald-600 hover:to-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-lg transition hover:from-emerald-600 hover:to-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation active:scale-95"
                 >
                   {cashierLoading ? "Abrindo..." : "Abrir Caixa"}
                 </button>
@@ -539,7 +539,7 @@ export default function CashPage() {
                 <button
                   onClick={closeCashier}
                   disabled={cashierLoading}
-                  className="rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-red-600 hover:to-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-lg transition hover:from-red-600 hover:to-red-700 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation active:scale-95"
                 >
                   {cashierLoading ? "Fechando..." : "Fechar Caixa"}
                 </button>
@@ -557,66 +557,66 @@ export default function CashPage() {
       {mode === "list" && (
         <>
           {/* Resumo Geral */}
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-4 shadow-lg shadow-black/30">
-              <div className="text-[11px] uppercase tracking-wide text-emerald-200">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-emerald-200">
                 Serviços Realizados
               </div>
-              <div className="mt-2 text-3xl font-semibold text-emerald-100">
+              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-emerald-100">
                 {formatCurrency(totalServicesValue)}
               </div>
-              <div className="mt-1 text-xs text-emerald-200/70">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-emerald-200/70">
                 {completedJobs.length} OS concluída(s)
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-4 shadow-lg shadow-black/30">
-              <div className="text-[11px] uppercase tracking-wide text-blue-200">
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-blue-200">
                 Total de Entradas
               </div>
-              <div className="mt-2 text-3xl font-semibold text-blue-100">
+              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-blue-100">
                 {formatCurrency(stats.totalEntradas)}
               </div>
-              <div className="mt-1 text-xs text-blue-200/70">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-blue-200/70">
                 {filtered.filter((t) => t.type === "entrada").length} transação(ões)
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-red-500/20 to-red-600/10 p-4 shadow-lg shadow-black/30">
-              <div className="text-[11px] uppercase tracking-wide text-red-200">
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-red-500/20 to-red-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-red-200">
                 Total de Saídas
               </div>
-              <div className="mt-2 text-3xl font-semibold text-red-100">
+              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-red-100">
                 {formatCurrency(stats.totalSaidas)}
               </div>
-              <div className="mt-1 text-xs text-red-200/70">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-red-200/70">
                 {filtered.filter((t) => t.type === "saida").length} transação(ões)
               </div>
             </div>
 
             <div
-              className={`rounded-2xl border border-white/10 p-4 shadow-lg shadow-black/30 ${
+              className={`rounded-xl sm:rounded-2xl border border-white/10 p-3 sm:p-4 shadow-lg shadow-black/30 ${
                 stats.totalSaldo >= 0
                   ? "bg-gradient-to-br from-purple-500/20 to-purple-600/10"
                   : "bg-gradient-to-br from-orange-500/20 to-orange-600/10"
               }`}
             >
               <div
-                className={`text-[11px] uppercase tracking-wide ${
+                className={`text-[10px] sm:text-[11px] uppercase tracking-wide ${
                   stats.totalSaldo >= 0 ? "text-purple-200" : "text-orange-200"
                 }`}
               >
                 Saldo Total
               </div>
               <div
-                className={`mt-2 text-3xl font-semibold ${
+                className={`mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold ${
                   stats.totalSaldo >= 0 ? "text-purple-100" : "text-orange-100"
                 }`}
               >
                 {formatCurrency(stats.totalSaldo)}
               </div>
               <div
-                className={`mt-1 text-xs ${
+                className={`mt-0.5 sm:mt-1 text-[10px] sm:text-xs ${
                   stats.totalSaldo >= 0 ? "text-purple-200/70" : "text-orange-200/70"
                 }`}
               >
@@ -626,66 +626,66 @@ export default function CashPage() {
           </div>
 
           {/* Estatísticas de Salários e Valores Pendentes */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/20">
-              <div className="text-[11px] uppercase tracking-wide text-slate-400">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
                 Folha de Pagamento (Ativos)
               </div>
-              <div className="mt-2 text-2xl font-semibold text-yellow-300">
+              <div className="mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold text-yellow-300">
                 {formatCurrency(totalEmployeesSalary)}
               </div>
-              <div className="mt-1 text-xs text-slate-300">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-300">
                 {employees.filter((e) => e.status === "ativo").length} funcionário(s) ativo(s)
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/20">
-              <div className="text-[11px] uppercase tracking-wide text-slate-400">
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
                 Salários Pagos
               </div>
-              <div className="mt-2 text-2xl font-semibold text-orange-300">
+              <div className="mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold text-orange-300">
                 {formatCurrency(totalSalaryPaid)}
               </div>
-              <div className="mt-1 text-xs text-slate-300">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-300">
                 {salaryPayments.length} pagamento(s) registrado(s)
               </div>
             </div>
 
-            <div className="rounded-2xl border border-yellow-400/30 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 p-4 shadow-inner shadow-black/20">
-              <div className="text-[11px] uppercase tracking-wide text-yellow-200">
+            <div className="rounded-xl sm:rounded-2xl border border-yellow-400/30 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 p-3 sm:p-4 shadow-inner shadow-black/20">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-yellow-200">
                 Valores Pendentes
               </div>
-              <div className="mt-2 text-2xl font-semibold text-yellow-100">
+              <div className="mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold text-yellow-100">
                 {formatCurrency(totalPendingValue)}
               </div>
-              <div className="mt-1 text-xs text-yellow-200/70">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-yellow-200/70">
                 {pendingJobs.length} OS pendente(s) ou em execução
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/20">
-              <div className="text-[11px] uppercase tracking-wide text-slate-400">
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
                 Saldo do Dia (Hoje)
               </div>
               <div
-                className={`mt-2 text-2xl font-semibold ${
+                className={`mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold ${
                   stats.todaySaldo >= 0 ? "text-emerald-300" : "text-red-300"
                 }`}
               >
                 {formatCurrency(stats.todaySaldo)}
               </div>
-              <div className="mt-1 text-xs text-slate-300">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-300">
                 {todayTransactions.length} transação(ões) hoje
               </div>
             </div>
           </div>
 
           {/* Estatísticas de Pagamento por Método */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/20">
-            <div className="mb-4 text-sm font-semibold text-white">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
+            <div className="mb-3 sm:mb-4 text-sm font-semibold text-white">
               Estatísticas de Pagamento por Método
             </div>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {Object.entries(paymentStats).map(([method, stats]) => {
                 const methodLabel = PAYMENT_METHODS.find((p) => p.value === method)?.label || method;
                 const statsTyped = stats as { entrada: number; saida: number };
@@ -724,148 +724,223 @@ export default function CashPage() {
           </div>
 
           {/* Filtros */}
-          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 sm:px-4 py-3">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por descrição, cliente ou OS"
-              className="flex-1 min-w-64 bg-transparent text-sm text-white outline-none placeholder:text-slate-400"
+              className="w-full sm:flex-1 sm:min-w-64 rounded-md border border-white/10 bg-slate-900/60 px-3 py-2.5 sm:py-2 text-sm text-white outline-none placeholder:text-slate-400 transition focus:border-emerald-400/60 touch-manipulation"
             />
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400"
-            />
-            <div className="relative">
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value as any)}
-                className="appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-2 pr-7 text-xs font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400"
-              >
-                <option value="all">Todos os tipos</option>
-                <option value="entrada">Entradas</option>
-                <option value="saida">Saídas</option>
-              </select>
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-300">
-                ▼
-              </span>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="flex-1 sm:flex-none rounded-md border border-white/10 bg-slate-900 px-3 py-2.5 sm:py-2 text-xs sm:text-sm font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
+              />
+              <div className="relative flex-1 sm:flex-none min-w-[140px]">
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value as any)}
+                  className="w-full appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-2.5 sm:py-2 pr-7 text-xs sm:text-sm font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
+                >
+                  <option value="all">Todos os tipos</option>
+                  <option value="entrada">Entradas</option>
+                  <option value="saida">Saídas</option>
+                </select>
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-300">
+                  ▼
+                </span>
+              </div>
+              {(dateFilter || typeFilter !== "all" || search) && (
+                <button
+                  onClick={() => {
+                    setDateFilter("");
+                    setTypeFilter("all");
+                    setSearch("");
+                  }}
+                  className="rounded-md border border-white/10 bg-white/5 px-3 py-2.5 sm:py-2 text-xs font-semibold text-slate-200 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
+                >
+                  Limpar
+                </button>
+              )}
             </div>
-            {(dateFilter || typeFilter !== "all" || search) && (
-              <button
-                onClick={() => {
-                  setDateFilter("");
-                  setTypeFilter("all");
-                  setSearch("");
-                }}
-                className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-emerald-300/40 hover:text-white"
-              >
-                Limpar filtros
-              </button>
-            )}
           </div>
 
           {/* Lista de Transações */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-0 text-sm text-slate-200 shadow-inner shadow-black/20">
-            <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
-              <div className="font-semibold text-white">Movimentações Financeiras</div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-white/5 px-3 sm:px-6 py-3 sm:py-4 gap-2">
+              <div className="font-semibold text-white text-sm sm:text-base">Movimentações Financeiras</div>
               <span className="text-xs text-slate-300">
                 {loading ? "Carregando..." : `${filtered.length} registro(s)`}
               </span>
             </div>
             {loading ? (
-              <div className="px-6 py-8 text-center text-slate-300">
+              <div className="px-3 sm:px-6 py-8 text-center text-slate-300">
                 <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-400" />
                 <p className="text-sm">Carregando transações...</p>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="px-6 py-4 text-slate-300">
+              <div className="px-3 sm:px-6 py-4 text-slate-300 text-sm">
                 Nenhuma transação encontrada. Clique em "+ Nova transação" para adicionar.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-white/5 text-xs uppercase text-slate-300">
-                    <tr>
-                      <th className="px-4 py-3">Data</th>
-                      <th className="px-4 py-3">Tipo</th>
-                      <th className="px-4 py-3">Descrição</th>
-                      <th className="px-4 py-3">Cliente</th>
-                      <th className="px-4 py-3">OS</th>
-                      <th className="px-4 py-3">Forma de pagamento</th>
-                      <th className="px-4 py-3 text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((t) => (
-                      <tr
-                        key={t._id}
-                        className="border-t border-white/5 hover:bg-white/5 cursor-pointer transition"
-                        onClick={() => {
-                          setSelected(t);
-                          setMode("detail");
-                        }}
-                      >
-                        <td className="px-4 py-3 text-slate-200">
-                          {formatDate(t.date)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap ${
-                              t.type === "entrada"
-                                ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-100"
-                                : "border-red-400/50 bg-red-500/20 text-red-100"
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-white/5 text-xs uppercase text-slate-300">
+                      <tr>
+                        <th className="px-4 py-3">Data</th>
+                        <th className="px-4 py-3">Tipo</th>
+                        <th className="px-4 py-3">Descrição</th>
+                        <th className="px-4 py-3">Cliente</th>
+                        <th className="px-4 py-3">OS</th>
+                        <th className="px-4 py-3">Forma de pagamento</th>
+                        <th className="px-4 py-3 text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((t) => (
+                        <tr
+                          key={t._id}
+                          className="border-t border-white/5 hover:bg-white/5 cursor-pointer transition"
+                          onClick={() => {
+                            setSelected(t);
+                            setMode("detail");
+                          }}
+                        >
+                          <td className="px-4 py-3 text-slate-200">
+                            {formatDate(t.date)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap ${
+                                t.type === "entrada"
+                                  ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-100"
+                                  : "border-red-400/50 bg-red-500/20 text-red-100"
+                              }`}
+                            >
+                              {t.type === "entrada" ? "Entrada" : "Saída"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-white">
+                            <div className="flex items-center gap-2">
+                              <span>{t.description || "-"}</span>
+                              {t.receiptFileKey && (
+                                <span className="text-blue-400" title="Comprovante anexado">
+                                  📎
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-200">
+                            {t.clientName || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-200">
+                            {t.jobTitle ? (
+                              <span className="text-xs">{t.jobTitle.substring(0, 30)}...</span>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-slate-200">
+                            {PAYMENT_METHODS.find((p) => p.value === t.paymentMethod)?.label || t.paymentMethod || "-"}
+                          </td>
+                          <td
+                            className={`px-4 py-3 text-right font-semibold ${
+                              t.type === "entrada" ? "text-emerald-300" : "text-red-300"
                             }`}
                           >
-                            {t.type === "entrada" ? "Entrada" : "Saída"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-white">
+                            {t.type === "entrada" ? "+" : "-"}
+                            {formatCurrency(t.amount || 0)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3 p-3">
+                  {filtered.map((t) => (
+                    <div
+                      key={t._id}
+                      className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2"
+                      onClick={() => {
+                        setSelected(t);
+                        setMode("detail");
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span>{t.description || "-"}</span>
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap ${
+                                t.type === "entrada"
+                                  ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-100"
+                                  : "border-red-400/50 bg-red-500/20 text-red-100"
+                              }`}
+                            >
+                              {t.type === "entrada" ? "Entrada" : "Saída"}
+                            </span>
                             {t.receiptFileKey && (
-                              <span className="text-blue-400" title="Comprovante anexado">
+                              <span className="text-blue-400 text-xs" title="Comprovante anexado">
                                 📎
                               </span>
                             )}
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-200">
-                          {t.clientName || "-"}
-                        </td>
-                        <td className="px-4 py-3 text-slate-200">
-                          {t.jobTitle ? (
-                            <span className="text-xs">{t.jobTitle.substring(0, 30)}...</span>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-slate-200">
-                          {PAYMENT_METHODS.find((p) => p.value === t.paymentMethod)?.label || t.paymentMethod || "-"}
-                        </td>
-                        <td
-                          className={`px-4 py-3 text-right font-semibold ${
+                          <h3 className="text-sm font-semibold text-white mt-1 break-words">
+                            {t.description || "-"}
+                          </h3>
+                          <p className="text-xs text-slate-300 mt-0.5">{formatDate(t.date)}</p>
+                        </div>
+                        <div
+                          className={`text-right font-semibold text-sm ${
                             t.type === "entrada" ? "text-emerald-300" : "text-red-300"
                           }`}
                         >
                           {t.type === "entrada" ? "+" : "-"}
                           {formatCurrency(t.amount || 0)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/5">
+                        {t.clientName && (
+                          <div>
+                            <span className="text-slate-400">Cliente:</span>
+                            <p className="text-slate-200 break-words">{t.clientName}</p>
+                          </div>
+                        )}
+                        {t.jobTitle && (
+                          <div>
+                            <span className="text-slate-400">OS:</span>
+                            <p className="text-slate-200 break-words">{t.jobTitle}</p>
+                          </div>
+                        )}
+                        {t.paymentMethod && (
+                          <div>
+                            <span className="text-slate-400">Pagamento:</span>
+                            <p className="text-slate-200">
+                              {PAYMENT_METHODS.find((p) => p.value === t.paymentMethod)?.label || t.paymentMethod}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </>
       )}
 
       {mode === "form" && (
-        <div className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4 sm:space-y-5 rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-5 shadow-inner shadow-black/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">Nova transação</div>
+              <div className="text-base sm:text-lg font-semibold text-white">Nova transação</div>
               <p className="text-xs text-slate-300">
                 Registre uma entrada ou saída financeira vinculada a cliente, OS ou funcionário.
         </p>
@@ -875,13 +950,13 @@ export default function CashPage() {
                 setMode("list");
                 resetForm();
               }}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Cancelar
             </button>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
             <div className="space-y-1 text-sm">
               <label className="text-slate-200">Tipo de transação *</label>
               <select
@@ -889,7 +964,7 @@ export default function CashPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, type: e.target.value as TransactionType }))
                 }
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="entrada">Entrada</option>
                 <option value="saida">Saída</option>
@@ -902,7 +977,7 @@ export default function CashPage() {
                 type="date"
                 value={form.date}
                 onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               />
             </div>
 
@@ -914,7 +989,7 @@ export default function CashPage() {
                 min="0.01"
                 value={form.amount}
                 onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="0.00"
               />
             </div>
@@ -926,7 +1001,7 @@ export default function CashPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, paymentMethod: e.target.value as PaymentMethod }))
                 }
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 {PAYMENT_METHODS.map((p) => (
                   <option key={p.value} value={p.value}>
@@ -941,7 +1016,7 @@ export default function CashPage() {
               <input
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Ex: Pagamento de serviço de perfuração"
               />
             </div>
@@ -951,7 +1026,7 @@ export default function CashPage() {
               <select
                 value={form.category}
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Selecione uma categoria</option>
                 {CATEGORIES.map((cat) => (
@@ -980,7 +1055,7 @@ export default function CashPage() {
                     }
                   }
                 }}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Selecione um cliente (opcional)</option>
                 {clients.map((c) => (
@@ -996,7 +1071,7 @@ export default function CashPage() {
               <select
                 value={form.jobId}
                 onChange={(e) => setForm((f) => ({ ...f, jobId: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Selecione uma OS (opcional)</option>
                 {(form.clientId
@@ -1017,7 +1092,7 @@ export default function CashPage() {
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 rows={3}
                 placeholder="Informações adicionais sobre a transação"
               />
@@ -1028,7 +1103,7 @@ export default function CashPage() {
             <button
               onClick={saveTransaction}
               disabled={saving}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-3 sm:py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation active:scale-95"
             >
               {saving ? "Salvando..." : "Salvar transação"}
             </button>
@@ -1037,10 +1112,10 @@ export default function CashPage() {
       )}
 
       {mode === "detail" && selected && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-5 shadow-inner shadow-black/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">{selected.description}</div>
+              <div className="text-base sm:text-lg font-semibold text-white break-words">{selected.description}</div>
               <div className="text-xs text-slate-300">
                 {formatDate(selected.date)} •{" "}
                 {selected.type === "entrada" ? "Entrada" : "Saída"}
@@ -1051,7 +1126,7 @@ export default function CashPage() {
                 setMode("list");
                 setSelected(null);
               }}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Fechar
             </button>
@@ -1124,7 +1199,7 @@ export default function CashPage() {
                       Swal.fire("Erro", "Não foi possível baixar o comprovante", "error");
                     }
                   }}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-400/50 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-300 transition hover:border-blue-400 hover:bg-blue-500/30"
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-400/50 bg-blue-500/20 px-4 py-3 sm:py-2 text-sm font-semibold text-blue-300 transition hover:border-blue-400 hover:bg-blue-500/30 touch-manipulation active:scale-95"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

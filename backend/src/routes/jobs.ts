@@ -368,15 +368,26 @@ router.post("/", async (req, res) => {
     let dateLabel = "sem-data";
     if (parsed.data.plannedDate && parsed.data.plannedDate.trim() !== "") {
       try {
-        const date = new Date(parsed.data.plannedDate);
-        if (!isNaN(date.getTime())) {
-          // Format as DD/MM/YYYY HH:mm
-          const day = date.getDate().toString().padStart(2, "0");
-          const month = (date.getMonth() + 1).toString().padStart(2, "0");
-          const year = date.getFullYear();
-          const hours = date.getHours().toString().padStart(2, "0");
-          const minutes = date.getMinutes().toString().padStart(2, "0");
+        // Parse date string directly to avoid timezone conversion
+        // Format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm:ssZ
+        const dateStr = parsed.data.plannedDate.trim();
+        const dateTimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+        
+        if (dateTimeMatch) {
+          const [, year, month, day, hours, minutes] = dateTimeMatch;
+          // Format as DD/MM/YYYY HH:mm (preserving the exact time entered)
           dateLabel = `${day}/${month}/${year} ${hours}:${minutes}`;
+        } else {
+          // Fallback to Date object if format is unexpected
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+            const day = date.getDate().toString().padStart(2, "0");
+            const month = (date.getMonth() + 1).toString().padStart(2, "0");
+            const year = date.getFullYear();
+            const hours = date.getHours().toString().padStart(2, "0");
+            const minutes = date.getMinutes().toString().padStart(2, "0");
+            dateLabel = `${day}/${month}/${year} ${hours}:${minutes}`;
+          }
         }
       } catch {
         // If parsing fails, use the string as-is if it's not empty
@@ -545,16 +556,29 @@ router.put("/:id", async (req, res) => {
     let dateLabel = "sem-data";
     if (parsed.data.plannedDate && parsed.data.plannedDate.trim() !== "") {
       try {
-        const date = new Date(parsed.data.plannedDate);
-        if (!isNaN(date.getTime())) {
-          const day = date.getDate().toString().padStart(2, "0");
-          const month = (date.getMonth() + 1).toString().padStart(2, "0");
-          const year = date.getFullYear();
-          const hours = date.getHours().toString().padStart(2, "0");
-          const minutes = date.getMinutes().toString().padStart(2, "0");
+        // Parse date string directly to avoid timezone conversion
+        // Format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm:ssZ
+        const dateStr = parsed.data.plannedDate.trim();
+        const dateTimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+        
+        if (dateTimeMatch) {
+          const [, year, month, day, hours, minutes] = dateTimeMatch;
+          // Format as DD/MM/YYYY HH:mm (preserving the exact time entered)
           dateLabel = `${day}/${month}/${year} ${hours}:${minutes}`;
+        } else {
+          // Fallback to Date object if format is unexpected
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+            const day = date.getDate().toString().padStart(2, "0");
+            const month = (date.getMonth() + 1).toString().padStart(2, "0");
+            const year = date.getFullYear();
+            const hours = date.getHours().toString().padStart(2, "0");
+            const minutes = date.getMinutes().toString().padStart(2, "0");
+            dateLabel = `${day}/${month}/${year} ${hours}:${minutes}`;
+          }
         }
       } catch {
+        // If parsing fails, use the string as-is if it's not empty
         dateLabel = parsed.data.plannedDate;
       }
     }

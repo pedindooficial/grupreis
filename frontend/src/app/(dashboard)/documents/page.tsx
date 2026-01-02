@@ -367,16 +367,16 @@ export default function DocumentsPage() {
 
   if (!isAdmin) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Documentos e Contratos</h1>
-          <p className="text-sm text-slate-300 mt-1">
+          <h1 className="text-xl sm:text-2xl font-semibold text-white">Documentos e Contratos</h1>
+          <p className="text-xs sm:text-sm text-slate-300 mt-1">
             Acesso restrito a administradores
           </p>
         </div>
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-12 text-center">
-          <div className="text-red-300 font-semibold mb-2">Acesso Negado</div>
-          <p className="text-slate-300">
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 sm:p-12 text-center">
+          <div className="text-red-300 font-semibold mb-2 text-sm sm:text-base">Acesso Negado</div>
+          <p className="text-slate-300 text-sm">
             Você não tem permissão para acessar esta página. Apenas administradores podem visualizar e gerenciar documentos.
           </p>
         </div>
@@ -386,13 +386,13 @@ export default function DocumentsPage() {
 
   if (mode === "form") {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-white">
+            <h1 className="text-xl sm:text-2xl font-semibold text-white">
               {editingId ? "Editar Documento" : "Novo Documento"}
             </h1>
-            <p className="text-sm text-slate-300 mt-1">
+            <p className="text-xs sm:text-sm text-slate-300 mt-1">
               {editingId
                 ? "Atualize as informações do documento"
                 : "Adicione um novo documento ao sistema"}
@@ -403,14 +403,14 @@ export default function DocumentsPage() {
               resetForm();
               setMode("list");
             }}
-            className="px-4 py-2 rounded-lg border border-white/15 bg-white/5 text-sm font-semibold text-slate-200 hover:bg-white/10 transition"
+            className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-lg border border-white/15 bg-white/5 text-sm font-semibold text-slate-200 hover:bg-white/10 transition touch-manipulation active:scale-95"
           >
             Cancelar
           </button>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-6 space-y-4 sm:space-y-6">
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 Título <span className="text-red-400">*</span>
@@ -419,7 +419,7 @@ export default function DocumentsPage() {
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
                 placeholder="Ex: Contrato de Prestação de Serviços"
               />
             </div>
@@ -431,7 +431,7 @@ export default function DocumentsPage() {
               <select
                 value={form.type}
                 onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as DocumentType }))}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
               >
                 {DOCUMENT_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -446,7 +446,7 @@ export default function DocumentsPage() {
               <select
                 value={form.status}
                 onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as DocumentStatus }))}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
               >
                 {DOCUMENT_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -468,7 +468,7 @@ export default function DocumentsPage() {
                     clientName: client?.name || ""
                   }));
                 }}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
               >
                 <option value="">Selecione um cliente...</option>
                 {clients.map((c) => (
@@ -491,7 +491,7 @@ export default function DocumentsPage() {
                     jobTitle: job?.title || ""
                   }));
                 }}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
               >
                 <option value="">Selecione uma OS...</option>
                 {jobs.map((j) => (
@@ -508,7 +508,7 @@ export default function DocumentsPage() {
                 type="date"
                 value={form.signedAt}
                 onChange={(e) => setForm((f) => ({ ...f, signedAt: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
               />
             </div>
 
@@ -518,7 +518,7 @@ export default function DocumentsPage() {
                 type="date"
                 value={form.expiresAt}
                 onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
               />
             </div>
           </div>
@@ -529,7 +529,7 @@ export default function DocumentsPage() {
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
               placeholder="Descrição do documento..."
             />
           </div>
@@ -542,9 +542,9 @@ export default function DocumentsPage() {
               const currentDoc = documents.find((d) => d._id === editingId);
               return currentDoc ? (
                 <div className="mb-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-emerald-300 truncate">
+                      <p className="text-sm font-semibold text-emerald-300 break-words">
                         {currentDoc.fileName}
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
@@ -554,7 +554,7 @@ export default function DocumentsPage() {
                     <button
                       type="button"
                       onClick={() => handleDownload(currentDoc)}
-                      className="ml-3 px-3 py-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/20 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/30 transition"
+                      className="w-full sm:w-auto px-3 py-2 rounded-lg border border-emerald-500/50 bg-emerald-500/20 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/30 transition touch-manipulation active:scale-95"
                     >
                       Ver
                     </button>
@@ -569,7 +569,7 @@ export default function DocumentsPage() {
               type="file"
               onChange={handleFileSelect}
               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-500/20 file:text-emerald-300 hover:file:bg-emerald-500/30"
+              className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-500/20 file:text-emerald-300 hover:file:bg-emerald-500/30 touch-manipulation"
             />
             {selectedFile && (
               <p className="mt-2 text-sm text-emerald-300">
@@ -585,16 +585,16 @@ export default function DocumentsPage() {
               value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               rows={2}
-              className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              className="w-full px-3 py-3 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
               placeholder="Observações adicionais..."
             />
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="px-6 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="w-full sm:w-auto px-6 py-3 sm:py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition touch-manipulation active:scale-95"
             >
               {saving ? "Salvando..." : editingId ? "Atualizar" : "Criar Documento"}
             </button>
@@ -603,7 +603,7 @@ export default function DocumentsPage() {
                 resetForm();
                 setMode("list");
               }}
-              className="px-6 py-2 rounded-lg border border-white/15 bg-white/5 text-slate-200 font-semibold hover:bg-white/10 transition"
+              className="w-full sm:w-auto px-6 py-3 sm:py-2 rounded-lg border border-white/15 bg-white/5 text-slate-200 font-semibold hover:bg-white/10 transition touch-manipulation active:scale-95"
             >
               Cancelar
             </button>
@@ -614,70 +614,72 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Documentos e Contratos</h1>
-          <p className="text-sm text-slate-300 mt-1">
+          <h1 className="text-xl sm:text-2xl font-semibold text-white">Documentos e Contratos</h1>
+          <p className="text-xs sm:text-sm text-slate-300 mt-1">
             Gerencie contratos, propostas, notas fiscais e outros documentos
           </p>
         </div>
         <button
           onClick={() => setMode("form")}
-          className="px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 transition"
+          className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 transition touch-manipulation active:scale-95"
         >
           + Novo Documento
         </button>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
           <div className="flex-1">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por título, cliente, OS ou arquivo..."
-              className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              className="w-full px-3 py-2.5 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
             />
           </div>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as DocumentType | "all")}
-            className="px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-          >
-            <option value="all">Todos os tipos</option>
-            {DOCUMENT_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as DocumentStatus | "all")}
-            className="px-3 py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-          >
-            <option value="all">Todos os status</option>
-            {DOCUMENT_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex gap-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as DocumentType | "all")}
+              className="flex-1 sm:flex-none min-w-[140px] px-3 py-2.5 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
+            >
+              <option value="all">Todos os tipos</option>
+              {DOCUMENT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as DocumentStatus | "all")}
+              className="flex-1 sm:flex-none min-w-[140px] px-3 py-2.5 sm:py-2 rounded-lg border border-white/10 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
+            >
+              <option value="all">Todos os status</option>
+              {DOCUMENT_STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
       {filteredDocuments.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-12 text-center">
-          <p className="text-slate-300">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-12 text-center">
+          <p className="text-sm text-slate-300">
             {search || typeFilter !== "all" || statusFilter !== "all"
               ? "Nenhum documento encontrado com os filtros aplicados."
               : "Nenhum documento cadastrado. Clique em 'Novo Documento' para começar."}
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filteredDocuments.map((doc) => {
             const statusInfo = DOCUMENT_STATUSES.find((s) => s.value === doc.status);
             const typeInfo = DOCUMENT_TYPES.find((t) => t.value === doc.type);
@@ -685,32 +687,32 @@ export default function DocumentsPage() {
             return (
               <div
                 key={doc._id}
-                className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4"
+                className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 space-y-3 sm:space-y-4"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-white truncate">{doc.title}</h3>
-                    <p className="text-sm text-slate-400 mt-1">{typeInfo?.label}</p>
+                    <h3 className="text-base sm:text-lg font-semibold text-white break-words">{doc.title}</h3>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">{typeInfo?.label}</p>
                   </div>
                   <span
-                    className={`px-2 py-1 rounded text-xs font-semibold border ${statusInfo?.color || ""}`}
+                    className={`px-2 py-1 rounded text-[10px] sm:text-xs font-semibold border flex-shrink-0 ${statusInfo?.color || ""}`}
                   >
                     {statusInfo?.label}
                   </span>
                 </div>
 
-                <div className="space-y-2 text-sm text-slate-300">
+                <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-slate-300">
                   {doc.clientName && (
-                    <div>
+                    <div className="break-words">
                       <span className="text-slate-400">Cliente:</span> {doc.clientName}
                     </div>
                   )}
                   {doc.jobTitle && (
-                    <div>
+                    <div className="break-words">
                       <span className="text-slate-400">OS:</span> {doc.jobTitle}
                     </div>
                   )}
-                  <div>
+                  <div className="break-words">
                     <span className="text-slate-400">Arquivo:</span> {doc.fileName}
                   </div>
                   <div>
@@ -731,28 +733,30 @@ export default function DocumentsPage() {
                 </div>
 
                 {doc.description && (
-                  <p className="text-sm text-slate-400 line-clamp-2">{doc.description}</p>
+                  <p className="text-xs sm:text-sm text-slate-400 line-clamp-2 break-words">{doc.description}</p>
                 )}
 
-                <div className="flex gap-2 pt-2 border-t border-white/10">
+                <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-white/10">
                   <button
                     onClick={() => handleDownload(doc)}
-                    className="flex-1 px-3 py-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 text-sm font-semibold hover:bg-emerald-500/20 transition"
+                    className="flex-1 px-3 py-2.5 sm:py-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 text-sm font-semibold hover:bg-emerald-500/20 transition touch-manipulation active:scale-95"
                   >
                     Download
                   </button>
-                  <button
-                    onClick={() => handleEdit(doc)}
-                    className="px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-slate-200 text-sm font-semibold hover:bg-white/10 transition"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(doc._id)}
-                    className="px-3 py-2 rounded-lg border border-red-500/50 bg-red-500/10 text-red-300 text-sm font-semibold hover:bg-red-500/20 transition"
-                  >
-                    Excluir
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(doc)}
+                      className="flex-1 px-3 py-2.5 sm:py-2 rounded-lg border border-white/15 bg-white/5 text-slate-200 text-sm font-semibold hover:bg-white/10 transition touch-manipulation active:scale-95"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => handleDelete(doc._id)}
+                      className="flex-1 px-3 py-2.5 sm:py-2 rounded-lg border border-red-500/50 bg-red-500/10 text-red-300 text-sm font-semibold hover:bg-red-500/20 transition touch-manipulation active:scale-95"
+                    >
+                      Excluir
+                    </button>
+                  </div>
                 </div>
               </div>
             );

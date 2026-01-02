@@ -67,17 +67,28 @@ const mapAccessToCatalog = (access: string): "livre" | "limitado" | "restrito" =
 const formatDateTime = (dateTimeString: string | null | undefined): string => {
   if (!dateTimeString) return "-";
   try {
-    const date = new Date(dateTimeString);
-    if (isNaN(date.getTime())) return dateTimeString;
+    // Parse date string directly to avoid timezone conversion
+    // Format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm:ssZ
+    const dateStr = dateTimeString.trim();
+    const dateTimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     
-    // Format: DD/MM/YYYY HH:mm
-    const day = date.getDate().toString().padStart(2, "0");
-    const month = (date.getMonth() + 1).toString().padStart(2, "0");
-    const year = date.getFullYear();
-    const hours = date.getHours().toString().padStart(2, "0");
-    const minutes = date.getMinutes().toString().padStart(2, "0");
-    
-    return `${day}/${month}/${year} ${hours}:${minutes}`;
+    if (dateTimeMatch) {
+      const [, year, month, day, hours, minutes] = dateTimeMatch;
+      // Format as DD/MM/YYYY HH:mm (preserving the exact time stored)
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } else {
+      // Fallback to Date object if format is unexpected
+      const date = new Date(dateTimeString);
+      if (isNaN(date.getTime())) return dateTimeString;
+      
+      const day = date.getDate().toString().padStart(2, "0");
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const year = date.getFullYear();
+      const hours = date.getHours().toString().padStart(2, "0");
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    }
   } catch {
     return dateTimeString;
   }
@@ -100,9 +111,10 @@ const convertToISO = (dateTimeLocal: string): string => {
       return "";
     }
     
-    // Create ISO string treating the local time as if it were UTC
-    // This preserves the exact time the user selected
-    return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}T${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:00.000Z`;
+    // Create ISO string WITHOUT timezone (no Z suffix)
+    // This preserves the exact time the user selected as local time
+    // The backend will parse it as local time when using new Date()
+    return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}T${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:00`;
   } catch {
     return "";
   }

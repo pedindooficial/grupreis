@@ -247,6 +247,85 @@ export default function TeamsPage() {
     copyToClipboard(team.operationPass, "Senha copiada.");
   };
 
+  const handleLocateTeam = async (team: any) => {
+    try {
+      const res = await apiFetch(`/teams/${team._id}/location`, { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      
+      if (!res.ok || !data?.data) {
+        Swal.fire({
+          title: "Localização indisponível",
+          text: "A equipe ainda não compartilhou sua localização. Certifique-se de que o painel de operações está aberto em um dispositivo com GPS ativado.",
+          icon: "info",
+          confirmButtonText: "OK"
+        });
+        return;
+      }
+
+      const location = data.data;
+      const timestamp = new Date(location.timestamp);
+      const timeAgo = Math.floor((Date.now() - timestamp.getTime()) / 1000 / 60); // minutes ago
+      
+      let timeText = "";
+      if (timeAgo < 1) {
+        timeText = "Agora mesmo";
+      } else if (timeAgo < 60) {
+        timeText = `${timeAgo} minuto${timeAgo > 1 ? "s" : ""} atrás`;
+      } else {
+        const hoursAgo = Math.floor(timeAgo / 60);
+        timeText = `${hoursAgo} hora${hoursAgo > 1 ? "s" : ""} atrás`;
+      }
+
+      const mapUrl = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`;
+      
+      Swal.fire({
+        title: `📍 Localização da Equipe: ${team.name}`,
+        html: `
+          <div class="text-left space-y-3">
+            ${location.address ? `
+              <div>
+                <div class="text-xs text-slate-500 mb-1">Endereço:</div>
+                <div class="text-sm font-semibold text-slate-800">${location.address}</div>
+              </div>
+            ` : ""}
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <div class="text-slate-500">Latitude:</div>
+                <div class="font-mono text-slate-800">${location.latitude.toFixed(6)}</div>
+              </div>
+              <div>
+                <div class="text-slate-500">Longitude:</div>
+                <div class="font-mono text-slate-800">${location.longitude.toFixed(6)}</div>
+              </div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-500">Última atualização:</div>
+              <div class="text-sm text-slate-700">${timeText}</div>
+            </div>
+            <div class="pt-2 border-t border-slate-200">
+              <a href="${mapUrl}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition text-sm font-semibold">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                Abrir no Google Maps
+              </a>
+            </div>
+          </div>
+        `,
+        icon: "info",
+        width: 500,
+        confirmButtonText: "Fechar"
+      });
+    } catch (err) {
+      console.error(err);
+      Swal.fire({
+        title: "Localização indisponível",
+        text: "Não foi possível obter a localização da equipe.",
+        icon: "error"
+      });
+    }
+  };
+
   const handleShowLinkInfo = (team: any) => {
     const base = typeof window !== "undefined" ? window.location.origin : "";
     const link = `${base}/operations/team/${team._id}`;
@@ -291,41 +370,43 @@ export default function TeamsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Equipes</h1>
-          <p className="text-sm text-slate-300">
+          <h1 className="text-xl sm:text-2xl font-semibold text-white">Equipes</h1>
+          <p className="text-xs sm:text-sm text-slate-300">
             Crie equipes, defina líder, status e membros. Todos os dados ficam salvos no banco.
           </p>
         </div>
         {mode === "list" ? (
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome ou líder"
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+              className="w-full sm:w-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
             />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-            >
-              <option value="all">Todos</option>
-              <option value="ativa">Ativas</option>
-              <option value="inativa">Inativas</option>
-            </select>
-            <button
-              onClick={() => {
-                resetForm();
-                setEditingId(null);
-                setMode("form");
-              }}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500"
-            >
-              + Nova equipe
-            </button>
+            <div className="flex gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="flex-1 sm:flex-none rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
+              >
+                <option value="all">Todos</option>
+                <option value="ativa">Ativas</option>
+                <option value="inativa">Inativas</option>
+              </select>
+              <button
+                onClick={() => {
+                  resetForm();
+                  setEditingId(null);
+                  setMode("form");
+                }}
+                className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500 touch-manipulation active:scale-95"
+              >
+                + Nova equipe
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex gap-2">
@@ -335,7 +416,7 @@ export default function TeamsPage() {
                 setEditingId(null);
                 setMode("list");
               }}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Cancelar
             </button>
@@ -344,10 +425,10 @@ export default function TeamsPage() {
       </div>
 
       {mode === "form" && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-5 shadow-inner shadow-black/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">
+              <div className="text-base sm:text-lg font-semibold text-white">
                 {editingId ? "Editar equipe" : "Nova equipe"}
               </div>
               <p className="text-xs text-slate-300">
@@ -361,20 +442,20 @@ export default function TeamsPage() {
                   setEditingId(null);
                   setMode("list");
                 }}
-                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
               >
                 Cancelar edição
               </button>
             )}
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:gap-4 md:grid-cols-2">
             <div className="space-y-1 text-sm">
               <label className="text-slate-200">Nome da equipe</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Equipe de Campo 01"
               />
             </div>
@@ -383,7 +464,7 @@ export default function TeamsPage() {
               <input
                 value={form.leader}
                 onChange={(e) => setForm((f) => ({ ...f, leader: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Nome do líder"
               />
             </div>
@@ -392,7 +473,7 @@ export default function TeamsPage() {
               <select
                 value={form.status}
                 onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as TeamStatus }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="ativa">Ativa</option>
                 <option value="inativa">Inativa</option>
@@ -403,7 +484,7 @@ export default function TeamsPage() {
               <input
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Equipamento, região, turno..."
               />
             </div>
@@ -413,7 +494,7 @@ export default function TeamsPage() {
                 type="password"
                 value={form.operationPass}
                 onChange={(e) => setForm((f) => ({ ...f, operationPass: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Senha para acesso ao painel público (mínimo 4 caracteres)"
               />
               <div className="text-[11px] text-slate-400">
@@ -421,7 +502,7 @@ export default function TeamsPage() {
               </div>
             </div>
             <div className="space-y-2 text-sm md:col-span-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <label className="text-slate-200 font-semibold">Funcionários da Equipe</label>
                 {employees.filter((e) => e.status === "ativo").length > 0 && (
                   <button
@@ -436,7 +517,7 @@ export default function TeamsPage() {
                         setForm((f) => ({ ...f, selectedEmployeeIds: activeEmployees }));
                       }
                     }}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 transition"
+                    className="text-xs text-emerald-400 hover:text-emerald-300 transition touch-manipulation active:scale-95"
                   >
                     {form.selectedEmployeeIds.length ===
                     employees.filter((e) => e.status === "ativo").length
@@ -445,7 +526,7 @@ export default function TeamsPage() {
                   </button>
                 )}
               </div>
-              <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4 max-h-[300px] overflow-y-auto">
+              <div className="rounded-lg border border-white/10 bg-slate-900/60 p-3 sm:p-4 max-h-[300px] overflow-y-auto">
                 {employees.filter((e) => e.status === "ativo").length === 0 ? (
                   <div className="text-sm text-slate-400 text-center py-4">
                     Nenhum funcionário ativo cadastrado
@@ -463,7 +544,7 @@ export default function TeamsPage() {
                         return (
                           <label
                             key={emp._id}
-                            className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition ${
+                            className={`flex items-center gap-3 rounded-lg border p-2.5 sm:p-3 cursor-pointer transition touch-manipulation ${
                               isSelected
                                 ? "border-emerald-400/50 bg-emerald-500/20"
                                 : "border-white/10 bg-white/5 hover:border-emerald-400/30 hover:bg-emerald-500/10"
@@ -485,7 +566,7 @@ export default function TeamsPage() {
                                   }));
                                 }
                               }}
-                              className="h-4 w-4 rounded border-white/20 bg-slate-800 text-emerald-500 focus:ring-2 focus:ring-emerald-500/50"
+                              className="h-4 w-4 sm:h-5 sm:w-5 rounded border-white/20 bg-slate-800 text-emerald-500 focus:ring-2 focus:ring-emerald-500/50 touch-manipulation"
                             />
                             <div className="flex-1">
                               <div className="font-semibold text-white">{emp.name}</div>
@@ -520,7 +601,7 @@ export default function TeamsPage() {
               <textarea
                 value={form.membersText}
                 onChange={(e) => setForm((f) => ({ ...f, membersText: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 rows={3}
                 placeholder={"João Silva\nMaria Souza\nCarlos Pereira"}
               />
@@ -534,7 +615,7 @@ export default function TeamsPage() {
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-3 sm:py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation active:scale-95"
             >
               {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Criar equipe"}
             </button>
@@ -543,173 +624,306 @@ export default function TeamsPage() {
       )}
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-0 text-sm text-slate-200 shadow-inner shadow-black/20">
-        <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
-          <div className="font-semibold text-white">Equipes cadastradas</div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-white/5 px-3 sm:px-6 py-3 sm:py-4 gap-2">
+          <div className="font-semibold text-white text-sm sm:text-base">Equipes cadastradas</div>
           <span className="text-xs text-slate-300">
             {loading ? "Carregando..." : `${filtered.length} registro(s)`}
           </span>
         </div>
         {loading ? (
-          <div className="px-6 py-8 text-center text-slate-300">
+          <div className="px-3 sm:px-6 py-8 text-center text-slate-300">
             <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-400" />
             <p className="text-sm">Carregando equipes...</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="px-6 py-4 text-slate-300">
+          <div className="px-3 sm:px-6 py-4 text-slate-300 text-sm">
             Nenhuma equipe cadastrada. Crie uma nova equipe no formulário acima.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-white/5 text-xs uppercase text-slate-300">
-                <tr>
-                  <th className="px-4 py-3">Equipe</th>
-                  <th className="px-4 py-3">Líder</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Membros</th>
-                  <th className="px-4 py-3">Observações</th>
-                  <th className="px-4 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((team) => {
-                  return (
-                    <tr
-                      key={team._id}
-                      className="border-t border-white/5 hover:bg-white/5 cursor-pointer"
-                      onClick={() => setViewingTeam(team)}
-                    >
-                      <td className="px-4 py-3 text-white">
-                        <div className="font-semibold">{team.name}</div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-200">{team.leader || "-"}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            team.status === "ativa"
-                              ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
-                              : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
-                          }`}
-                        >
-                          {team.status === "ativa" ? "Ativa" : "Inativa"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-200">
-                        {(() => {
-                          const teamEmployees = employees.filter((e) => e.teamId === team._id);
-                          const totalMembers = Array.isArray(team.members) ? team.members.length : 0;
-                          if (teamEmployees.length > 0 || totalMembers > 0) {
-                            return (
-                              <span className="text-emerald-300 font-semibold">
-                                {totalMembers} membro(s)
-                              </span>
-                            );
-                          }
-                          return "-";
-                        })()}
-                      </td>
-                      <td className="px-4 py-3 text-slate-200 truncate max-w-xs">
-                        {team.notes || "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-200">
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="flex flex-wrap justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(team);
-                            }}
-                            className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-white/5 text-xs uppercase text-slate-300">
+                  <tr>
+                    <th className="px-4 py-3">Equipe</th>
+                    <th className="px-4 py-3">Líder</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Membros</th>
+                    <th className="px-4 py-3">Observações</th>
+                    <th className="px-4 py-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((team) => {
+                    return (
+                      <tr
+                        key={team._id}
+                        className="border-t border-white/5 hover:bg-white/5 cursor-pointer"
+                        onClick={() => setViewingTeam(team)}
+                      >
+                        <td className="px-4 py-3 text-white">
+                          <div className="font-semibold">{team.name}</div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-200">{team.leader || "-"}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              team.status === "ativa"
+                                ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                                : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
+                            }`}
                           >
-                            Editar
-                          </button>
-                          <Link
-                            to={`/teams/${team._id}/jobs`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/80 hover:bg-emerald-500/20"
-                          >
-                            Serviços
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleShowLinkInfo(team);
-                            }}
-                            className="rounded-md border border-blue-400/50 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-100 transition hover:border-blue-300/80 hover:bg-blue-500/20"
-                          >
-                            Ver link
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCopyLink(team);
-                            }}
-                            className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/60 hover:bg-white/10"
-                          >
-                            Copiar link
-                          </button>
-                          {team.operationPass && (
+                            {team.status === "ativa" ? "Ativa" : "Inativa"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-200">
+                          {(() => {
+                            const teamEmployees = employees.filter((e) => e.teamId === team._id);
+                            const totalMembers = Array.isArray(team.members) ? team.members.length : 0;
+                            if (teamEmployees.length > 0 || totalMembers > 0) {
+                              return (
+                                <span className="text-emerald-300 font-semibold">
+                                  {totalMembers} membro(s)
+                                </span>
+                              );
+                            }
+                            return "-";
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 text-slate-200 truncate max-w-xs">
+                          {team.notes || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-200">
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="flex flex-wrap justify-end gap-2">
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleCopyPass(team);
+                                handleEdit(team);
                               }}
-                              className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/60 hover:bg-white/10"
+                              className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
                             >
-                              Copiar senha
+                              Editar
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(team);
-                            }}
-                            className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10"
-                          >
-                            Excluir
-                          </button>
+                            <Link
+                              to={`/teams/${team._id}/jobs`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/80 hover:bg-emerald-500/20 touch-manipulation active:scale-95"
+                            >
+                              Serviços
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleShowLinkInfo(team);
+                              }}
+                              className="rounded-md border border-blue-400/50 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-100 transition hover:border-blue-300/80 hover:bg-blue-500/20 touch-manipulation active:scale-95"
+                            >
+                              Ver link
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyLink(team);
+                              }}
+                              className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/60 hover:bg-white/10 touch-manipulation active:scale-95"
+                            >
+                              Copiar link
+                            </button>
+                            {team.operationPass && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyPass(team);
+                                }}
+                                className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/60 hover:bg-white/10 touch-manipulation active:scale-95"
+                              >
+                                Copiar senha
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLocateTeam(team);
+                              }}
+                              className="rounded-md border border-purple-400/50 bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-100 transition hover:border-purple-300/80 hover:bg-purple-500/20 touch-manipulation active:scale-95"
+                            >
+                              Localizar Equipe
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(team);
+                              }}
+                              className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10 touch-manipulation active:scale-95"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3 p-3">
+              {filtered.map((team) => {
+                const teamEmployees = employees.filter((e) => e.teamId === team._id);
+                const totalMembers = Array.isArray(team.members) ? team.members.length : 0;
+                return (
+                  <div
+                    key={team._id}
+                    className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3"
+                    onClick={() => setViewingTeam(team)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold text-white">{team.name}</h3>
+                        {team.leader && (
+                          <p className="text-xs text-slate-300 mt-0.5">Líder: {team.leader}</p>
+                        )}
+                      </div>
+                      <span
+                        className={`flex-shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                          team.status === "ativa"
+                            ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                            : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
+                        }`}
+                      >
+                        {team.status === "ativa" ? "Ativa" : "Inativa"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {totalMembers > 0 && (
+                        <div>
+                          <span className="text-slate-400">Membros:</span>
+                          <p className="text-emerald-300 font-semibold">{totalMembers} membro(s)</p>
                         </div>
+                      )}
+                      {team.notes && (
+                        <div className="col-span-2">
+                          <span className="text-slate-400">Observações:</span>
+                          <p className="text-slate-200 break-words">{team.notes}</p>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(team);
+                        }}
+                        className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
+                      >
+                        Editar
+                      </button>
+                      <Link
+                        to={`/teams/${team._id}/jobs`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-1 rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/80 hover:bg-emerald-500/20 touch-manipulation active:scale-95"
+                      >
+                        Serviços
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleShowLinkInfo(team);
+                        }}
+                        className="flex-1 rounded-md border border-blue-400/50 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-100 transition hover:border-blue-300/80 hover:bg-blue-500/20 touch-manipulation active:scale-95"
+                      >
+                        Ver link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyLink(team);
+                        }}
+                        className="flex-1 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:border-emerald-300/60 hover:bg-white/10 touch-manipulation active:scale-95"
+                      >
+                        Copiar link
+                      </button>
+                      {team.operationPass && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyPass(team);
+                          }}
+                          className="flex-1 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:border-emerald-300/60 hover:bg-white/10 touch-manipulation active:scale-95"
+                        >
+                          Copiar senha
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLocateTeam(team);
+                        }}
+                        className="flex-1 rounded-md border border-purple-400/50 bg-purple-500/10 px-3 py-2 text-xs font-semibold text-purple-100 transition hover:border-purple-300/80 hover:bg-purple-500/20 touch-manipulation active:scale-95"
+                      >
+                        Localizar Equipe
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(team);
+                        }}
+                        className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10 touch-manipulation active:scale-95"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 
       {/* Modal de Detalhes da Equipe */}
       {viewingTeam && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4"
           onClick={() => setViewingTeam(null)}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-900 p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <div>
-                <h2 className="text-xl font-semibold text-white">{viewingTeam.name}</h2>
-                <p className="text-sm text-slate-300">Detalhes da equipe</p>
+                <h2 className="text-lg sm:text-xl font-semibold text-white">{viewingTeam.name}</h2>
+                <p className="text-xs sm:text-sm text-slate-300">Detalhes da equipe</p>
               </div>
               <button
                 onClick={() => setViewingTeam(null)}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
               >
                 Fechar
               </button>
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-slate-400">Líder / Responsável</label>
                   <div className="text-sm text-white mt-1">{viewingTeam.leader || "-"}</div>

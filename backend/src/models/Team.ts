@@ -9,6 +9,12 @@ export interface Team {
   notes?: string;
   operationToken?: string;
   operationPass?: string;
+  currentLocation?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+    timestamp: Date;
+  };
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -21,7 +27,13 @@ const TeamSchema = new Schema<Team>(
     members: { type: [String], default: [] },
     notes: { type: String, trim: true },
     operationToken: { type: String, trim: true }, // Legacy - for old links
-    operationPass: { type: String, trim: true }
+    operationPass: { type: String, trim: true },
+    currentLocation: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+      address: { type: String, trim: true },
+      timestamp: { type: Date, default: Date.now }
+    }
   },
   { timestamps: true }
 );

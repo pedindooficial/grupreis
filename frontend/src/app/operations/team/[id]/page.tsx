@@ -40,6 +40,7 @@ export default function OperationTeamPage() {
     dateFilteredJobs,
     filteredJobs,
     groupedJobsByDate,
+    nextJob,
     authWithPassword,
     handleStartJob,
     updateJobStatus,
@@ -107,6 +108,55 @@ export default function OperationTeamPage() {
           </div>
         ) : (
           <>
+            {/* Next Job Section */}
+            {nextJob && (
+              <div className="rounded-xl sm:rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 p-3 sm:p-4 shadow-inner shadow-black/30">
+                <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                  <div className="text-lg sm:text-xl text-emerald-300">⏭️</div>
+                  <div className="text-xs sm:text-sm font-semibold text-emerald-200 uppercase tracking-wide">
+                    Próximo Serviço
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-sm sm:text-base font-semibold text-white break-words">{nextJob.title}</div>
+                  <div className="text-[11px] sm:text-xs text-slate-300 break-words">
+                    {nextJob.plannedDate || "sem data"} · {nextJob.site || "Endereço não informado"}
+                  </div>
+                  <div className="text-[10px] sm:text-xs text-slate-400 break-words">
+                    Cliente: {nextJob.clientName || "—"}
+                  </div>
+                  <div className="flex gap-2 mt-2 sm:mt-3">
+                    {nextJob.site && (
+                      <button
+                        type="button"
+                        onClick={() => handleNavigateToJob(nextJob)}
+                        className="flex-1 rounded-md border border-purple-400/40 bg-purple-500/10 px-3 py-2 text-xs font-semibold text-purple-100 transition active:border-purple-300/60 active:bg-purple-500/20 touch-manipulation min-h-[40px]"
+                      >
+                        🚗 Rota
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJob(nextJob)}
+                      className="flex-1 rounded-md border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition active:border-emerald-300/60 active:bg-emerald-500/20 touch-manipulation min-h-[40px]"
+                    >
+                      Ver detalhes
+                    </button>
+                    {nextJob.status === "pendente" && (
+                      <button
+                        type="button"
+                        disabled={updating === nextJob._id}
+                        onClick={() => handleStartJob(nextJob._id, nextJob.title)}
+                        className="flex-1 rounded-md border border-blue-400/40 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-100 transition active:border-blue-300/60 active:bg-blue-500/20 disabled:opacity-60 touch-manipulation min-h-[40px]"
+                      >
+                        Iniciar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Date Filter Buttons */}
             <div className="flex flex-wrap gap-2">
               {DATE_FILTERS.map((filter) => (
@@ -254,48 +304,100 @@ export default function OperationTeamPage() {
               </div>
 
               <div className="mt-3 sm:mt-4 rounded-lg sm:rounded-xl border border-white/10 bg-white/5 p-2.5 sm:p-3">
-                <div className="text-xs sm:text-sm font-semibold text-white">
+                <div className="text-xs sm:text-sm font-semibold text-white mb-3 sm:mb-4">
                   Serviços ({selectedJob.services?.length || 0})
                 </div>
-                <div className="mt-2 grid gap-2 grid-cols-1">
-                  {(selectedJob.services || []).map((s: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="rounded-lg border border-white/10 bg-slate-800/60 p-3 text-sm text-slate-200"
-                    >
-                      <div className="font-semibold text-white">
-                        {s.serviceType || s.service || "Serviço"}
+                <div className="mt-2 grid gap-3 sm:gap-4 grid-cols-1">
+                  {(selectedJob.services || []).map((s: any, idx: number) => {
+                    const diametro = s.stakeDiameter || s.diametro;
+                    const profundidade = s.stakeDepth || s.profundidade;
+                    const quantidade = s.stakeQuantity || s.quantidade;
+                    const hasMeasurements = diametro || profundidade || quantidade;
+                    
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded-lg border border-white/10 bg-slate-800/60 p-3 sm:p-4 text-xs sm:text-sm text-slate-200"
+                      >
+                        <div className="font-semibold text-white break-words mb-2">
+                          {s.serviceType || s.service || "Serviço"}
+                        </div>
+                        
+                        {/* Prominent Measurements Section */}
+                        {hasMeasurements && (
+                          <div className="mt-3 sm:mt-4 mb-3 sm:mb-4 p-3 sm:p-4 rounded-lg border-2 border-emerald-400/50 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10">
+                            <div className="text-[10px] sm:text-xs uppercase tracking-wide text-emerald-200 font-semibold mb-2 sm:mb-3">
+                              ⚠️ Especificações do Serviço
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                              {diametro && (
+                                <div className="text-center">
+                                  <div className="text-[9px] sm:text-[10px] text-emerald-300/80 uppercase tracking-wide mb-1">
+                                    Diâmetro
+                                  </div>
+                                  <div className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-200">
+                                    Ø{diametro.toString()}cm
+                                  </div>
+                                </div>
+                              )}
+                              {profundidade && (
+                                <div className="text-center">
+                                  <div className="text-[9px] sm:text-[10px] text-emerald-300/80 uppercase tracking-wide mb-1">
+                                    Profundidade
+                                  </div>
+                                  <div className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-200">
+                                    {profundidade.toString()}m
+                                  </div>
+                                </div>
+                              )}
+                              {quantidade && (
+                                <div className="text-center">
+                                  <div className="text-[9px] sm:text-[10px] text-emerald-300/80 uppercase tracking-wide mb-1">
+                                    Quantidade
+                                  </div>
+                                  <div className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-200">
+                                    {quantidade.toString()} un
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            {diametro && profundidade && quantidade && (
+                              <div className="mt-3 pt-3 border-t border-emerald-400/30 text-center">
+                                <div className="text-[10px] sm:text-xs text-emerald-200/70">
+                                  Total: {quantidade.toString()} estacas de Ø{diametro.toString()}cm × {profundidade.toString()}m
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        <div className="text-[10px] sm:text-xs text-slate-400 break-words space-y-1">
+                          <div>Local: {s.siteType || s.localType || "—"}</div>
+                          <div>Solo: {s.soilType || "—"}</div>
+                          <div>Acesso: {s.access || "—"}</div>
+                        </div>
+                        {s.categories && s.categories.length > 0 && (
+                          <div className="mt-2 sm:mt-3 flex flex-wrap gap-1 text-[10px] sm:text-[11px] text-emerald-200">
+                            {s.categories.map((c: string) => (
+                              <span key={c} className="rounded-full bg-emerald-500/10 px-2 py-0.5 sm:py-1 break-words">
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {(s.sptInfo || s.sptFileName) && (
+                          <div className="mt-2 text-[10px] sm:text-xs text-slate-300 break-words">
+                            SPT/Diagnóstico: {s.sptInfo || s.sptFileName}
+                          </div>
+                        )}
+                        {s.observacoes && (
+                          <div className="mt-2 text-[10px] sm:text-xs text-slate-300 break-words">
+                            <span className="font-semibold">Obs.:</span> {s.observacoes}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs text-slate-400">
-                        Local: {s.siteType || s.localType || "—"} · Solo: {s.soilType || "—"} ·
-                        Acesso: {s.access || "—"}
-                      </div>
-                      {s.categories && s.categories.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1 text-[11px] text-emerald-200">
-                          {s.categories.map((c: string) => (
-                            <span key={c} className="rounded-full bg-emerald-500/10 px-2 py-1">
-                              {c}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {(s.stakeDiameter || s.diametro) && (
-                        <div className="mt-1 text-xs text-slate-300">
-                          Estacas: Ø{(s.stakeDiameter || s.diametro || "").toString()}cm ·{" "}
-                          {(s.stakeDepth || s.profundidade || "").toString()}m ·{" "}
-                          {(s.stakeQuantity || s.quantidade || "").toString()} un
-                        </div>
-                      )}
-                      {(s.sptInfo || s.sptFileName) && (
-                        <div className="mt-1 text-xs text-slate-300">
-                          SPT/Diagnóstico: {s.sptInfo || s.sptFileName}
-                        </div>
-                      )}
-                      {s.observacoes && (
-                        <div className="mt-1 text-xs text-slate-300">Obs.: {s.observacoes}</div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

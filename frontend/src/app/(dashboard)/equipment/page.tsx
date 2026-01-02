@@ -215,51 +215,53 @@ export default function EquipmentPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Equipamentos e EPIs</h1>
-          <p className="text-sm text-slate-300">
+          <h1 className="text-xl sm:text-2xl font-semibold text-white">Equipamentos e EPIs</h1>
+          <p className="text-xs sm:text-sm text-slate-300">
             Cadastre equipamentos, EPIs e ferramentas. Controle status, quantidade e alocação.
           </p>
         </div>
         {mode === "list" ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome, patrimônio, série..."
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+              className="w-full sm:w-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
             />
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as any)}
-              className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-            >
-              <option value="all">Todos</option>
-              <option value="equipamento">Equipamentos</option>
-              <option value="epi">EPIs</option>
-              <option value="ferramenta">Ferramentas</option>
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-            >
-              <option value="all">Todos</option>
-              <option value="ativo">Ativos</option>
-              <option value="inativo">Inativos</option>
-            </select>
-            <button
-              onClick={() => {
-                resetForm();
-                setEditingId(null);
-                setMode("form");
-              }}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500"
-            >
-              + Novo item
-            </button>
+            <div className="flex gap-2">
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value as any)}
+                className="flex-1 sm:flex-none rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
+              >
+                <option value="all">Todos</option>
+                <option value="equipamento">Equipamentos</option>
+                <option value="epi">EPIs</option>
+                <option value="ferramenta">Ferramentas</option>
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="flex-1 sm:flex-none rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
+              >
+                <option value="all">Todos</option>
+                <option value="ativo">Ativos</option>
+                <option value="inativo">Inativos</option>
+              </select>
+              <button
+                onClick={() => {
+                  resetForm();
+                  setEditingId(null);
+                  setMode("form");
+                }}
+                className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500 touch-manipulation active:scale-95"
+              >
+                + Novo item
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex gap-2">
@@ -269,7 +271,7 @@ export default function EquipmentPage() {
                 setEditingId(null);
                 setMode("list");
               }}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Cancelar
             </button>
@@ -278,10 +280,10 @@ export default function EquipmentPage() {
       </div>
 
       {mode === "form" && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-5 shadow-inner shadow-black/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">
+              <div className="text-base sm:text-lg font-semibold text-white">
                 {editingId ? "Editar item" : "Novo item"}
               </div>
               <p className="text-xs text-slate-300">
@@ -295,20 +297,20 @@ export default function EquipmentPage() {
                   setEditingId(null);
                   setMode("list");
                 }}
-                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
               >
                 Cancelar edição
               </button>
             )}
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:gap-4 md:grid-cols-2">
             <div className="space-y-1 text-sm">
               <label className="text-slate-200">Nome</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Capacete, Botina, Furadeira..."
               />
             </div>
@@ -317,7 +319,7 @@ export default function EquipmentPage() {
               <select
                 value={form.type}
                 onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as EquipType }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="equipamento">Equipamento</option>
                 <option value="epi">EPI</option>
@@ -329,7 +331,7 @@ export default function EquipmentPage() {
               <input
                 value={form.category}
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="EPI / Ferramenta elétrica / Transporte..."
               />
             </div>
@@ -338,7 +340,7 @@ export default function EquipmentPage() {
               <input
                 value={form.patrimony}
                 onChange={(e) => setForm((f) => ({ ...f, patrimony: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Código interno"
               />
             </div>
@@ -347,7 +349,7 @@ export default function EquipmentPage() {
               <input
                 value={form.serialNumber}
                 onChange={(e) => setForm((f) => ({ ...f, serialNumber: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Número de série"
               />
             </div>
@@ -358,7 +360,7 @@ export default function EquipmentPage() {
                   type="number"
                   value={form.quantity}
                   onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   placeholder="1"
                 />
               </div>
@@ -367,7 +369,7 @@ export default function EquipmentPage() {
                 <input
                   value={form.unit}
                   onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                   placeholder="un, par, kit..."
                 />
               </div>
@@ -377,7 +379,7 @@ export default function EquipmentPage() {
               <select
                 value={form.status}
                 onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as EquipStatus }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="ativo">Ativo</option>
                 <option value="inativo">Inativo</option>
@@ -388,7 +390,7 @@ export default function EquipmentPage() {
               <input
                 value={form.assignedTo}
                 onChange={(e) => setForm((f) => ({ ...f, assignedTo: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Equipe, funcionário ou obra"
               />
             </div>
@@ -397,7 +399,7 @@ export default function EquipmentPage() {
               <input
                 value={form.location}
                 onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 placeholder="Almoxarifado, caminhão, obra..."
               />
             </div>
@@ -407,7 +409,7 @@ export default function EquipmentPage() {
                 type="date"
                 value={form.nextMaintenance}
                 onChange={(e) => setForm((f) => ({ ...f, nextMaintenance: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               />
             </div>
             <div className="space-y-1 text-sm">
@@ -415,7 +417,7 @@ export default function EquipmentPage() {
               <select
                 value={form.nextMaintenanceType}
                 onChange={(e) => setForm((f) => ({ ...f, nextMaintenanceType: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Selecione o tipo</option>
                 <option value="Troca de óleo">Troca de óleo</option>
@@ -435,7 +437,7 @@ export default function EquipmentPage() {
               <textarea
                 value={form.nextMaintenanceDetails}
                 onChange={(e) => setForm((f) => ({ ...f, nextMaintenanceDetails: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 rows={3}
                 placeholder="Detalhes específicos sobre a manutenção a ser realizada (ex: trocar óleo do motor, revisar sistema hidráulico, calibrar instrumentos...)"
               />
@@ -445,7 +447,7 @@ export default function EquipmentPage() {
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
                 rows={3}
                 placeholder="Observações gerais sobre o item, uso, restrições..."
               />
@@ -456,7 +458,7 @@ export default function EquipmentPage() {
           {editingId && (
             <div className="mt-6 border-t border-white/10 pt-6">
               <div className="mb-4">
-                <h3 className="text-lg font-semibold text-white mb-2">Histórico de Manutenção</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-white mb-2">Histórico de Manutenção</h3>
                 <p className="text-xs text-slate-400">Gerencie todas as manutenções realizadas neste item</p>
               </div>
               <MaintenanceHistory
@@ -508,7 +510,7 @@ export default function EquipmentPage() {
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-3 sm:py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation active:scale-95"
             >
               {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Criar item"}
             </button>
@@ -517,122 +519,233 @@ export default function EquipmentPage() {
       )}
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-0 text-sm text-slate-200 shadow-inner shadow-black/20">
-        <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
-          <div className="font-semibold text-white">Itens cadastrados</div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-white/5 px-3 sm:px-6 py-3 sm:py-4 gap-2">
+          <div className="font-semibold text-white text-sm sm:text-base">Itens cadastrados</div>
           <span className="text-xs text-slate-300">
             {loading ? "Carregando..." : `${filtered.length} registro(s)`}
           </span>
         </div>
         {loading ? (
-          <div className="px-6 py-8 text-center text-slate-300">
+          <div className="px-3 sm:px-6 py-8 text-center text-slate-300">
             <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-400" />
             <p className="text-sm">Carregando equipamentos...</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="px-6 py-4 text-slate-300">
-            Nenhum item cadastrado. Clique em “+ Novo item” para adicionar.
+          <div className="px-3 sm:px-6 py-4 text-slate-300 text-sm">
+            Nenhum item cadastrado. Clique em "+ Novo item" para adicionar.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-white/5 text-xs uppercase text-slate-300">
-                <tr>
-                  <th className="px-4 py-3">Nome</th>
-                  <th className="px-4 py-3">Tipo</th>
-                  <th className="px-4 py-3">Patrimônio</th>
-                  <th className="px-4 py-3">Série</th>
-                  <th className="px-4 py-3">Qtd</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Alocado</th>
-                  <th className="px-4 py-3">Local</th>
-                  <th className="px-4 py-3">Próx. manutenção</th>
-                  <th className="px-4 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((item) => (
-                  <tr key={item._id} className="border-t border-white/5 hover:bg-white/5">
-                    <td className="px-4 py-3 text-white">{item.name}</td>
-                    <td className="px-4 py-3 text-slate-200">
-                      {item.type === "epi"
-                        ? "EPI"
-                        : item.type === "ferramenta"
-                        ? "Ferramenta"
-                        : "Equipamento"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-200">{item.patrimony || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">{item.serialNumber || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">
-                      {item.quantity || 0} {item.unit || "un"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          item.status === "ativo"
-                            ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
-                            : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
-                        }`}
-                      >
-                        {item.status === "ativo" ? "Ativo" : "Inativo"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-200">{item.assignedTo || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">{item.location || "-"}</td>
-                    <td className="px-4 py-3 text-slate-200">
-                      {item.nextMaintenance || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-200">
-                      <div className="flex justify-end gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setViewingItem(item);
-                            setMode("detail");
-                          }}
-                          className="rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20"
-                        >
-                          Manutenção
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setViewingItem(item);
-                            setMode("detail");
-                          }}
-                          className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-blue-100 transition hover:border-blue-300/40 hover:bg-blue-500/10"
-                        >
-                          Detalhes
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(item)}
-                          className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(item)}
-                          className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10"
-                        >
-                          Excluir
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-white/5 text-xs uppercase text-slate-300">
+                  <tr>
+                    <th className="px-4 py-3">Nome</th>
+                    <th className="px-4 py-3">Tipo</th>
+                    <th className="px-4 py-3">Patrimônio</th>
+                    <th className="px-4 py-3">Série</th>
+                    <th className="px-4 py-3">Qtd</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Alocado</th>
+                    <th className="px-4 py-3">Local</th>
+                    <th className="px-4 py-3">Próx. manutenção</th>
+                    <th className="px-4 py-3 text-right">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((item) => (
+                    <tr key={item._id} className="border-t border-white/5 hover:bg-white/5">
+                      <td className="px-4 py-3 text-white">{item.name}</td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {item.type === "epi"
+                          ? "EPI"
+                          : item.type === "ferramenta"
+                          ? "Ferramenta"
+                          : "Equipamento"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-200">{item.patrimony || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">{item.serialNumber || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {item.quantity || 0} {item.unit || "un"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            item.status === "ativo"
+                              ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                              : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
+                          }`}
+                        >
+                          {item.status === "ativo" ? "Ativo" : "Inativo"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-200">{item.assignedTo || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">{item.location || "-"}</td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {item.nextMaintenance || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-200">
+                        <div className="flex justify-end gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewingItem(item);
+                              setMode("detail");
+                            }}
+                            className="rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20 touch-manipulation active:scale-95"
+                          >
+                            Manutenção
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewingItem(item);
+                              setMode("detail");
+                            }}
+                            className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-blue-100 transition hover:border-blue-300/40 hover:bg-blue-500/10 touch-manipulation active:scale-95"
+                          >
+                            Detalhes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(item)}
+                            className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(item)}
+                            className="rounded-md border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10 touch-manipulation active:scale-95"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3 p-3">
+              {filtered.map((item) => (
+                <div
+                  key={item._id}
+                  className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-white truncate">{item.name}</h3>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        {item.type === "epi"
+                          ? "EPI"
+                          : item.type === "ferramenta"
+                          ? "Ferramenta"
+                          : "Equipamento"}
+                      </p>
+                    </div>
+                    <span
+                      className={`flex-shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                        item.status === "ativo"
+                          ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                          : "border border-orange-400/40 bg-orange-500/10 text-orange-100"
+                      }`}
+                    >
+                      {item.status === "ativo" ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {item.patrimony && (
+                      <div>
+                        <span className="text-slate-400">Patrimônio:</span>
+                        <p className="text-slate-200">{item.patrimony}</p>
+                      </div>
+                    )}
+                    {item.serialNumber && (
+                      <div>
+                        <span className="text-slate-400">Série:</span>
+                        <p className="text-slate-200">{item.serialNumber}</p>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-slate-400">Quantidade:</span>
+                      <p className="text-slate-200">
+                        {item.quantity || 0} {item.unit || "un"}
+                      </p>
+                    </div>
+                    {item.assignedTo && (
+                      <div>
+                        <span className="text-slate-400">Alocado:</span>
+                        <p className="text-slate-200 break-words">{item.assignedTo}</p>
+                      </div>
+                    )}
+                    {item.location && (
+                      <div>
+                        <span className="text-slate-400">Local:</span>
+                        <p className="text-slate-200 break-words">{item.location}</p>
+                      </div>
+                    )}
+                    {item.nextMaintenance && (
+                      <div>
+                        <span className="text-slate-400">Próx. manutenção:</span>
+                        <p className="text-slate-200">{item.nextMaintenance}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewingItem(item);
+                        setMode("detail");
+                      }}
+                      className="flex-1 rounded-md border border-emerald-400/50 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20 touch-manipulation active:scale-95"
+                    >
+                      Manutenção
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewingItem(item);
+                        setMode("detail");
+                      }}
+                      className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-blue-100 transition hover:border-blue-300/40 hover:bg-blue-500/10 touch-manipulation active:scale-95"
+                    >
+                      Detalhes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(item)}
+                      className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(item)}
+                      className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-red-100 transition hover:border-red-400/40 hover:bg-red-500/10 touch-manipulation active:scale-95"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
       {/* Detail View */}
       {mode === "detail" && viewingItem && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
-          <div className="flex items-center justify-between mb-6">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-5 shadow-inner shadow-black/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
             <div>
-              <div className="text-lg font-semibold text-white">{viewingItem.name}</div>
+              <div className="text-base sm:text-lg font-semibold text-white">{viewingItem.name}</div>
               <div className="text-xs text-slate-400 mt-1">
                 {viewingItem.type === "epi"
                   ? "EPI"
@@ -648,13 +761,13 @@ export default function EquipmentPage() {
                 setViewingItem(null);
                 setMode("list");
               }}
-              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white"
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
             >
               Voltar
             </button>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 mb-6">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 mb-4 sm:mb-6">
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
               <div className="text-xs text-slate-400 uppercase mb-1">Status</div>
               <div className="text-sm font-semibold text-white">
@@ -680,7 +793,7 @@ export default function EquipmentPage() {
               </div>
             )}
             {viewingItem.nextMaintenance && (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3 sm:col-span-2">
                 <div className="text-xs text-slate-400 uppercase mb-1">Próxima Manutenção</div>
                 <div className="text-sm font-semibold text-white">{viewingItem.nextMaintenance}</div>
                 {viewingItem.nextMaintenanceType && (
@@ -689,22 +802,22 @@ export default function EquipmentPage() {
               </div>
             )}
             {viewingItem.nextMaintenanceDetails && (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3 md:col-span-2">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3 sm:col-span-2">
                 <div className="text-xs text-slate-400 uppercase mb-1">Detalhes da Próxima Manutenção</div>
-                <div className="text-sm text-slate-200">{viewingItem.nextMaintenanceDetails}</div>
+                <div className="text-sm text-slate-200 break-words">{viewingItem.nextMaintenanceDetails}</div>
               </div>
             )}
             {viewingItem.notes && (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3 md:col-span-2">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3 sm:col-span-2">
                 <div className="text-xs text-slate-400 uppercase mb-1">Observações</div>
-                <div className="text-sm text-slate-200 whitespace-pre-wrap">{viewingItem.notes}</div>
+                <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">{viewingItem.notes}</div>
               </div>
             )}
           </div>
 
-          <div className="border-t border-white/10 pt-6">
+          <div className="border-t border-white/10 pt-4 sm:pt-6">
             <div className="mb-4">
-              <h3 className="text-lg font-semibold text-white mb-2">Histórico de Manutenção</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-2">Histórico de Manutenção</h3>
               <p className="text-xs text-slate-400">Gerencie todas as manutenções realizadas neste item</p>
             </div>
             <MaintenanceHistory
