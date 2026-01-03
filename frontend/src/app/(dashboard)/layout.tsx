@@ -1,5 +1,7 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
+import { apiFetch, apiUrl } from "@/lib/api-client";
 import SidebarAvatar from "./_components/sidebar-avatar";
 import SidebarNav from "./_components/sidebar-nav";
 import MobileNav from "./_components/mobile-nav";
@@ -168,6 +170,23 @@ const ICONS = {
       <path d="M3 9h18" />
       <circle cx="12" cy="12" r="2" />
     </svg>
+  ),
+  orcamentos: (
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+      <path d="M10 9H8" />
+    </svg>
   )
 };
 
@@ -183,9 +202,95 @@ export function usePendingCount() {
   return pendingCount;
 }
 
+export function usePendingOrcamentoRequestsCount() {
+  const [pendingCount, setPendingCount] = useState(0);
+  const location = useLocation();
+  const isOnOrcamentoRequestsPage = location.pathname === "/orcamento-requests";
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    // Only fetch count when not on the orçamento requests page
+    if (isOnOrcamentoRequestsPage) {
+      setPendingCount(0);
+      // Close SSE connection if open
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      return;
+    }
+
+    // Use SSE for real-time updates
+    const connectSSE = () => {
+      try {
+        const url = apiUrl("/orcamento-requests/count/watch");
+        const eventSource = new EventSource(url);
+        eventSourceRef.current = eventSource;
+
+        eventSource.onopen = () => {
+          console.log("SSE connected for orcamento requests count");
+        };
+
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "count" && typeof data.count === "number") {
+              setPendingCount(data.count);
+            }
+          } catch (error) {
+            console.error("Error parsing SSE message for count:", error);
+          }
+        };
+
+        eventSource.onerror = (error) => {
+          console.error("SSE error for count:", error);
+          eventSource.close();
+          eventSourceRef.current = null;
+          // Try to reconnect after a delay
+          setTimeout(() => {
+            if (!isOnOrcamentoRequestsPage) {
+              connectSSE();
+            }
+          }, 5000);
+        };
+      } catch (error) {
+        console.error("Error setting up SSE for count:", error);
+        // Fallback to polling if SSE fails
+        const fetchCount = async () => {
+          try {
+            const res = await apiFetch("/orcamento-requests/count/pending", { cache: "no-store" });
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.data?.count !== undefined) {
+              setPendingCount(data.data.count);
+            }
+          } catch (err) {
+            console.error("Error fetching pending orçamento requests count:", err);
+          }
+        };
+        fetchCount();
+        const interval = setInterval(fetchCount, 30000);
+        return () => clearInterval(interval);
+      }
+    };
+
+    connectSSE();
+
+    // Cleanup on unmount or when page changes
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, [isOnOrcamentoRequestsPage]);
+
+  return pendingCount;
+}
+
 function Sidebar() {
   const { user } = useAuth();
   const pendingCount = usePendingCount();
+  const pendingOrcamentoCount = usePendingOrcamentoRequestsCount();
   const items = [
     { label: "Dashboard", href: "/", icon: ICONS.dashboard },
     {
@@ -202,7 +307,13 @@ function Sidebar() {
     { label: "Financeiro", href: "/cash", icon: ICONS.cash },
     { label: "Documentos", href: "/documents", icon: ICONS.documents },
     { label: "Auditoria", href: "/audit", icon: ICONS.audit },
-    { label: "Catálogo", href: "/catalog", icon: ICONS.catalog }
+    { label: "Catálogo", href: "/catalog", icon: ICONS.catalog },
+    { 
+      label: "Orçamentos", 
+      href: "/orcamento-requests", 
+      icon: ICONS.orcamentos,
+      badge: pendingOrcamentoCount > 0 ? pendingOrcamentoCount : null
+    }
   ];
 
   return (
@@ -268,6 +379,7 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   const pendingCount = usePendingCount();
+  const pendingOrcamentoCount = usePendingOrcamentoRequestsCount();
   
   return (
     <div className="flex min-h-screen bg-slate-950">
@@ -296,7 +408,13 @@ export default function DashboardLayout({
             { label: "Financeiro", href: "/cash", icon: ICONS.cash },
             { label: "Documentos", href: "/documents", icon: ICONS.documents },
             { label: "Auditoria", href: "/audit", icon: ICONS.audit },
-            { label: "Catálogo", href: "/catalog", icon: ICONS.catalog }
+            { label: "Catálogo", href: "/catalog", icon: ICONS.catalog },
+            { 
+              label: "Orçamentos", 
+              href: "/orcamento-requests", 
+              icon: ICONS.orcamentos,
+              badge: pendingOrcamentoCount > 0 ? pendingOrcamentoCount : null
+            }
           ]}
         />
       </div>

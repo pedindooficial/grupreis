@@ -7,7 +7,38 @@ import { logAudit } from "../services/audit";
 
 const router = Router();
 
-// All catalog routes require authentication and admin role
+// Public route: GET service names (no auth required)
+router.get("/public/services", async (req, res) => {
+  try {
+    await connectDB();
+    
+    // Get only active catalog items with their names
+    const catalogItems = await CatalogModel.find({ active: true })
+      .select("name category active")
+      .sort({ name: 1 })
+      .lean();
+    
+    // Extract unique service names
+    const serviceNames = catalogItems.map((item) => ({
+      name: item.name,
+      category: item.category || undefined,
+      id: item._id?.toString()
+    }));
+    
+    res.json({
+      data: serviceNames,
+      count: serviceNames.length
+    });
+  } catch (error: any) {
+    console.error("GET /api/catalog/public/services error", error);
+    res.status(500).json({
+      error: "Falha ao carregar serviços",
+      detail: error?.message || "Erro interno"
+    });
+  }
+});
+
+// All other catalog routes require authentication and admin role
 router.use(authenticate);
 router.use(requireAdmin);
 

@@ -25,6 +25,7 @@ import budgetsRouter from "./routes/budgets";
 import travelPricingRouter from "./routes/travel-pricing";
 import distanceRouter from "./routes/distance";
 import maintenanceRouter from "./routes/maintenance";
+import orcamentoRequestsRouter from "./routes/orcamento-requests";
 import { connectDB } from "./db";
 import mongoose from "mongoose";
 
@@ -109,6 +110,7 @@ app.use("/api/budgets", budgetsRouter);
 app.use("/api/travel-pricing", travelPricingRouter);
 app.use("/api/distance", distanceRouter);
 app.use("/api/maintenance", maintenanceRouter);
+app.use("/api/orcamento-requests", orcamentoRequestsRouter);
 
 // Use HTTPS with self-signed certs only in development
 // Production should use HTTP behind reverse proxy (Nginx) with proper SSL

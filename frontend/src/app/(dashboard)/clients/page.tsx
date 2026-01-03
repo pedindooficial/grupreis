@@ -98,6 +98,8 @@ export default function ClientsPage() {
   const [budgetMode, setBudgetMode] = useState<"list" | "form" | null>(null);
   const [budgets, setBudgets] = useState<any[]>([]);
   const [selectedBudget, setSelectedBudget] = useState<any | null>(null);
+  const [pendingBudgetId, setPendingBudgetId] = useState<string | null>(null);
+  const [clientJobs, setClientJobs] = useState<any[]>([]);
   const emptyAddress = {
     label: "",
     address: "",
@@ -140,7 +142,27 @@ export default function ClientsPage() {
           console.error("Erro ao carregar clientes", data);
           return;
         }
-        setClients(data?.data || []);
+        const clientsData = data?.data || [];
+        setClients(clientsData);
+        
+        // Check for query parameters to auto-select client and budget
+        const params = new URLSearchParams(window.location.search);
+        const clientId = params.get("clientId");
+        const budgetId = params.get("budgetId");
+        
+        if (clientId && clientsData.length > 0) {
+          const client = clientsData.find((c: any) => c._id === clientId);
+          if (client) {
+            setSelectedClient(client);
+            // If budgetId is also provided, open budget manager
+            if (budgetId) {
+              setPendingBudgetId(budgetId);
+              setBudgetMode("list");
+            }
+            // Clean up URL parameters
+            window.history.replaceState({}, "", "/clients");
+          }
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -232,8 +254,9 @@ export default function ClientsPage() {
         addresses
       });
 
-      // Load client budgets
+      // Load client budgets and jobs
       loadClientBudgets(selectedClient._id);
+      loadClientJobs(selectedClient._id);
     }
   }, [selectedClient]);
 
@@ -246,6 +269,25 @@ export default function ClientsPage() {
       }
     } catch (err) {
       console.error("Erro ao carregar orçamentos:", err);
+    }
+  };
+
+  const loadClientJobs = async (clientId: string) => {
+    try {
+      const res = await apiFetch("/jobs", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.data) {
+        // Filter jobs by clientId
+        const jobs = Array.isArray(data.data) ? data.data : [];
+        const clientJobsList = jobs.filter((job: any) => 
+          job.clientId === clientId || 
+          (typeof job.clientId === 'object' && job.clientId?._id === clientId) ||
+          (typeof job.clientId === 'object' && job.clientId?.toString() === clientId)
+        );
+        setClientJobs(clientJobsList);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar OSs do cliente:", err);
     }
   };
 
@@ -1525,7 +1567,11 @@ export default function ClientsPage() {
               <BudgetManager
                 clientId={selectedClient._id}
                 clientName={selectedClient.name}
-                onClose={() => setBudgetMode(null)}
+                onClose={() => {
+                  setBudgetMode(null);
+                  setPendingBudgetId(null);
+                }}
+                initialBudgetId={pendingBudgetId || undefined}
               />
             ) : editing ? (
               <>
@@ -1880,6 +1926,123 @@ export default function ClientsPage() {
                   </div>
                 </div>
               )}
+
+              {/* Orçamentos e OSs Section */}
+              {!editing && !budgetMode && (
+                <div className="mt-6 space-y-4">
+                  {/* Orçamentos */}
+                  <div className="rounded-lg border border-white/10 bg-slate-800/30 p-4">
+                    <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                      <span>💰</span>
+                      <span>Orçamentos ({budgets.length})</span>
+                    </h3>
+                    {budgets.length > 0 ? (
+                      <div className="space-y-2">
+                        {budgets.slice(0, 5).map((budget: any) => (
+                          <div
+                            key={budget._id}
+                            className="p-3 rounded-lg border border-white/5 bg-slate-900/50 hover:bg-slate-900/70 transition cursor-pointer"
+                            onClick={() => {
+                              setSelectedBudget(budget);
+                              setBudgetMode("list");
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-white truncate">
+                                  {budget.title || `Orçamento #${budget.seq || budget._id?.slice(-6)}`}
+                                </div>
+                                <div className="text-xs text-slate-400 mt-1">
+                                  {budget.status === "pendente" && "⏳ Pendente"}
+                                  {budget.status === "aprovado" && "✅ Aprovado"}
+                                  {budget.status === "rejeitado" && "❌ Rejeitado"}
+                                  {budget.status === "convertido" && "🔄 Convertido"}
+                                  {budget.finalValue && (
+                                    <span className="ml-2">
+                                      · R$ {budget.finalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBudget(budget);
+                                  setBudgetMode("list");
+                                }}
+                                className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                              >
+                                Ver
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {budgets.length > 5 && (
+                          <button
+                            onClick={() => setBudgetMode("list")}
+                            className="w-full text-xs text-slate-400 hover:text-slate-300 text-center py-2"
+                          >
+                            Ver todos os {budgets.length} orçamentos →
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-400 italic">
+                        Nenhum orçamento cadastrado
+                      </div>
+                    )}
+                  </div>
+
+                  {/* OSs (Ordens de Serviço) */}
+                  <div className="rounded-lg border border-white/10 bg-slate-800/30 p-4">
+                    <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                      <span>📋</span>
+                      <span>Ordens de Serviço ({clientJobs.length})</span>
+                    </h3>
+                    {clientJobs.length > 0 ? (
+                      <div className="space-y-2">
+                        {clientJobs.slice(0, 5).map((job: any) => (
+                          <div
+                            key={job._id}
+                            className="p-3 rounded-lg border border-white/5 bg-slate-900/50 hover:bg-slate-900/70 transition"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-white truncate">
+                                  {job.title || `OS #${job.seq || job._id?.slice(-6)}`}
+                                </div>
+                                <div className="text-xs text-slate-400 mt-1">
+                                  {job.status === "pendente" && "⏳ Pendente"}
+                                  {job.status === "em_andamento" && "🔄 Em Andamento"}
+                                  {job.status === "concluido" && "✅ Concluído"}
+                                  {job.status === "cancelado" && "❌ Cancelado"}
+                                  {job.team && (
+                                    <span className="ml-2">· {job.team}</span>
+                                  )}
+                                  {job.plannedDate && (
+                                    <span className="ml-2">
+                                      · {new Date(job.plannedDate).toLocaleDateString("pt-BR")}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {clientJobs.length > 5 && (
+                          <div className="text-xs text-slate-400 text-center py-2">
+                            +{clientJobs.length - 5} OSs adicionais
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-400 italic">
+                        Nenhuma OS cadastrada
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer fixo com botões */}
@@ -1918,7 +2081,7 @@ export default function ClientsPage() {
                     onClick={() => setBudgetMode("form")}
                     className="rounded-md border border-blue-400/50 bg-blue-500/20 px-3 py-2 font-semibold text-blue-50 transition hover:border-blue-300/50 hover:bg-blue-500/30"
                   >
-                    💰 Fazer Orçamento
+                    💰 Orçamentos
                   </button>
                   <button
                     onClick={generateLocationCaptureLink}

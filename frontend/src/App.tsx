@@ -19,6 +19,7 @@ import CatalogPage from './app/(dashboard)/catalog/page';
 import DocumentsPage from './app/(dashboard)/documents/page';
 import AuditPage from './app/(dashboard)/audit/page';
 import SettingsPage from './app/(dashboard)/settings/page';
+import OrcamentoRequestsPage from './app/(dashboard)/orcamento-requests/page';
 import OperationsPage from './app/operations/[token]/page';
 import OperationsTeamPage from './app/operations/team/[id]/page';
 import LocationCapturePage from './app/location-capture/[token]/page';
@@ -63,6 +64,7 @@ function App() {
                     <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/audit" element={<AuditPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/orcamento-requests" element={<OrcamentoRequestsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </DashboardLayout>

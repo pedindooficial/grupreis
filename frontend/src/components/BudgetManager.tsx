@@ -8,6 +8,7 @@ interface BudgetManagerProps {
   clientId: string;
   clientName: string;
   onClose: () => void;
+  initialBudgetId?: string; // Optional: auto-select this budget when loaded
 }
 
 const SOIL_TYPE_LABELS: Record<string, string> = {
@@ -24,10 +25,11 @@ const ACCESS_LABELS: Record<string, string> = {
   "restrito": "Acesso restrito ou complicado"
 };
 
-export default function BudgetManager({ clientId, clientName, onClose }: BudgetManagerProps) {
+export default function BudgetManager({ clientId, clientName, onClose, initialBudgetId }: BudgetManagerProps) {
   const [mode, setMode] = useState<"list" | "form" | "detail">("list");
   const [budgets, setBudgets] = useState<any[]>([]);
   const [catalog, setCatalog] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -74,16 +76,30 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
   const loadData = async () => {
     try {
       setLoading(true);
-      const [budgetsRes, catalogRes] = await Promise.all([
+      const [budgetsRes, catalogRes, teamsRes] = await Promise.all([
         apiFetch("/budgets/client/" + clientId, { cache: "no-store" }),
-        apiFetch("/catalog", { cache: "no-store" })
+        apiFetch("/catalog", { cache: "no-store" }),
+        apiFetch("/teams", { cache: "no-store" })
       ]);
 
       const budgetsData = await budgetsRes.json().catch(() => null);
       const catalogData = await catalogRes.json().catch(() => null);
+      const teamsData = await teamsRes.json().catch(() => null);
 
-      setBudgets(budgetsData?.data || []);
+      const budgetsList = budgetsData?.data || [];
+      setBudgets(budgetsList);
       setCatalog(catalogData?.data || []);
+      setTeams(Array.isArray(teamsData?.data) ? teamsData.data : []);
+      
+      // Auto-select budget if initialBudgetId is provided
+      if (initialBudgetId && budgetsList.length > 0) {
+        const budgetToSelect = budgetsList.find((b: any) => b._id === initialBudgetId);
+        if (budgetToSelect) {
+          setSelected(budgetToSelect);
+          setMode("detail");
+          // Clear the initialBudgetId after selecting (handled by parent component)
+        }
+      }
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
     } finally {
@@ -332,10 +348,13 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
           icon: "success"
         });
 
-        // Recalculate total
+        // Recalculate total with all travel data
         recalculateTotal({
           ...form,
-          travelPrice: data.data.travelPrice || 0
+          selectedAddress: clientAddress,
+          travelDistanceKm: data.data.distanceKm || 0,
+          travelPrice: data.data.travelPrice || 0,
+          travelDescription: data.data.travelDescription || ""
         });
       }
     } catch (err) {
@@ -492,29 +511,103 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
   };
 
   const convertToJob = async (budgetId: string) => {
-    const htmlContent = '<div class="space-y-3 text-left">' +
-      '<div>' +
-      '<label class="text-sm text-gray-300">Equipe *</label>' +
-      '<select id="swal-team" class="swal2-input w-full">' +
-      '<option value="">Selecione...</option>' +
-      '<option value="Equipe Alpha">Equipe Alpha</option>' +
-      '<option value="Equipe Beta">Equipe Beta</option>' +
-      '<option value="Equipe Gamma">Equipe Gamma</option>' +
-      '</select>' +
-      '</div>' +
-      '<div>' +
-      '<label class="text-sm text-gray-300">Data e Hora *</label>' +
-      '<input id="swal-date" type="datetime-local" class="swal2-input w-full" />' +
-      '</div>' +
-      '<div>' +
-      '<label class="text-sm text-gray-300">Local</label>' +
-      '<input id="swal-site" type="text" class="swal2-input w-full" placeholder="Endereço do serviço" />' +
-      '</div>' +
-      '<div>' +
-      '<label class="text-sm text-gray-300">Observações</label>' +
-      '<textarea id="swal-notes" class="swal2-textarea w-full" placeholder="Observações adicionais"></textarea>' +
-      '</div>' +
-      '</div>';
+    // Find the budget to extract data
+    const budget = budgets.find((b) => b._id === budgetId);
+    if (!budget) {
+      Swal.fire("Erro", "Orçamento não encontrado", "error");
+      return;
+    }
+
+    // Extract location from budget - try selectedAddress first, then fetch client addresses as fallback
+    let defaultSite = budget.selectedAddress || "";
+    
+    // If no selectedAddress, try to get from client
+    if (!defaultSite && clientId) {
+      try {
+        const clientRes = await apiFetch("/clients/" + clientId, { cache: "no-store" });
+        const clientData = await clientRes.json().catch(() => null);
+        if (clientRes.ok && clientData?.data) {
+          const client = clientData.data;
+          // Try addresses array first (new format)
+          if (client.addresses && client.addresses.length > 0) {
+            defaultSite = client.addresses[0].address || "";
+          } 
+          // Fallback to legacy address field
+          else if (client.address) {
+            defaultSite = client.address;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch client address:", err);
+      }
+    }
+
+    // Build teams dropdown options
+    const teamsOptions = teams
+      .filter((t) => t.status === "ativa") // Only show active teams
+      .map((t) => `<option value="${t._id}">${t.name}</option>`)
+      .join("");
+
+    // Escape HTML for safe insertion
+    const escapedSite = (defaultSite || "").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escapedNotes = (budget.notes || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+    const htmlContent = `
+      <div style="text-align: left; color: #e2e8f0;">
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #cbd5e1; margin-bottom: 0.5rem;">
+            Equipe <span style="color: #f87171;">*</span>
+          </label>
+          <select 
+            id="swal-team" 
+            style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(15, 23, 42, 0.5); color: #ffffff; font-size: 0.875rem; outline: none; transition: all 0.2s;"
+            onfocus="this.style.borderColor='rgba(16, 185, 129, 0.6)'; this.style.boxShadow='0 0 0 3px rgba(16, 185, 129, 0.1)'"
+            onblur="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.boxShadow='none'"
+          >
+            <option value="">Selecione...</option>
+            ${teamsOptions}
+          </select>
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #cbd5e1; margin-bottom: 0.5rem;">
+            Data e Hora <span style="color: #f87171;">*</span>
+          </label>
+          <input 
+            id="swal-date" 
+            type="datetime-local" 
+            style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(15, 23, 42, 0.5); color: #ffffff; font-size: 0.875rem; outline: none; transition: all 0.2s;"
+            onfocus="this.style.borderColor='rgba(16, 185, 129, 0.6)'; this.style.boxShadow='0 0 0 3px rgba(16, 185, 129, 0.1)'"
+            onblur="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.boxShadow='none'"
+          />
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #cbd5e1; margin-bottom: 0.5rem;">
+            Local
+          </label>
+          <input 
+            id="swal-site" 
+            type="text" 
+            placeholder="Endereço do serviço" 
+            value="${escapedSite}"
+            style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(15, 23, 42, 0.5); color: #ffffff; font-size: 0.875rem; outline: none; transition: all 0.2s;"
+            onfocus="this.style.borderColor='rgba(16, 185, 129, 0.6)'; this.style.boxShadow='0 0 0 3px rgba(16, 185, 129, 0.1)'"
+            onblur="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.boxShadow='none'"
+          />
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #cbd5e1; margin-bottom: 0.5rem;">
+            Observações
+          </label>
+          <textarea 
+            id="swal-notes" 
+            placeholder="Observações adicionais"
+            style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(15, 23, 42, 0.5); color: #ffffff; font-size: 0.875rem; outline: none; min-height: 80px; resize: vertical; transition: all 0.2s; font-family: inherit;"
+            onfocus="this.style.borderColor='rgba(16, 185, 129, 0.6)'; this.style.boxShadow='0 0 0 3px rgba(16, 185, 129, 0.1)'"
+            onblur="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.boxShadow='none'"
+          >${escapedNotes}</textarea>
+        </div>
+      </div>
+    `;
 
     const { value: formValues } = await Swal.fire({
       title: "Converter em Ordem de Serviço",
@@ -522,18 +615,55 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
       showCancelButton: true,
       confirmButtonText: "Converter",
       cancelButtonText: "Cancelar",
+      width: "600px",
+      background: "#0f172a",
+      color: "#ffffff",
+      customClass: {
+        popup: "swal2-dark",
+        title: "swal2-title-dark",
+        confirmButton: "swal2-confirm-dark",
+        cancelButton: "swal2-cancel-dark"
+      },
+      didOpen: () => {
+        // Apply dark theme styles after modal opens
+        const popup = document.querySelector(".swal2-popup") as HTMLElement;
+        if (popup) {
+          popup.style.background = "#0f172a";
+          popup.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+        }
+        const title = document.querySelector(".swal2-title") as HTMLElement;
+        if (title) {
+          title.style.color = "#ffffff";
+        }
+        const confirmBtn = document.querySelector(".swal2-confirm") as HTMLElement;
+        if (confirmBtn) {
+          confirmBtn.style.background = "#8b5cf6";
+          confirmBtn.style.borderColor = "#8b5cf6";
+          confirmBtn.style.color = "#ffffff";
+        }
+        const cancelBtn = document.querySelector(".swal2-cancel") as HTMLElement;
+        if (cancelBtn) {
+          cancelBtn.style.background = "rgba(255, 255, 255, 0.1)";
+          cancelBtn.style.borderColor = "rgba(255, 255, 255, 0.2)";
+          cancelBtn.style.color = "#e2e8f0";
+        }
+      },
       preConfirm: () => {
-        const team = (document.getElementById("swal-team") as HTMLSelectElement)?.value;
+        const teamId = (document.getElementById("swal-team") as HTMLSelectElement)?.value;
         const plannedDate = (document.getElementById("swal-date") as HTMLInputElement)?.value;
         const site = (document.getElementById("swal-site") as HTMLInputElement)?.value || "";
         const notes = (document.getElementById("swal-notes") as HTMLTextAreaElement)?.value || "";
 
-        if (!team || !plannedDate) {
+        if (!teamId || !plannedDate) {
           Swal.showValidationMessage("Equipe e Data são obrigatórios");
           return null;
         }
 
-        return { team, plannedDate, site, notes };
+        // Find team name from teamId
+        const selectedTeam = teams.find((t) => t._id === teamId);
+        const teamName = selectedTeam?.name || "";
+
+        return { teamId, team: teamName, plannedDate, site, notes };
       }
     });
 
@@ -768,37 +898,59 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
 
             {/* Total */}
             <div className="border-t border-white/10 pt-3 space-y-2 text-sm">
-              {selected.travelDistanceKm && selected.travelDistanceKm > 0 && (
-                <>
+              {/* Services Subtotal (without travel) */}
+              {selected.value !== undefined && (
+                <div className="flex justify-between text-slate-300">
+                  <span>Subtotal (Serviços):</span>
+                  <span>{formatCurrency((selected.value || 0) - (selected.travelPrice || 0))}</span>
+                </div>
+              )}
+              
+              {/* Travel/Displacement Costs Breakdown */}
+              {selected.travelPrice && selected.travelPrice > 0 && (
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-blue-300 font-semibold">
+                      Deslocamento
+                      {selected.travelDistanceKm && typeof selected.travelDistanceKm === 'number' && selected.travelDistanceKm > 0 && (
+                        <span className="ml-2 text-blue-200 font-normal">
+                          ({Math.round(selected.travelDistanceKm)}km)
+                        </span>
+                      )}:
+                    </span>
+                    <span className="text-blue-200 font-bold">{formatCurrency(selected.travelPrice || 0)}</span>
+                  </div>
                   {selected.selectedAddress && (
-                    <div className="text-xs text-slate-400 mb-1">
-                      📍 Endereço: {selected.selectedAddress}
+                    <div className="text-xs text-blue-200/80">
+                      📍 <span className="font-medium">Endereço:</span> {selected.selectedAddress}
                     </div>
                   )}
-                  <div className="flex justify-between text-blue-300">
-                    <span>Deslocamento ({selected.travelDistanceKm}km):</span>
-                    <span>{formatCurrency(selected.travelPrice || 0)}</span>
-                  </div>
                   {selected.travelDescription && (
-                    <div className="text-xs text-slate-400 italic">
+                    <div className="text-xs text-blue-200/70 italic mt-1 pt-2 border-t border-blue-500/20">
                       {selected.travelDescription}
                     </div>
                   )}
-                </>
-              )}
-              {selected.value && (
-                <div className="flex justify-between text-slate-300">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(selected.value)}</span>
                 </div>
               )}
+              
+              {/* Total (Services + Travel) */}
+              {selected.value && (
+                <div className="flex justify-between text-slate-300 pt-2 border-t border-white/10">
+                  <span>Subtotal:</span>
+                  <span className="font-semibold">{formatCurrency(selected.value)}</span>
+                </div>
+              )}
+              
+              {/* Discount */}
               {selected.discountValue && selected.discountValue > 0 && (
                 <div className="flex justify-between text-red-300">
                   <span>Desconto ({selected.discountPercent}%):</span>
                   <span>- {formatCurrency(selected.discountValue)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-lg font-bold text-emerald-300">
+              
+              {/* Final Total */}
+              <div className="flex justify-between text-lg font-bold text-emerald-300 pt-2 border-t border-emerald-500/30">
                 <span>Total:</span>
                 <span>{formatCurrency(selected.finalValue || 0)}</span>
               </div>
@@ -1345,7 +1497,12 @@ export default function BudgetManager({ clientId, clientName, onClose }: BudgetM
                 )}
                 {form.travelPrice > 0 && (
                   <div className="flex justify-between text-blue-300">
-                    <span>Deslocamento ({form.travelDistanceKm}km):</span>
+                    <span>
+                      Deslocamento
+                      {form.travelDistanceKm && form.travelDistanceKm > 0 && (
+                        <span> ({form.travelDistanceKm.toFixed(1).replace('.', ',')}km)</span>
+                      )}:
+                    </span>
                     <span className="font-semibold">{formatCurrency(form.travelPrice)}</span>
                   </div>
                 )}
