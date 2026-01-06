@@ -15,7 +15,8 @@ const travelPricingSchema = zod_1.z.object({
     type: zod_1.z.enum(["per_km", "fixed"]),
     description: zod_1.z.string().min(1, "Descrição é obrigatória"),
     roundTrip: zod_1.z.boolean().default(true),
-    order: zod_1.z.number().default(0)
+    order: zod_1.z.number().default(0),
+    isDefault: zod_1.z.boolean().default(false)
 });
 // GET all travel pricing rules
 router.get("/", async (req, res) => {
@@ -60,6 +61,10 @@ router.post("/", async (req, res) => {
             return res.status(400).json({ error: "Preço fixo é obrigatório para tipo 'fixo'" });
         }
         await (0, db_1.connectDB)();
+        // If setting as default, unset other defaults
+        if (parsed.data.isDefault) {
+            await TravelPricing_1.default.updateMany({ isDefault: true }, { $set: { isDefault: false } });
+        }
         const newPricing = await TravelPricing_1.default.create(parsed.data);
         res.status(201).json({ data: newPricing });
     }
@@ -84,6 +89,10 @@ router.put("/:id", async (req, res) => {
             return res.status(400).json({ error: "Preço fixo é obrigatório para tipo 'fixo'" });
         }
         await (0, db_1.connectDB)();
+        // If setting as default, unset other defaults (except the current one)
+        if (parsed.data.isDefault) {
+            await TravelPricing_1.default.updateMany({ _id: { $ne: req.params.id }, isDefault: true }, { $set: { isDefault: false } });
+        }
         const updatedPricing = await TravelPricing_1.default.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true }).lean();
         if (!updatedPricing) {
             return res.status(404).json({ error: "Preço não encontrado" });

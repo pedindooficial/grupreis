@@ -10,7 +10,35 @@ const Catalog_1 = __importDefault(require("../models/Catalog"));
 const auth_1 = require("../middleware/auth");
 const audit_1 = require("../services/audit");
 const router = (0, express_1.Router)();
-// All catalog routes require authentication and admin role
+// Public route: GET service names (no auth required)
+router.get("/public/services", async (req, res) => {
+    try {
+        await (0, db_1.connectDB)();
+        // Get only active catalog items with their names
+        const catalogItems = await Catalog_1.default.find({ active: true })
+            .select("name category active")
+            .sort({ name: 1 })
+            .lean();
+        // Extract unique service names
+        const serviceNames = catalogItems.map((item) => ({
+            name: item.name,
+            category: item.category || undefined,
+            id: item._id?.toString()
+        }));
+        res.json({
+            data: serviceNames,
+            count: serviceNames.length
+        });
+    }
+    catch (error) {
+        console.error("GET /api/catalog/public/services error", error);
+        res.status(500).json({
+            error: "Falha ao carregar serviços",
+            detail: error?.message || "Erro interno"
+        });
+    }
+});
+// All other catalog routes require authentication and admin role
 router.use(auth_1.authenticate);
 router.use(auth_1.requireAdmin);
 const priceVariationSchema = zod_1.z.object({

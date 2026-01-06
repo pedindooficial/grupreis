@@ -13,6 +13,7 @@ const Client_1 = __importDefault(require("../models/Client"));
 const Cashier_1 = __importDefault(require("../models/Cashier"));
 const CashTransaction_1 = __importDefault(require("../models/CashTransaction"));
 const Settings_1 = __importDefault(require("../models/Settings"));
+const Team_1 = __importDefault(require("../models/Team"));
 const router = (0, express_1.Router)();
 const serviceSchema = zod_1.z.object({
     catalogId: zod_1.z.string().optional(),
@@ -37,7 +38,8 @@ const jobSchema = zod_1.z.object({
     clientId: zod_1.z.string().optional().nullable(),
     clientName: zod_1.z.string().optional(),
     site: zod_1.z.string().optional(),
-    team: zod_1.z.string().optional(),
+    team: zod_1.z.string().optional(), // Team name (kept for backward compatibility)
+    teamId: zod_1.z.string().optional(), // Team ID (preferred)
     status: zod_1.z.enum(["pendente", "em_execucao", "concluida", "cancelada"]).optional(),
     plannedDate: zod_1.z.string().optional(),
     estimatedDuration: zod_1.z.number().min(0).optional(), // Total estimated duration in minutes
@@ -48,7 +50,81 @@ const jobSchema = zod_1.z.object({
     discountPercent: zod_1.z.number().min(0).max(100).optional(),
     discountValue: zod_1.z.number().min(0).optional(),
     finalValue: zod_1.z.number().min(0).optional(),
-    services: zod_1.z.array(serviceSchema).min(1, "Adicione pelo menos um serviço")
+    services: zod_1.z.array(serviceSchema).min(1, "Adicione pelo menos um serviço"),
+    // Travel/Displacement fields
+    selectedAddress: zod_1.z.string().optional(),
+    travelDistanceKm: zod_1.z.number().min(0).optional(),
+    travelPrice: zod_1.z.number().min(0).optional(),
+    travelDescription: zod_1.z.string().optional()
+});
+// Roadmap endpoint - MUST be before router.get("/") to avoid route conflicts
+router.get("/roadmap", async (req, res) => {
+    try {
+        await (0, db_1.connectDB)();
+        const { status, teamId, dateFrom, dateTo } = req.query;
+        // Build filter
+        const filter = {};
+        if (status) {
+            filter.status = status;
+        }
+        if (teamId) {
+            filter.teamId = teamId;
+        }
+        // Only get jobs with location data
+        filter.siteLatitude = { $exists: true, $ne: null };
+        filter.siteLongitude = { $exists: true, $ne: null };
+        // Date filtering
+        if (dateFrom || dateTo) {
+            filter.plannedDate = {};
+            if (dateFrom) {
+                filter.plannedDate.$gte = dateFrom;
+            }
+            if (dateTo) {
+                filter.plannedDate.$lte = dateTo;
+            }
+        }
+        const jobs = await Job_1.default.find(filter)
+            .populate("teamId", "name status currentLocation")
+            .populate("clientId", "name phone email")
+            .select("title seq clientName site siteLatitude siteLongitude team teamId status plannedDate startedAt finishedAt estimatedDuration value finalValue services")
+            .lean()
+            .sort({ plannedDate: 1, createdAt: -1 });
+        // Format response
+        const roadmapData = jobs.map((job) => ({
+            _id: job._id,
+            title: job.title,
+            seq: job.seq,
+            clientName: job.clientName || job.clientId?.name || "Cliente não informado",
+            site: job.site || "Local não informado",
+            latitude: job.siteLatitude,
+            longitude: job.siteLongitude,
+            team: job.teamId?.name || job.team || "Sem equipe",
+            teamId: job.teamId?._id || null,
+            teamStatus: job.teamId?.status || null,
+            teamLocation: job.teamId?.currentLocation || null,
+            status: job.status,
+            plannedDate: job.plannedDate,
+            startedAt: job.startedAt,
+            finishedAt: job.finishedAt,
+            estimatedDuration: job.estimatedDuration,
+            value: job.value,
+            finalValue: job.finalValue,
+            servicesCount: job.services?.length || 0,
+            services: job.services?.map((s) => ({
+                service: s.service,
+                quantity: s.quantidade,
+                value: s.finalValue || s.value
+            })) || []
+        }));
+        res.json({ data: roadmapData });
+    }
+    catch (error) {
+        console.error("GET /api/jobs/roadmap error", error);
+        res.status(500).json({
+            error: "Falha ao carregar dados do roadmap",
+            detail: error?.message || "Erro interno"
+        });
+    }
 });
 // Availability check endpoint - MUST be before router.get("/") to avoid route conflicts
 router.get("/availability", async (req, res) => {
@@ -96,11 +172,12 @@ router.get("/availability", async (req, res) => {
         const endOfDay = new Date(selectedDate);
         endOfDay.setHours(23, 59, 59, 999);
         // Find all jobs for this team on this date with their estimated duration
+        // Exclude cancelled and completed jobs - they don't block availability
         const existingJobs = await Job_1.default.find({
             team: team,
-            status: { $ne: "cancelada" } // Don't count cancelled jobs
+            status: { $nin: ["cancelada", "concluida"] } // Don't count cancelled or completed jobs
         })
-            .select("plannedDate estimatedDuration services")
+            .select("plannedDate estimatedDuration services status")
             .lean();
         // Filter jobs that fall on the selected date and get their durations
         const jobsOnDate = existingJobs
@@ -242,10 +319,18 @@ router.get("/", async (_req, res) => {
                     received: 1,
                     receivedAt: 1,
                     receipt: 1,
+                    receiptFileKey: 1,
+                    startedAt: 1,
+                    finishedAt: 1,
                     clientSignature: 1,
                     clientSignedAt: 1,
                     createdAt: 1,
                     updatedAt: 1,
+                    // Travel/Displacement fields
+                    selectedAddress: 1,
+                    travelDistanceKm: 1,
+                    travelPrice: 1,
+                    travelDescription: 1,
                     // Apenas serviços resumidos para exibição
                     services: {
                         $map: {
@@ -323,15 +408,26 @@ router.post("/", async (req, res) => {
         let dateLabel = "sem-data";
         if (parsed.data.plannedDate && parsed.data.plannedDate.trim() !== "") {
             try {
-                const date = new Date(parsed.data.plannedDate);
-                if (!isNaN(date.getTime())) {
-                    // Format as DD/MM/YYYY HH:mm
-                    const day = date.getDate().toString().padStart(2, "0");
-                    const month = (date.getMonth() + 1).toString().padStart(2, "0");
-                    const year = date.getFullYear();
-                    const hours = date.getHours().toString().padStart(2, "0");
-                    const minutes = date.getMinutes().toString().padStart(2, "0");
+                // Parse date string directly to avoid timezone conversion
+                // Format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm:ssZ
+                const dateStr = parsed.data.plannedDate.trim();
+                const dateTimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                if (dateTimeMatch) {
+                    const [, year, month, day, hours, minutes] = dateTimeMatch;
+                    // Format as DD/MM/YYYY HH:mm (preserving the exact time entered)
                     dateLabel = `${day}/${month}/${year} ${hours}:${minutes}`;
+                }
+                else {
+                    // Fallback to Date object if format is unexpected
+                    const date = new Date(dateStr);
+                    if (!isNaN(date.getTime())) {
+                        const day = date.getDate().toString().padStart(2, "0");
+                        const month = (date.getMonth() + 1).toString().padStart(2, "0");
+                        const year = date.getFullYear();
+                        const hours = date.getHours().toString().padStart(2, "0");
+                        const minutes = date.getMinutes().toString().padStart(2, "0");
+                        dateLabel = `${day}/${month}/${year} ${hours}:${minutes}`;
+                    }
                 }
             }
             catch {
@@ -370,7 +466,12 @@ router.post("/", async (req, res) => {
             seq,
             title
         };
+        // Add travel price to total if present
+        const travelPrice = parsed.data.travelPrice || 0;
+        const totalWithTravel = totalFinalValue + travelPrice;
+        const totalServiceValueWithTravel = totalServiceValue + travelPrice;
         if (parsed.data.value !== undefined && parsed.data.value !== null) {
+            // If value is explicitly provided, use it (it should already include travel if calculated on frontend)
             const value = parsed.data.value;
             const discountPercent = parsed.data.discountPercent !== undefined ? parsed.data.discountPercent : 0;
             const discountValue = discountPercent > 0 ? (value * discountPercent) / 100 : 0;
@@ -381,10 +482,50 @@ router.post("/", async (req, res) => {
             createData.finalValue = finalValue;
         }
         else if (totalFinalValue > 0) {
-            createData.value = totalServiceValue;
+            // Calculate from services + travel
+            createData.value = totalServiceValueWithTravel; // Include travel in total
             createData.discountPercent = totalDiscountPercent;
             createData.discountValue = totalDiscountValue;
-            createData.finalValue = totalFinalValue;
+            createData.finalValue = totalWithTravel; // Include travel in final value
+        }
+        else if (travelPrice > 0) {
+            // If only travel price, set it as the value
+            createData.value = travelPrice;
+            createData.finalValue = travelPrice;
+        }
+        // Explicitly include travel fields
+        if (parsed.data.selectedAddress) {
+            createData.selectedAddress = parsed.data.selectedAddress;
+        }
+        if (parsed.data.travelDistanceKm !== undefined) {
+            createData.travelDistanceKm = parsed.data.travelDistanceKm;
+        }
+        if (parsed.data.travelPrice !== undefined) {
+            createData.travelPrice = parsed.data.travelPrice;
+        }
+        if (parsed.data.travelDescription) {
+            createData.travelDescription = parsed.data.travelDescription;
+        }
+        // Handle team assignment: if teamId is provided, use it; otherwise, look up by team name
+        if (parsed.data.teamId) {
+            createData.teamId = parsed.data.teamId;
+            // Also store team name for backward compatibility
+            const team = await Team_1.default.findById(parsed.data.teamId).lean();
+            if (team) {
+                createData.team = team.name;
+            }
+        }
+        else if (parsed.data.team) {
+            // Look up team by name and store both teamId and team name
+            const team = await Team_1.default.findOne({ name: parsed.data.team }).lean();
+            if (team) {
+                createData.teamId = team._id;
+                createData.team = team.name;
+            }
+            else {
+                // Team not found, just store the name (backward compatibility)
+                createData.team = parsed.data.team;
+            }
         }
         const created = await Job_1.default.create(createData);
         res.status(201).json({ data: created });
@@ -400,7 +541,8 @@ const updateSchema = zod_1.z.object({
     status: zod_1.z.enum(["pendente", "em_execucao", "concluida", "cancelada"]).optional(),
     startedAt: zod_1.z.string().optional(),
     finishedAt: zod_1.z.string().optional(),
-    team: zod_1.z.string().optional(),
+    team: zod_1.z.string().optional(), // Team name (kept for backward compatibility)
+    teamId: zod_1.z.string().optional(), // Team ID (preferred)
     notes: zod_1.z.string().optional(),
     value: zod_1.z.number().min(0).optional(),
     discountPercent: zod_1.z.number().min(0).max(100).optional(),
@@ -448,17 +590,30 @@ router.put("/:id", async (req, res) => {
         let dateLabel = "sem-data";
         if (parsed.data.plannedDate && parsed.data.plannedDate.trim() !== "") {
             try {
-                const date = new Date(parsed.data.plannedDate);
-                if (!isNaN(date.getTime())) {
-                    const day = date.getDate().toString().padStart(2, "0");
-                    const month = (date.getMonth() + 1).toString().padStart(2, "0");
-                    const year = date.getFullYear();
-                    const hours = date.getHours().toString().padStart(2, "0");
-                    const minutes = date.getMinutes().toString().padStart(2, "0");
+                // Parse date string directly to avoid timezone conversion
+                // Format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm:ssZ
+                const dateStr = parsed.data.plannedDate.trim();
+                const dateTimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                if (dateTimeMatch) {
+                    const [, year, month, day, hours, minutes] = dateTimeMatch;
+                    // Format as DD/MM/YYYY HH:mm (preserving the exact time entered)
                     dateLabel = `${day}/${month}/${year} ${hours}:${minutes}`;
+                }
+                else {
+                    // Fallback to Date object if format is unexpected
+                    const date = new Date(dateStr);
+                    if (!isNaN(date.getTime())) {
+                        const day = date.getDate().toString().padStart(2, "0");
+                        const month = (date.getMonth() + 1).toString().padStart(2, "0");
+                        const year = date.getFullYear();
+                        const hours = date.getHours().toString().padStart(2, "0");
+                        const minutes = date.getMinutes().toString().padStart(2, "0");
+                        dateLabel = `${day}/${month}/${year} ${hours}:${minutes}`;
+                    }
                 }
             }
             catch {
+                // If parsing fails, use the string as-is if it's not empty
                 dateLabel = parsed.data.plannedDate;
             }
         }
@@ -492,7 +647,12 @@ router.put("/:id", async (req, res) => {
             siteLongitude,
             title
         };
+        // Add travel price to total if present
+        const travelPrice = parsed.data.travelPrice || 0;
+        const totalWithTravel = totalFinalValue + travelPrice;
+        const totalServiceValueWithTravel = totalServiceValue + travelPrice;
         if (parsed.data.value !== undefined && parsed.data.value !== null) {
+            // If value is explicitly provided, use it (it should already include travel if calculated on frontend)
             const value = parsed.data.value;
             const discountPercent = parsed.data.discountPercent !== undefined ? parsed.data.discountPercent : 0;
             const discountValue = discountPercent > 0 ? (value * discountPercent) / 100 : 0;
@@ -503,10 +663,59 @@ router.put("/:id", async (req, res) => {
             updateData.finalValue = finalValue;
         }
         else if (totalFinalValue > 0) {
-            updateData.value = totalServiceValue;
+            // Calculate from services + travel
+            updateData.value = totalServiceValueWithTravel; // Include travel in total
             updateData.discountPercent = totalDiscountPercent;
             updateData.discountValue = totalDiscountValue;
-            updateData.finalValue = totalFinalValue;
+            updateData.finalValue = totalWithTravel; // Include travel in final value
+        }
+        else if (travelPrice > 0) {
+            // If only travel price, set it as the value
+            updateData.value = travelPrice;
+            updateData.finalValue = travelPrice;
+        }
+        // Explicitly include travel fields
+        if (parsed.data.selectedAddress !== undefined) {
+            updateData.selectedAddress = parsed.data.selectedAddress;
+        }
+        if (parsed.data.travelDistanceKm !== undefined) {
+            updateData.travelDistanceKm = parsed.data.travelDistanceKm;
+        }
+        if (parsed.data.travelPrice !== undefined) {
+            updateData.travelPrice = parsed.data.travelPrice;
+        }
+        if (parsed.data.travelDescription !== undefined) {
+            updateData.travelDescription = parsed.data.travelDescription;
+        }
+        // Handle team assignment: if teamId is provided, use it; otherwise, look up by team name
+        if (parsed.data.teamId) {
+            updateData.teamId = parsed.data.teamId;
+            // Also store team name for backward compatibility
+            const team = await Team_1.default.findById(parsed.data.teamId).lean();
+            if (team) {
+                updateData.team = team.name;
+            }
+        }
+        else if (parsed.data.team !== undefined) {
+            if (parsed.data.team) {
+                // Look up team by name and store both teamId and team name
+                const team = await Team_1.default.findOne({ name: parsed.data.team }).lean();
+                if (team) {
+                    updateData.teamId = team._id;
+                    updateData.team = team.name;
+                }
+                else {
+                    // Team not found, just store the name (backward compatibility)
+                    updateData.team = parsed.data.team;
+                    // Clear teamId if team name doesn't exist
+                    updateData.teamId = null;
+                }
+            }
+            else {
+                // Team is being cleared
+                updateData.team = null;
+                updateData.teamId = null;
+            }
         }
         const updated = await Job_1.default.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
         res.json({ data: updated });
@@ -541,6 +750,43 @@ router.patch("/:id", async (req, res) => {
             updateData.discountPercent = discountPercent;
             updateData.discountValue = discountValue;
             updateData.finalValue = finalValue;
+        }
+        // Handle team assignment: if teamId is provided, use it; otherwise, look up by team name
+        if (parsed.data.teamId !== undefined) {
+            if (parsed.data.teamId) {
+                updateData.teamId = parsed.data.teamId;
+                // Also store team name for backward compatibility
+                const team = await Team_1.default.findById(parsed.data.teamId).lean();
+                if (team) {
+                    updateData.team = team.name;
+                }
+            }
+            else {
+                // Team is being cleared
+                updateData.teamId = null;
+                updateData.team = null;
+            }
+        }
+        else if (parsed.data.team !== undefined) {
+            if (parsed.data.team) {
+                // Look up team by name and store both teamId and team name
+                const team = await Team_1.default.findOne({ name: parsed.data.team }).lean();
+                if (team) {
+                    updateData.teamId = team._id;
+                    updateData.team = team.name;
+                }
+                else {
+                    // Team not found, just store the name (backward compatibility)
+                    updateData.team = parsed.data.team;
+                    // Clear teamId if team name doesn't exist
+                    updateData.teamId = null;
+                }
+            }
+            else {
+                // Team is being cleared
+                updateData.team = null;
+                updateData.teamId = null;
+            }
         }
         const updated = await Job_1.default.findByIdAndUpdate(req.params.id, updateData, {
             new: true,
@@ -866,8 +1112,30 @@ router.get("/:id/pdf", async (req, res) => {
         doc.fontSize(14).font("Helvetica-Bold").text("RESUMO FINANCEIRO", { align: "left" });
         doc.moveDown(0.5);
         doc.fontSize(10).font("Helvetica");
+        // Services subtotal
+        const servicesSubtotal = job.services?.reduce((sum, s) => {
+            return sum + (s.finalValue || s.value || 0);
+        }, 0) || 0;
+        if (servicesSubtotal > 0) {
+            doc.text(`Subtotal dos Serviços: ${formatCurrency(servicesSubtotal)}`, { align: "left" });
+        }
+        // Displacement/Travel cost
+        if (job.travelPrice && job.travelPrice > 0) {
+            const travelInfo = job.travelDistanceKm
+                ? `Deslocamento (${job.travelDistanceKm} km): ${formatCurrency(job.travelPrice)}`
+                : `Deslocamento: ${formatCurrency(job.travelPrice)}`;
+            doc.text(travelInfo, { align: "left" });
+            if (job.travelDescription) {
+                doc.fontSize(9).font("Helvetica");
+                doc.text(`   ${job.travelDescription}`, { align: "left", indent: 20 });
+                doc.fontSize(10).font("Helvetica");
+            }
+        }
+        // Total value (services + travel)
         if (job.value) {
+            doc.fontSize(11).font("Helvetica-Bold");
             doc.text(`Valor Total: ${formatCurrency(job.value)}`, { align: "left" });
+            doc.fontSize(10).font("Helvetica");
         }
         if (job.discountPercent && job.discountPercent > 0) {
             doc.text(`Desconto (${job.discountPercent}%): ${formatCurrency(job.discountValue || 0)}`, { align: "left" });

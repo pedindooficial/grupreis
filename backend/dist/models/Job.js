@@ -28,7 +28,8 @@ const JobSchema = new mongoose_1.Schema({
     site: { type: String, trim: true },
     siteLatitude: { type: Number }, // Latitude da localização da obra
     siteLongitude: { type: Number }, // Longitude da localização da obra
-    team: { type: String, trim: true },
+    team: { type: String, trim: true }, // Team name (kept for backward compatibility)
+    teamId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Team" }, // Team ID (preferred)
     status: {
         type: String,
         enum: ["pendente", "em_execucao", "concluida", "cancelada"],
@@ -59,5 +60,6 @@ const JobSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 JobSchema.index({ seq: 1 }, { unique: false });
 JobSchema.index({ clientId: 1, status: 1 });
+JobSchema.index({ teamId: 1 }); // Index for team queries
 const JobModel = mongoose_1.models.Job || (0, mongoose_1.model)("Job", JobSchema);
 exports.default = JobModel;

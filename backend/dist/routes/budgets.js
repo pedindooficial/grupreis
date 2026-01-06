@@ -8,9 +8,11 @@ const zod_1 = require("zod");
 const Budget_1 = __importDefault(require("../models/Budget"));
 const Client_1 = __importDefault(require("../models/Client"));
 const Job_1 = __importDefault(require("../models/Job"));
+const Team_1 = __importDefault(require("../models/Team"));
 const db_1 = require("../db");
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const Settings_1 = __importDefault(require("../models/Settings"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const router = express_1.default.Router();
 // Labels for display
 const SOIL_TYPE_LABELS = {
@@ -52,7 +54,12 @@ const budgetSchema = zod_1.z.object({
     finalValue: zod_1.z.number().min(0).optional(),
     status: zod_1.z.enum(["pendente", "aprovado", "rejeitado", "convertido"]).optional(),
     notes: zod_1.z.string().optional(),
-    validUntil: zod_1.z.string().optional()
+    validUntil: zod_1.z.string().optional(),
+    // Travel/Displacement fields
+    selectedAddress: zod_1.z.string().optional(),
+    travelDistanceKm: zod_1.z.number().min(0).optional(),
+    travelPrice: zod_1.z.number().min(0).optional(),
+    travelDescription: zod_1.z.string().optional()
 });
 // GET all budgets
 router.get("/", async (req, res) => {
@@ -221,10 +228,14 @@ router.delete("/:id", async (req, res) => {
 });
 // POST convert budget to job
 const convertSchema = zod_1.z.object({
-    team: zod_1.z.string().min(1, "Equipe é obrigatória"),
+    team: zod_1.z.string().optional(), // Team name (kept for backward compatibility)
+    teamId: zod_1.z.string().optional(), // Team ID (preferred)
     plannedDate: zod_1.z.string().min(1, "Data é obrigatória"),
     site: zod_1.z.string().optional(),
     notes: zod_1.z.string().optional()
+}).refine((data) => data.team || data.teamId, {
+    message: "Equipe é obrigatória",
+    path: ["team"]
 });
 router.post("/:id/convert", async (req, res) => {
     try {
@@ -245,12 +256,78 @@ router.post("/:id/convert", async (req, res) => {
                 error: "Este orçamento já foi convertido em OS"
             });
         }
+        // Resolve teamId and team name
+        let teamId = parsed.data.teamId;
+        let teamName = parsed.data.team;
+        if (teamId) {
+            const team = await Team_1.default.findById(teamId).lean();
+            if (team) {
+                teamName = team.name; // Ensure teamName is consistent with teamId
+            }
+            else {
+                return res.status(400).json({ error: "Equipe não encontrada" });
+            }
+        }
+        else if (teamName) {
+            // If only teamName is provided, try to find teamId
+            const team = await Team_1.default.findOne({ name: teamName }).lean();
+            if (team) {
+                teamId = team._id.toString();
+            }
+            else {
+                return res.status(400).json({ error: "Equipe não encontrada" });
+            }
+        }
+        else {
+            return res.status(400).json({ error: "Equipe é obrigatória" });
+        }
         // Get next job sequence number
         const lastJob = await Job_1.default.findOne().sort({ seq: -1 }).lean();
         const jobSeq = (lastJob?.seq || 0) + 1;
         // Parse planned date
         const plannedDate = new Date(parsed.data.plannedDate);
         const formattedDate = `${plannedDate.toLocaleDateString("pt-BR")} ${plannedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+        // Extract latitude and longitude from client addresses
+        let siteLatitude;
+        let siteLongitude;
+        const siteAddress = parsed.data.site || budget.selectedAddress || "";
+        if (budget.clientId) {
+            try {
+                const client = await Client_1.default.findById(budget.clientId).lean();
+                if (client) {
+                    // Try to find address matching the site address
+                    if (siteAddress && client.addresses && client.addresses.length > 0) {
+                        const matchingAddress = client.addresses.find((addr) => addr.address && addr.address.toLowerCase().includes(siteAddress.toLowerCase()) ||
+                            siteAddress.toLowerCase().includes(addr.address?.toLowerCase() || ""));
+                        if (matchingAddress) {
+                            siteLatitude = matchingAddress.latitude;
+                            siteLongitude = matchingAddress.longitude;
+                        }
+                        else {
+                            // Use first address with coordinates
+                            const addressWithCoords = client.addresses.find((addr) => addr.latitude !== undefined && addr.latitude !== null &&
+                                addr.longitude !== undefined && addr.longitude !== null);
+                            if (addressWithCoords) {
+                                siteLatitude = addressWithCoords.latitude;
+                                siteLongitude = addressWithCoords.longitude;
+                            }
+                        }
+                    }
+                    else if (client.addresses && client.addresses.length > 0) {
+                        // No site address, use first address with coordinates
+                        const addressWithCoords = client.addresses.find((addr) => addr.latitude !== undefined && addr.latitude !== null &&
+                            addr.longitude !== undefined && addr.longitude !== null);
+                        if (addressWithCoords) {
+                            siteLatitude = addressWithCoords.latitude;
+                            siteLongitude = addressWithCoords.longitude;
+                        }
+                    }
+                }
+            }
+            catch (err) {
+                console.warn("Could not fetch client coordinates:", err);
+            }
+        }
         // Create job from budget
         const job = await Job_1.default.create({
             seq: jobSeq,
@@ -258,7 +335,10 @@ router.post("/:id/convert", async (req, res) => {
             clientId: budget.clientId,
             clientName: budget.clientName,
             site: parsed.data.site || "",
-            team: parsed.data.team,
+            siteLatitude: siteLatitude,
+            siteLongitude: siteLongitude,
+            team: teamName,
+            teamId: teamId ? new mongoose_1.default.Types.ObjectId(teamId) : undefined,
             status: "pendente",
             plannedDate: parsed.data.plannedDate,
             services: budget.services,
@@ -266,7 +346,11 @@ router.post("/:id/convert", async (req, res) => {
             discountPercent: budget.discountPercent,
             discountValue: budget.discountValue,
             finalValue: budget.finalValue,
-            notes: parsed.data.notes || budget.notes || ""
+            notes: parsed.data.notes || budget.notes || "",
+            selectedAddress: budget.selectedAddress || parsed.data.site || "",
+            travelDistanceKm: budget.travelDistanceKm,
+            travelPrice: budget.travelPrice,
+            travelDescription: budget.travelDescription
         });
         // Update budget status
         budget.status = "convertido";
@@ -368,6 +452,26 @@ router.get("/:id/pdf", async (req, res) => {
             });
             currentY += 20;
         }
+        // Travel/Displacement costs
+        if (budget.travelPrice && budget.travelPrice > 0) {
+            doc.fillColor("#000");
+            doc.text("Deslocamento:", 400, currentY);
+            doc.text(`R$ ${budget.travelPrice.toFixed(2)}`, 480, currentY, {
+                width: 70,
+                align: "right"
+            });
+            currentY += 15;
+            // Show travel description if available
+            if (budget.travelDescription) {
+                doc.fontSize(8).fillColor("#666");
+                doc.text(`(${budget.travelDescription})`, 400, currentY, {
+                    width: 150,
+                    align: "right"
+                });
+                currentY += 15;
+            }
+            doc.fontSize(10).fillColor("#000");
+        }
         if (budget.discountValue && budget.discountValue > 0) {
             doc.fillColor("#d00");
             doc.text("Desconto:", 400, currentY);
@@ -379,7 +483,11 @@ router.get("/:id/pdf", async (req, res) => {
         }
         doc.fontSize(12).fillColor("#000").font("Helvetica-Bold");
         doc.text("Valor Final:", 400, currentY);
-        doc.text(`R$ ${(budget.finalValue || 0).toFixed(2)}`, 480, currentY, {
+        // Use finalValue (which should already include travel costs if calculated)
+        // If finalValue is not set, calculate it: value (services + travel) - discount
+        const finalValue = budget.finalValue ||
+            ((budget.value || 0) - (budget.discountValue || 0));
+        doc.text(`R$ ${finalValue.toFixed(2)}`, 480, currentY, {
             width: 70,
             align: "right"
         });

@@ -8,7 +8,13 @@ const TeamSchema = new mongoose_1.Schema({
     members: { type: [String], default: [] },
     notes: { type: String, trim: true },
     operationToken: { type: String, trim: true }, // Legacy - for old links
-    operationPass: { type: String, trim: true }
+    operationPass: { type: String, trim: true },
+    currentLocation: {
+        latitude: { type: Number },
+        longitude: { type: Number },
+        address: { type: String, trim: true },
+        timestamp: { type: Date, default: Date.now }
+    }
 }, { timestamps: true });
 TeamSchema.index({ name: 1 }, { unique: false });
 const TeamModel = mongoose_1.models.Team || (0, mongoose_1.model)("Team", TeamSchema);

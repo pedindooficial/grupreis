@@ -20,6 +20,8 @@ const equipmentSchema = zod_1.z.object({
     assignedTo: zod_1.z.string().optional(),
     location: zod_1.z.string().optional(),
     nextMaintenance: zod_1.z.string().optional(),
+    nextMaintenanceType: zod_1.z.string().optional(),
+    nextMaintenanceDetails: zod_1.z.string().optional(),
     notes: zod_1.z.string().optional()
 });
 router.get("/", async (_req, res) => {
@@ -41,6 +43,8 @@ router.get("/", async (_req, res) => {
                     assignedTo: 1,
                     location: 1,
                     nextMaintenance: 1,
+                    nextMaintenanceType: 1,
+                    nextMaintenanceDetails: 1,
                     notes: 1,
                     createdAt: 1,
                     updatedAt: 1

@@ -13,6 +13,8 @@ const EquipmentSchema = new mongoose_1.Schema({
     assignedTo: { type: String, trim: true },
     location: { type: String, trim: true },
     nextMaintenance: { type: String, trim: true },
+    nextMaintenanceType: { type: String, trim: true },
+    nextMaintenanceDetails: { type: String, trim: true },
     notes: { type: String, trim: true }
 }, { timestamps: true });
 EquipmentSchema.index({ name: 1 }, { unique: false });

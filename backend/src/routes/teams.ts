@@ -30,8 +30,11 @@ router.get("/", async (req, res) => {
     await connectDB();
     const includeLocation = req.query.locations === "true";
     const selectFields = includeLocation ? "_id name status currentLocation" : undefined;
-    const teams = await TeamModel.find()
-      .select(selectFields)
+    const query = TeamModel.find();
+    if (selectFields) {
+      query.select(selectFields);
+    }
+    const teams = await query
       .sort({ createdAt: -1 })
       .lean();
     

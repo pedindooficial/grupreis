@@ -29,6 +29,9 @@ const location_capture_1 = __importDefault(require("./routes/location-capture"))
 const budgets_1 = __importDefault(require("./routes/budgets"));
 const travel_pricing_1 = __importDefault(require("./routes/travel-pricing"));
 const distance_1 = __importDefault(require("./routes/distance"));
+const maintenance_1 = __importDefault(require("./routes/maintenance"));
+const orcamento_requests_1 = __importDefault(require("./routes/orcamento-requests"));
+const social_media_1 = __importDefault(require("./routes/social-media"));
 const db_1 = require("./db");
 const mongoose_1 = __importDefault(require("mongoose"));
 const app = (0, express_1.default)();
@@ -102,6 +105,9 @@ app.use("/api/location-capture", location_capture_1.default);
 app.use("/api/budgets", budgets_1.default);
 app.use("/api/travel-pricing", travel_pricing_1.default);
 app.use("/api/distance", distance_1.default);
+app.use("/api/maintenance", maintenance_1.default);
+app.use("/api/orcamento-requests", orcamento_requests_1.default);
+app.use("/api/social-media", social_media_1.default);
 // Use HTTPS with self-signed certs only in development
 // Production should use HTTP behind reverse proxy (Nginx) with proper SSL
 const isDevelopment = process.env.NODE_ENV !== 'production';

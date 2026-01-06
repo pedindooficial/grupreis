@@ -31,7 +31,7 @@ const deleteFileSchema = zod_1.z.object({
 });
 /**
  * POST /api/files/upload
- * Upload a file directly to S3
+ * Upload a file directly to S3 (default bucket)
  */
 router.post("/upload", upload.single("file"), async (req, res) => {
     try {
@@ -60,6 +60,47 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     }
     catch (error) {
         console.error("POST /api/files/upload error", error);
+        res.status(500).json({
+            error: "Falha ao fazer upload do arquivo",
+            detail: error?.message || "Erro interno"
+        });
+    }
+});
+/**
+ * POST /api/files/upload-social
+ * Upload a file directly to S3 social media bucket (reisfundacoes)
+ */
+router.post("/upload-social", upload.single("file"), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "Nenhum arquivo enviado" });
+        }
+        const { category, id } = req.body;
+        if (!category) {
+            return res.status(400).json({ error: "Categoria é obrigatória" });
+        }
+        const socialBucket = (0, s3_1.getSocialBucketName)();
+        // For social media, use simpler key format: category/filename
+        const timestamp = Date.now();
+        const sanitizedFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const key = id ? `${category}/${id}/${timestamp}_${sanitizedFilename}` : `${category}/${timestamp}_${sanitizedFilename}`;
+        const result = await (0, s3_1.uploadFile)(req.file.buffer, key, req.file.mimetype, {
+            originalName: req.file.originalname,
+            uploadedAt: new Date().toISOString()
+        }, socialBucket);
+        res.json({
+            data: {
+                key: result.key,
+                url: result.url,
+                bucket: result.bucket,
+                filename: req.file.originalname,
+                size: req.file.size,
+                contentType: req.file.mimetype
+            }
+        });
+    }
+    catch (error) {
+        console.error("POST /api/files/upload-social error", error);
         res.status(500).json({
             error: "Falha ao fazer upload do arquivo",
             detail: error?.message || "Erro interno"

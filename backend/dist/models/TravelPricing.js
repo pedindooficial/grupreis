@@ -8,7 +8,8 @@ const TravelPricingSchema = new mongoose_1.Schema({
     type: { type: String, enum: ["per_km", "fixed"], required: true },
     description: { type: String, required: true, trim: true },
     roundTrip: { type: Boolean, required: true, default: true },
-    order: { type: Number, required: true, default: 0 }
+    order: { type: Number, required: true, default: 0 },
+    isDefault: { type: Boolean, required: true, default: false }
 }, { timestamps: true });
 TravelPricingSchema.index({ order: 1 });
 const TravelPricingModel = mongoose_1.models.TravelPricing ||
