@@ -22,7 +22,7 @@ module.exports = {
       NEXTAUTH_SECRET: 'CHANGE-THIS-TO-A-STRONG-RANDOM-SECRET-IN-PRODUCTION',
       
       // Google Maps API
-      GOOGLE_MAPS_API_KEY: "AIzaSyAUoyCSevBWa4CkeDcBuYd-R0mbR2NtpIs",
+      GOOGLE_MAPS_API_KEY: "AIzaSyBnpJWYv2yT_mFwmuoirSSdGPtLC2I8IYY",
       
       // AWS S3 Configuration (for file uploads)
       // IMPORTANT: Set these as environment variables on the server before starting PM2
