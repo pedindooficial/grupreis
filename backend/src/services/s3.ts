@@ -10,6 +10,7 @@ const s3Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || "";
+const SOCIAL_BUCKET_NAME = "reisfundacoes";
 
 export interface UploadResult {
   key: string;
@@ -19,19 +20,23 @@ export interface UploadResult {
 
 /**
  * Upload a file to S3
+ * @param bucketName - Optional bucket name. If not provided, uses default BUCKET_NAME
  */
 export async function uploadFile(
   file: Buffer,
   key: string,
   contentType: string,
-  metadata?: Record<string, string>
+  metadata?: Record<string, string>,
+  bucketName?: string
 ): Promise<UploadResult> {
-  if (!BUCKET_NAME) {
-    throw new Error("AWS_S3_BUCKET_NAME não configurado");
+  const targetBucket = bucketName || BUCKET_NAME;
+  
+  if (!targetBucket) {
+    throw new Error("Bucket name não configurado");
   }
 
   const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: targetBucket,
     Key: key,
     Body: file,
     ContentType: contentType,
@@ -42,8 +47,8 @@ export async function uploadFile(
 
   return {
     key,
-    url: `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION || "sa-east-1"}.amazonaws.com/${key}`,
-    bucket: BUCKET_NAME
+    url: `https://${targetBucket}.s3.${process.env.AWS_REGION || "sa-east-1"}.amazonaws.com/${key}`,
+    bucket: targetBucket
   };
 }
 
@@ -51,14 +56,17 @@ export async function uploadFile(
  * Generate a presigned URL for downloading a file
  * @param key - S3 object key
  * @param expiresIn - Expiration time in seconds (default: 1 hour)
+ * @param bucketName - Optional bucket name. If not provided, uses default BUCKET_NAME
  */
-export async function getPresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
-  if (!BUCKET_NAME) {
-    throw new Error("AWS_S3_BUCKET_NAME não configurado");
+export async function getPresignedUrl(key: string, expiresIn: number = 3600, bucketName?: string): Promise<string> {
+  const targetBucket = bucketName || BUCKET_NAME;
+  
+  if (!targetBucket) {
+    throw new Error("Bucket name não configurado");
   }
 
   const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: targetBucket,
     Key: key
   });
 
@@ -70,18 +78,22 @@ export async function getPresignedUrl(key: string, expiresIn: number = 3600): Pr
  * @param key - S3 object key
  * @param contentType - MIME type of the file
  * @param expiresIn - Expiration time in seconds (default: 1 hour)
+ * @param bucketName - Optional bucket name. If not provided, uses default BUCKET_NAME
  */
 export async function getPresignedUploadUrl(
   key: string,
   contentType: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
+  bucketName?: string
 ): Promise<string> {
-  if (!BUCKET_NAME) {
-    throw new Error("AWS_S3_BUCKET_NAME não configurado");
+  const targetBucket = bucketName || BUCKET_NAME;
+  
+  if (!targetBucket) {
+    throw new Error("Bucket name não configurado");
   }
 
   const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: targetBucket,
     Key: key,
     ContentType: contentType
   });
@@ -91,18 +103,28 @@ export async function getPresignedUploadUrl(
 
 /**
  * Delete a file from S3
+ * @param bucketName - Optional bucket name. If not provided, uses default BUCKET_NAME
  */
-export async function deleteFile(key: string): Promise<void> {
-  if (!BUCKET_NAME) {
-    throw new Error("AWS_S3_BUCKET_NAME não configurado");
+export async function deleteFile(key: string, bucketName?: string): Promise<void> {
+  const targetBucket = bucketName || BUCKET_NAME;
+  
+  if (!targetBucket) {
+    throw new Error("Bucket name não configurado");
   }
 
   const command = new DeleteObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: targetBucket,
     Key: key
   });
 
   await s3Client.send(command);
+}
+
+/**
+ * Get the social media bucket name
+ */
+export function getSocialBucketName(): string {
+  return SOCIAL_BUCKET_NAME;
 }
 
 /**

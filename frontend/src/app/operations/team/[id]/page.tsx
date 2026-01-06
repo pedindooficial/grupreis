@@ -10,7 +10,7 @@ import { apiFetch } from "@/lib/api-client";
 import LoadingScreen from "./_components/LoadingScreen";
 import LoginScreen from "./_components/LoginScreen";
 import JobCard from "./_components/JobCard";
-import BottomNavigation from "./_components/BottomNavigation";
+import HamburgerMenu from "./_components/HamburgerMenu";
 import SignatureCanvas from "@/components/SignatureCanvas";
 
 export default function OperationTeamPage() {
@@ -75,19 +75,26 @@ export default function OperationTeamPage() {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-3 sm:px-4 py-4 sm:py-8 text-slate-100 pb-20 sm:pb-8"
+      className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-3 sm:px-4 py-4 sm:py-8 text-slate-100"
       style={{
         background:
           "radial-gradient(circle at 15% 10%, rgba(16,185,129,0.08), transparent 35%), radial-gradient(circle at 85% 15%, rgba(59,130,246,0.08), transparent 30%), #020617"
       }}
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:gap-6">
-        <div className="flex flex-col gap-1">
-          <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-emerald-200">Equipe</div>
-          <div className="text-xl sm:text-2xl font-semibold text-white break-words">{data.team?.name}</div>
-          <div className="text-xs sm:text-sm text-slate-300">
-            Painel público protegido. Atualize início e conclusão das OS atribuídas.
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1 flex-1 min-w-0">
+            <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-emerald-200">Equipe</div>
+            <div className="text-xl sm:text-2xl font-semibold text-white break-words">{data.team?.name}</div>
+            <div className="text-xs sm:text-sm text-slate-300">
+              Painel público protegido. Atualize início e conclusão das OS atribuídas.
+            </div>
           </div>
+          <HamburgerMenu
+            view={view}
+            setView={setView}
+            onLogout={handleLogout}
+          />
         </div>
 
         {view === "home" ? (
@@ -545,13 +552,6 @@ export default function OperationTeamPage() {
         )}
       </div>
 
-      {data && (
-        <BottomNavigation
-          view={view}
-          setView={setView}
-          onLogout={handleLogout}
-        />
-      )}
     </div>
   );
 }

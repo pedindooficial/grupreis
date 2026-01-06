@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { apiFetch } from "@/lib/api-client";
+import Swal from "sweetalert2";
 
 interface MaintenanceRecord {
   _id: string;
@@ -37,6 +38,7 @@ export default function MaintenanceNotification() {
   const [selectedItem, setSelectedItem] = useState<MaintenanceItem | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [markingAsDone, setMarkingAsDone] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right?: number; left?: number; width?: number } | null>(null);
@@ -111,12 +113,14 @@ export default function MaintenanceNotification() {
 
   // Get the effective next maintenance date for an item
   // Priority: maintenance history nextMaintenanceDate > item's nextMaintenance
+  // Uses the most recent maintenance record's nextMaintenanceDate if available
   const getEffectiveNextMaintenance = async (itemId: string, itemNextMaintenance: string | undefined): Promise<string | null> => {
     try {
       // First check maintenance history for nextMaintenanceDate
       const history = await loadMaintenanceHistory(itemId);
       if (history && history.length > 0) {
         // Find the most recent maintenance record with a nextMaintenanceDate
+        // Sort by date (when maintenance was performed) - most recent first
         const sortedHistory = history.sort((a, b) => {
           const dateA = new Date(a.date).getTime();
           const dateB = new Date(b.date).getTime();
@@ -124,9 +128,16 @@ export default function MaintenanceNotification() {
         });
         
         // Look for nextMaintenanceDate in maintenance records (most recent first)
+        // This ensures that when we mark maintenance as done, the new record (with 90 days future date)
+        // will be used instead of older records
         for (const record of sortedHistory) {
           if (record.nextMaintenanceDate) {
-            return record.nextMaintenanceDate;
+            // Verify the nextMaintenanceDate is in the future
+            const nextDate = new Date(record.nextMaintenanceDate).getTime();
+            const today = new Date().getTime();
+            if (nextDate > today) {
+              return record.nextMaintenanceDate;
+            }
           }
         }
       }
@@ -217,69 +228,70 @@ export default function MaintenanceNotification() {
     return [];
   };
 
+  // Load maintenance data
+  const loadMaintenanceData = async () => {
+    try {
+      setLoading(true);
+      const [equipmentRes, machinesRes] = await Promise.all([
+        apiFetch("/equipment", { cache: "no-store" }),
+        apiFetch("/machines", { cache: "no-store" })
+      ]);
+
+      const equipmentData = await equipmentRes.json().catch(() => null);
+      const machinesData = await machinesRes.json().catch(() => null);
+
+      const equipment = Array.isArray(equipmentData?.data) ? equipmentData.data : [];
+      const machines = Array.isArray(machinesData?.data) ? machinesData.data : [];
+
+      const alerts = await getMaintenanceAlerts(equipment, machines);
+      
+      // Load maintenance history for each alert
+      const alertsWithHistory = await Promise.all(
+        alerts.map(async (alert) => {
+          const history = await loadMaintenanceHistory(alert._id);
+          const sortedHistory = history.sort((a, b) => {
+            const dateA = new Date(a.date).getTime();
+            const dateB = new Date(b.date).getTime();
+            return dateB - dateA; // Most recent first
+          });
+          
+          // Find last maintenance (most recent past maintenance)
+          const lastMaintenance = sortedHistory.find(
+            (m) => new Date(m.date).getTime() <= new Date().getTime()
+          );
+          
+          // Find upcoming maintenance (next future maintenance from history)
+          const upcomingMaintenance = sortedHistory.find(
+            (m) => {
+              const maintenanceDate = new Date(m.date).getTime();
+              const today = new Date().getTime();
+              return maintenanceDate > today;
+            }
+          ) || sortedHistory.find(
+            (m) => m.nextMaintenanceDate && new Date(m.nextMaintenanceDate).getTime() > new Date().getTime()
+          );
+          
+          return {
+            ...alert,
+            maintenanceHistory: sortedHistory,
+            lastMaintenance: lastMaintenance || undefined,
+            upcomingMaintenance: upcomingMaintenance || undefined
+          };
+        })
+      );
+      
+      setItems(alertsWithHistory);
+    } catch (err) {
+      console.error("Erro ao carregar dados de manutenção:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const [equipmentRes, machinesRes] = await Promise.all([
-          apiFetch("/equipment", { cache: "no-store" }),
-          apiFetch("/machines", { cache: "no-store" })
-        ]);
-
-        const equipmentData = await equipmentRes.json().catch(() => null);
-        const machinesData = await machinesRes.json().catch(() => null);
-
-        const equipment = Array.isArray(equipmentData?.data) ? equipmentData.data : [];
-        const machines = Array.isArray(machinesData?.data) ? machinesData.data : [];
-
-        const alerts = await getMaintenanceAlerts(equipment, machines);
-        
-        // Load maintenance history for each alert
-        const alertsWithHistory = await Promise.all(
-          alerts.map(async (alert) => {
-            const history = await loadMaintenanceHistory(alert._id);
-            const sortedHistory = history.sort((a, b) => {
-              const dateA = new Date(a.date).getTime();
-              const dateB = new Date(b.date).getTime();
-              return dateB - dateA; // Most recent first
-            });
-            
-            // Find last maintenance (most recent past maintenance)
-            const lastMaintenance = sortedHistory.find(
-              (m) => new Date(m.date).getTime() <= new Date().getTime()
-            );
-            
-            // Find upcoming maintenance (next future maintenance from history)
-            const upcomingMaintenance = sortedHistory.find(
-              (m) => {
-                const maintenanceDate = new Date(m.date).getTime();
-                const today = new Date().getTime();
-                return maintenanceDate > today;
-              }
-            ) || sortedHistory.find(
-              (m) => m.nextMaintenanceDate && new Date(m.nextMaintenanceDate).getTime() > new Date().getTime()
-            );
-            
-            return {
-              ...alert,
-              maintenanceHistory: sortedHistory,
-              lastMaintenance: lastMaintenance || undefined,
-              upcomingMaintenance: upcomingMaintenance || undefined
-            };
-          })
-        );
-        
-        setItems(alertsWithHistory);
-      } catch (err) {
-        console.error("Erro ao carregar dados de manutenção:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
+    loadMaintenanceData();
     // Refresh every 5 minutes
-    const interval = setInterval(loadData, 5 * 60 * 1000);
+    const interval = setInterval(loadMaintenanceData, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -333,6 +345,92 @@ export default function MaintenanceNotification() {
     if (daysUntil === 0) return "Hoje";
     if (daysUntil === 1) return "Amanhã";
     return `Em ${daysUntil} dia(s)`;
+  };
+
+  // Format date to YYYY-MM-DD
+  const formatDateForInput = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Calculate next maintenance date (default: 90 days from today)
+  const calculateNextMaintenanceDate = (): string => {
+    const today = new Date();
+    const nextDate = new Date(today);
+    nextDate.setDate(today.getDate() + 90); // 90 days from today
+    return formatDateForInput(nextDate);
+  };
+
+  // Mark maintenance as done
+  const handleMarkAsDone = async () => {
+    if (!selectedItem || markingAsDone) return;
+
+    try {
+      setMarkingAsDone(true);
+
+      // Get maintenance type from upcoming maintenance or item data
+      const maintenanceType = selectedItem.upcomingMaintenance?.nextMaintenanceType 
+        || selectedItem.upcomingMaintenance?.type
+        || selectedItem.fullData?.nextMaintenanceType
+        || "Manutenção Preventiva";
+
+      // Get maintenance details
+      const maintenanceDetails = selectedItem.upcomingMaintenance?.details
+        || selectedItem.fullData?.nextMaintenanceDetails
+        || "";
+
+      // Today's date
+      const today = formatDateForInput(new Date());
+
+      // Calculate next maintenance date (90 days from today to remove from notifications)
+      const nextMaintenanceDate = calculateNextMaintenanceDate();
+
+      // Create maintenance record
+      const payload = {
+        itemId: selectedItem._id,
+        itemType: selectedItem.type,
+        date: today,
+        type: maintenanceType,
+        details: maintenanceDetails || `Manutenção realizada conforme agendamento`,
+        nextMaintenanceDate: nextMaintenanceDate,
+        nextMaintenanceType: maintenanceType
+      };
+
+      const res = await apiFetch("/maintenance", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        Swal.fire("Erro", data?.error || "Não foi possível marcar como concluído.", "error");
+        return;
+      }
+
+      // Show success message
+      Swal.fire({
+        icon: "success",
+        title: "Manutenção Concluída",
+        text: "A manutenção foi registrada e o item foi removido das notificações.",
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+      // Close modal and refresh data
+      setShowDetailModal(false);
+      setSelectedItem(null);
+      
+      // Reload maintenance data
+      await loadMaintenanceData();
+    } catch (err) {
+      console.error("Error marking maintenance as done:", err);
+      Swal.fire("Erro", "Falha ao marcar manutenção como concluída.", "error");
+    } finally {
+      setMarkingAsDone(false);
+    }
   };
 
   const count = items.length;
@@ -873,6 +971,13 @@ export default function MaintenanceNotification() {
 
               {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t border-white/10">
+                <button
+                  onClick={handleMarkAsDone}
+                  disabled={markingAsDone}
+                  className="flex-1 rounded-lg border border-green-400/50 bg-green-500/10 px-4 py-3 text-center text-xs sm:text-sm font-semibold text-green-300 transition hover:border-green-400 hover:bg-green-500/20 touch-manipulation min-h-[44px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {markingAsDone ? "Salvando..." : "✓ Marcar como Concluído"}
+                </button>
                 <Link
                   to={selectedItem.type === "equipment" ? "/equipment" : "/machines"}
                   onClick={() => {

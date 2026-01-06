@@ -25,10 +25,22 @@ const updateSchema = z.object({
   operationPass: z.string().min(4).optional()
 });
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
     await connectDB();
-    const teams = await TeamModel.find().sort({ createdAt: -1 }).lean();
+    const includeLocation = req.query.locations === "true";
+    const selectFields = includeLocation ? "_id name status currentLocation" : undefined;
+    const teams = await TeamModel.find()
+      .select(selectFields)
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Debug: log teams with locations
+    if (includeLocation) {
+      const teamsWithLocation = teams.filter((t: any) => t.currentLocation?.latitude && t.currentLocation?.longitude);
+      console.log(`[GET /api/teams] Total teams: ${teams.length}, Teams with location: ${teamsWithLocation.length}`);
+    }
+    
     res.json({ data: teams });
   } catch (error: any) {
     console.error("GET /api/teams error", error);

@@ -187,6 +187,37 @@ const ICONS = {
       <path d="M16 17H8" />
       <path d="M10 9H8" />
     </svg>
+  ),
+  roadmap: (
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z" />
+      <path d="M12 3v6m0 6v6" />
+      <path d="M3 12h6m6 0h6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  ),
+  social: (
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
   )
 };
 
@@ -313,6 +344,16 @@ function Sidebar() {
       href: "/orcamento-requests", 
       icon: ICONS.orcamentos,
       badge: pendingOrcamentoCount > 0 ? pendingOrcamentoCount : null
+    },
+    { 
+      label: "Roadmap", 
+      href: "/roadmap", 
+      icon: ICONS.roadmap
+    },
+    { 
+      label: "Social", 
+      href: "/social", 
+      icon: ICONS.social
     }
   ];
 
@@ -384,7 +425,7 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-screen bg-slate-950">
       <Sidebar />
-      <div className="flex w-full flex-col gap-4 px-4 pb-8 pt-6 md:ml-64 md:px-8 md:pb-8">
+      <div className="flex flex-1 flex-col gap-4 px-4 pb-8 pt-6 md:ml-64 md:px-8 md:pb-8 min-w-0">
         <Topbar />
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-black/30">
           {children}
@@ -414,6 +455,16 @@ export default function DashboardLayout({
               href: "/orcamento-requests", 
               icon: ICONS.orcamentos,
               badge: pendingOrcamentoCount > 0 ? pendingOrcamentoCount : null
+            },
+            { 
+              label: "Roadmap", 
+              href: "/roadmap", 
+              icon: ICONS.roadmap
+            },
+            { 
+              label: "Social", 
+              href: "/social", 
+              icon: ICONS.social
             }
           ]}
         />

@@ -56,6 +56,84 @@ const jobSchema = z.object({
   travelDescription: z.string().optional()
 });
 
+// Roadmap endpoint - MUST be before router.get("/") to avoid route conflicts
+router.get("/roadmap", async (req, res) => {
+  try {
+    await connectDB();
+    
+    const { status, teamId, dateFrom, dateTo } = req.query;
+    
+    // Build filter
+    const filter: any = {};
+    
+    if (status) {
+      filter.status = status;
+    }
+    
+    if (teamId) {
+      filter.teamId = teamId;
+    }
+    
+    // Only get jobs with location data
+    filter.siteLatitude = { $exists: true, $ne: null };
+    filter.siteLongitude = { $exists: true, $ne: null };
+    
+    // Date filtering
+    if (dateFrom || dateTo) {
+      filter.plannedDate = {};
+      if (dateFrom) {
+        filter.plannedDate.$gte = dateFrom;
+      }
+      if (dateTo) {
+        filter.plannedDate.$lte = dateTo;
+      }
+    }
+    
+    const jobs = await JobModel.find(filter)
+      .populate("teamId", "name status currentLocation")
+      .populate("clientId", "name phone email")
+      .select("title seq clientName site siteLatitude siteLongitude team teamId status plannedDate startedAt finishedAt estimatedDuration value finalValue services")
+      .lean()
+      .sort({ plannedDate: 1, createdAt: -1 });
+    
+    // Format response
+    const roadmapData = jobs.map((job: any) => ({
+      _id: job._id,
+      title: job.title,
+      seq: job.seq,
+      clientName: job.clientName || job.clientId?.name || "Cliente não informado",
+      site: job.site || "Local não informado",
+      latitude: job.siteLatitude,
+      longitude: job.siteLongitude,
+      team: job.teamId?.name || job.team || "Sem equipe",
+      teamId: job.teamId?._id || null,
+      teamStatus: job.teamId?.status || null,
+      teamLocation: job.teamId?.currentLocation || null,
+      status: job.status,
+      plannedDate: job.plannedDate,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      estimatedDuration: job.estimatedDuration,
+      value: job.value,
+      finalValue: job.finalValue,
+      servicesCount: job.services?.length || 0,
+      services: job.services?.map((s: any) => ({
+        service: s.service,
+        quantity: s.quantidade,
+        value: s.finalValue || s.value
+      })) || []
+    }));
+    
+    res.json({ data: roadmapData });
+  } catch (error: any) {
+    console.error("GET /api/jobs/roadmap error", error);
+    res.status(500).json({
+      error: "Falha ao carregar dados do roadmap",
+      detail: error?.message || "Erro interno"
+    });
+  }
+});
+
 // Availability check endpoint - MUST be before router.get("/") to avoid route conflicts
 router.get("/availability", async (req, res) => {
   try {
