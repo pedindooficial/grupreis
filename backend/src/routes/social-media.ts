@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { connectDB } from "../db";
 import SocialMediaModel from "../models/SocialMedia";
+import { deleteFile, getSocialBucketName } from "../services/s3";
 
 const router = Router();
 
@@ -139,15 +140,86 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+// Helper function to check if URL is an S3 file (not external like YouTube/Vimeo)
+function isS3File(url: string): boolean {
+  if (!url) return false;
+  
+  // Check if it's an external video URL (YouTube, Vimeo)
+  const youtubeRegex = /(?:youtube\.com|youtu\.be)/i;
+  const vimeoRegex = /vimeo\.com/i;
+  
+  if (youtubeRegex.test(url) || vimeoRegex.test(url)) {
+    return false; // External video URL, not an S3 file
+  }
+  
+  // Check if it's a full S3 URL
+  const s3UrlRegex = /https?:\/\/.*\.s3\..*\.amazonaws\.com\/(.+)/i;
+  const s3UrlMatch = url.match(s3UrlRegex);
+  if (s3UrlMatch) {
+    return true; // Full S3 URL
+  }
+  
+  // Check if it's an S3 key (path like "fotos/image.jpg" or "videos/video.mp4")
+  // S3 keys typically don't start with http:// or https://
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    return true; // Likely an S3 key
+  }
+  
+  // If it's an http/https URL but not YouTube/Vimeo, it might be an external image
+  // We'll be conservative and only delete if it looks like an S3 URL
+  return false;
+}
+
+// Helper function to extract S3 key from URL
+function extractS3Key(url: string): string | null {
+  if (!url) return null;
+  
+  // If it's a full S3 URL, extract the key
+  const s3UrlRegex = /https?:\/\/.*\.s3\..*\.amazonaws\.com\/(.+)/i;
+  const s3UrlMatch = url.match(s3UrlRegex);
+  if (s3UrlMatch) {
+    return decodeURIComponent(s3UrlMatch[1]);
+  }
+  
+  // If it's already a key (doesn't start with http), return as is
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    return url;
+  }
+  
+  return null;
+}
+
 // Delete social media item
 router.delete("/:id", async (req, res) => {
   try {
     await connectDB();
-    const deleted = await SocialMediaModel.findByIdAndDelete(req.params.id);
-    if (!deleted) {
+    const item = await SocialMediaModel.findById(req.params.id);
+    if (!item) {
       return res.status(404).json({ error: "Item não encontrado" });
     }
-    res.json({ data: { _id: deleted._id } });
+    
+    // Delete S3 file if it's an uploaded file (not external URL)
+    if (isS3File(item.url)) {
+      try {
+        const s3Key = extractS3Key(item.url);
+        if (s3Key) {
+          console.log(`[Social Media] Deleting S3 file: ${s3Key} from bucket: ${getSocialBucketName()}`);
+          await deleteFile(s3Key, getSocialBucketName());
+          console.log(`[Social Media] Successfully deleted S3 file: ${s3Key}`);
+        }
+      } catch (s3Error: any) {
+        // Log error but don't fail the delete operation
+        // The file might already be deleted or not exist
+        console.error(`[Social Media] Error deleting S3 file ${item.url}:`, s3Error);
+      }
+    } else {
+      console.log(`[Social Media] Skipping S3 deletion for external URL: ${item.url}`);
+    }
+    
+    // Delete the database record
+    await SocialMediaModel.findByIdAndDelete(req.params.id);
+    
+    res.json({ data: { _id: item._id } });
   } catch (error: any) {
     console.error("DELETE /api/social-media/:id error", error);
     res.status(500).json({
