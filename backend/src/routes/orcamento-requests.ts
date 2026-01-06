@@ -137,11 +137,34 @@ router.get("/count/watch", async (req, res) => {
       res.write(`event: error\ndata: ${JSON.stringify({ error: "Erro na conexão" })}\n\n`);
     });
 
+    // Send keep-alive heartbeat every 30 seconds to prevent connection timeout
+    const keepAliveInterval = setInterval(() => {
+      try {
+        if (!res.destroyed && !res.closed) {
+          res.write(`: keepalive\n\n`);
+        }
+      } catch (error) {
+        console.error("Error sending keep-alive:", error);
+        clearInterval(keepAliveInterval);
+      }
+    }, 30000); // 30 seconds
+
     // Handle client disconnect
     req.on("close", () => {
       console.log("Client disconnected from orcamento requests count watch");
+      clearInterval(keepAliveInterval);
       changeStream.close();
       res.end();
+    });
+
+    // Handle request abort
+    req.on("aborted", () => {
+      console.log("Request aborted for orcamento requests count watch");
+      clearInterval(keepAliveInterval);
+      changeStream.close();
+      if (!res.headersSent) {
+        res.end();
+      }
     });
   } catch (error: any) {
     console.error("GET /api/orcamento-requests/count/watch error", error);
@@ -276,11 +299,34 @@ router.get("/watch", async (req, res) => {
       res.write(`event: error\ndata: ${JSON.stringify({ error: "Erro na conexão" })}\n\n`);
     });
 
+    // Send keep-alive heartbeat every 30 seconds to prevent connection timeout
+    const keepAliveInterval = setInterval(() => {
+      try {
+        if (!res.destroyed && !res.closed) {
+          res.write(`: keepalive\n\n`);
+        }
+      } catch (error) {
+        console.error("Error sending keep-alive:", error);
+        clearInterval(keepAliveInterval);
+      }
+    }, 30000); // 30 seconds
+
     // Handle client disconnect
     req.on("close", () => {
       console.log("Client disconnected from orcamento requests watch");
+      clearInterval(keepAliveInterval);
       changeStream.close();
       res.end();
+    });
+
+    // Handle request abort
+    req.on("aborted", () => {
+      console.log("Request aborted for orcamento requests watch");
+      clearInterval(keepAliveInterval);
+      changeStream.close();
+      if (!res.headersSent) {
+        res.end();
+      }
     });
   } catch (error: any) {
     console.error("GET /api/orcamento-requests/watch error", error);
@@ -813,5 +859,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 export default router;
+
+
 
 
