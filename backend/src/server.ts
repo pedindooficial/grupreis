@@ -40,27 +40,17 @@ const allowedOrigins = FRONTEND_ORIGIN === "*"
   ? "*" 
   : FRONTEND_ORIGIN.split(",").map(origin => origin.trim().toLowerCase());
 
-console.log("[CORS] FRONTEND_ORIGIN from env:", FRONTEND_ORIGIN);
-console.log("[CORS] Allowed origins (normalized):", allowedOrigins);
-
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) {
-        console.log("[CORS] Request with no origin - allowing");
-        return callback(null, true);
-      }
+      if (!origin) return callback(null, true);
       
       // Normalize origin (lowercase, remove trailing slash)
       const normalizedOrigin = origin.toLowerCase().replace(/\/$/, "");
       
-      console.log("[CORS] Request from origin:", origin);
-      console.log("[CORS] Normalized origin:", normalizedOrigin);
-      
       // If wildcard is enabled, allow all
       if (allowedOrigins === "*") {
-        console.log("[CORS] Wildcard enabled - allowing");
         return callback(null, true);
       }
       
@@ -68,18 +58,12 @@ app.use(
       if (Array.isArray(allowedOrigins)) {
         const isAllowed = allowedOrigins.some(allowed => {
           const normalizedAllowed = allowed.replace(/\/$/, "");
-          const matches = normalizedOrigin === normalizedAllowed;
-          if (matches) {
-            console.log("[CORS] Origin matched:", normalizedOrigin, "with", normalizedAllowed);
-          }
-          return matches;
+          return normalizedOrigin === normalizedAllowed;
         });
         
         if (isAllowed) {
           return callback(null, true);
         }
-        
-        console.log("[CORS] Origin NOT in allowed list. Requested:", normalizedOrigin, "Allowed:", allowedOrigins);
       }
       
       // Origin not allowed
