@@ -14,8 +14,8 @@ module.exports = {
       // MongoDB Configuration
       MONGODB_URI: 'mongodb+srv://gruporeisuser:81221513Ak@gruporeis.5sg5ru5.mongodb.net/gruporeis_prod?retryWrites=true&w=majority',
       
-      // Frontend URL (for CORS)
-      FRONTEND_ORIGIN: 'https://gruporeis.reisfundacoes.com',
+      // Frontend URL (for CORS) - comma-separated for multiple origins
+      FRONTEND_ORIGIN: 'https://gruporeis.reisfundacoes.com,https://www.reisfundacoes.com',
       
       // NextAuth Configuration (must match frontend)
       NEXTAUTH_URL: 'https://gruporeis.reisfundacoes.com',

@@ -35,9 +35,23 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 
+// Support multiple origins (comma-separated)
+const allowedOrigins = FRONTEND_ORIGIN === "*" 
+  ? "*" 
+  : FRONTEND_ORIGIN.split(",").map(origin => origin.trim());
+
 app.use(
   cors({
-    origin: FRONTEND_ORIGIN === "*" ? "*" : [FRONTEND_ORIGIN],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins === "*" || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true
   })
 );
