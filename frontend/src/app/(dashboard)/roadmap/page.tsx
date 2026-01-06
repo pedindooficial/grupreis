@@ -126,6 +126,9 @@ export default function RoadmapPage() {
   const markerClusterRef = useRef<any>(null);
   const markersMapRef = useRef<Map<string, { marker: any; infoWindow: any }>>(new Map());
   const [updatingLocations, setUpdatingLocations] = useState(false);
+  // Refs to store latest data to avoid closure issues
+  const validJobsRef = useRef<RoadmapJob[]>([]);
+  const teamsRef = useRef<Team[]>([]);
 
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
@@ -175,8 +178,16 @@ export default function RoadmapPage() {
   }, [jobs, selectedTeam, selectedStatus]);
 
   const validJobs = useMemo(() => {
-    return filteredJobs.filter(job => job.latitude && job.longitude);
+    const valid = filteredJobs.filter(job => job.latitude && job.longitude);
+    // Update ref with latest valid jobs
+    validJobsRef.current = valid;
+    return valid;
   }, [filteredJobs]);
+
+  // Update teams ref whenever teams change
+  useEffect(() => {
+    teamsRef.current = teams;
+  }, [teams]);
 
   const stats = useMemo(() => ({
     total: jobs.length,
@@ -195,15 +206,21 @@ export default function RoadmapPage() {
     }
 
     try {
+      // Use refs to get latest data (avoid closure issues)
+      const currentValidJobs = validJobsRef.current;
+      const currentTeams = teamsRef.current;
+      
+      console.log(`[Roadmap] Initializing map with ${currentValidJobs.length} valid jobs and ${currentTeams.length} teams (from refs)`);
+
       // Calculate center from jobs
       let center = { lat: -23.5505, lng: -46.6333 }; // São Paulo default
       let zoom = 10;
 
-      if (validJobs.length > 0) {
-        const avgLat = validJobs.reduce((sum, j) => sum + j.latitude, 0) / validJobs.length;
-        const avgLng = validJobs.reduce((sum, j) => sum + j.longitude, 0) / validJobs.length;
+      if (currentValidJobs.length > 0) {
+        const avgLat = currentValidJobs.reduce((sum, j) => sum + j.latitude, 0) / currentValidJobs.length;
+        const avgLng = currentValidJobs.reduce((sum, j) => sum + j.longitude, 0) / currentValidJobs.length;
         center = { lat: avgLat, lng: avgLng };
-        zoom = validJobs.length === 1 ? 15 : 12;
+        zoom = currentValidJobs.length === 1 ? 15 : 12;
       }
 
       // Initialize map
@@ -316,13 +333,15 @@ export default function RoadmapPage() {
 
       // Group jobs by location (same lat/lng)
       const jobsByLocation = new Map<string, RoadmapJob[]>();
-      validJobs.forEach((job) => {
+      currentValidJobs.forEach((job) => {
         const locationKey = `${job.latitude.toFixed(6)}_${job.longitude.toFixed(6)}`;
         if (!jobsByLocation.has(locationKey)) {
           jobsByLocation.set(locationKey, []);
         }
         jobsByLocation.get(locationKey)!.push(job);
       });
+      
+      console.log(`[Roadmap] Created ${jobsByLocation.size} job location groups from ${currentValidJobs.length} valid jobs`);
 
       // Create markers - one per location
       const markers: any[] = [];
@@ -460,16 +479,19 @@ export default function RoadmapPage() {
 
         markers.push(marker);
         markersRef.current.push(marker);
+        console.log(`[Roadmap] Created marker at ${lat}, ${lng} for ${jobsAtLocation.length} job(s): ${jobsAtLocation.map(j => j.title).join(', ')}`);
         
         // Store all jobs for this location
         jobsAtLocation.forEach(job => {
           markersMapRef.current.set(job._id, { marker, infoWindow });
         });
       });
+      
+      console.log(`[Roadmap] Total job markers created: ${markers.length}`);
 
       // Group teams by location (same lat/lng)
       const teamsByLocation = new Map<string, Team[]>();
-      teams.forEach((team) => {
+      currentTeams.forEach((team) => {
         if (!team.currentLocation?.latitude || !team.currentLocation?.longitude) {
           console.log(`[Roadmap] Skipping team ${team.name} - no location`);
           return;
@@ -481,7 +503,7 @@ export default function RoadmapPage() {
         teamsByLocation.get(locationKey)!.push(team);
       });
 
-      console.log(`[Roadmap] Total teams loaded: ${teams.length}`);
+      console.log(`[Roadmap] Total teams loaded: ${currentTeams.length}`);
       console.log(`[Roadmap] Teams with location: ${Array.from(teamsByLocation.values()).flat().length}`);
       console.log(`[Roadmap] Unique locations: ${teamsByLocation.size}`);
 
@@ -613,13 +635,16 @@ export default function RoadmapPage() {
       // All markers are already added to the map via the map property
       // If you want clustering, you can add the MarkerClusterer library later
 
+      console.log(`[Roadmap] Map initialization complete - ${markersRef.current.length} job markers, ${teamMarkersRef.current.length} team markers`);
+      console.log(`[Roadmap] Map center: ${center.lat}, ${center.lng}, zoom: ${zoom}`);
+      
       setMapLoading(false);
     } catch (err: any) {
       console.error("Erro ao inicializar mapa:", err);
       setMapError(`Erro ao inicializar mapa: ${err.message}`);
       setMapLoading(false);
     }
-  }, [validJobs, teams]);
+  }, []); // No dependencies - uses refs to get latest data
 
   // Load Google Maps script
   useEffect(() => {
@@ -632,6 +657,7 @@ export default function RoadmapPage() {
     const loadAndInitialize = () => {
       // Check if Google Maps is already loaded
       if (window.google && window.google.maps && typeof window.google.maps.Map === "function") {
+        // Initialize map - it will handle empty data gracefully
         initializeMap();
         return;
       }
@@ -646,6 +672,7 @@ export default function RoadmapPage() {
         const checkInterval = setInterval(() => {
           if (window.google && window.google.maps && typeof window.google.maps.Map === "function") {
             clearInterval(checkInterval);
+            // Initialize map - it will handle empty data gracefully
             initializeMap();
           } else if (attempts >= maxAttempts) {
             clearInterval(checkInterval);
@@ -666,6 +693,7 @@ export default function RoadmapPage() {
       
       script.onload = () => {
         setTimeout(() => {
+          // Initialize map - it will handle empty data gracefully
           initializeMap();
         }, 500);
       };
@@ -696,7 +724,8 @@ export default function RoadmapPage() {
     };
 
     waitForMapRef(loadAndInitialize);
-  }, [googleMapsApiKey, initializeMap]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleMapsApiKey]); // Only depend on API key - data changes will trigger re-init via the other useEffect
 
   // Update team locations
   const updateTeamLocations = useCallback(async () => {
@@ -719,12 +748,18 @@ export default function RoadmapPage() {
     }
   }, [initializeMap]);
 
-  // Update markers when jobs change
+  // Update markers when jobs or teams change (after map is initialized)
   useEffect(() => {
+    // Only update if map is already initialized
     if (mapInstanceRef.current && window.google && window.google.maps) {
+      console.log(`[Roadmap] Data changed - reinitializing map with ${validJobs.length} jobs and ${teams.length} teams`);
+      // Call initializeMap directly - it will use the latest validJobs and teams from its closure
+      // No setTimeout needed since initializeMap is already a useCallback that depends on validJobs and teams
       initializeMap();
+    } else {
+      console.log(`[Roadmap] Map not ready yet - waiting for initialization. Jobs: ${validJobs.length}, Teams: ${teams.length}`);
     }
-  }, [validJobs, initializeMap]);
+  }, [validJobs, teams, initializeMap]); // Use full arrays to ensure re-render when content changes
 
   // Function to navigate to a job on the map
   const navigateToJob = useCallback((job: RoadmapJob) => {
