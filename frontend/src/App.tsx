@@ -26,6 +26,7 @@ import OperationsPage from './app/operations/[token]/page';
 import OperationsTeamPage from './app/operations/team/[id]/page';
 import LocationCapturePage from './app/location-capture/[token]/page';
 import LocationCaptureLayout from './app/location-capture/layout';
+import PublicBudgetPage from './app/budget/[token]/page';
 
 function App() {
   return (
@@ -43,6 +44,9 @@ function App() {
           <Route path="/location-capture" element={<LocationCaptureLayout />}>
             <Route path=":token" element={<LocationCapturePage />} />
           </Route>
+          
+          {/* Public budget routes */}
+          <Route path="/budget/:token" element={<PublicBudgetPage />} />
 
           {/* Protected dashboard routes */}
           <Route

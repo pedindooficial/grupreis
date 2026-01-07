@@ -40,6 +40,15 @@ export interface Budget {
   travelDistanceKm?: number;
   travelPrice?: number;
   travelDescription?: string;
+  // Approval and signature fields
+  approved?: boolean;
+  approvedAt?: Date;
+  rejected?: boolean;
+  rejectedAt?: Date;
+  rejectionReason?: string;
+  clientSignature?: string; // Base64 encoded signature image
+  clientSignedAt?: Date;
+  publicToken?: string; // Unique token for public access
   createdAt?: Date;
   updatedAt?: Date;
 }

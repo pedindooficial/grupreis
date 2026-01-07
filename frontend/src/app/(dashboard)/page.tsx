@@ -17,6 +17,8 @@ type Job = {
   team?: string;
 };
 
+type DateFilterType = "yesterday" | "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom" | "all";
+
 export default function Home() {
   const [clients, setClients] = useState<any[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -28,6 +30,9 @@ export default function Home() {
   const [maintenanceRecords, setMaintenanceRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null); // null = all teams
+  const [dateFilter, setDateFilter] = useState<DateFilterType>("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -79,11 +84,181 @@ export default function Home() {
     loadAllData();
   }, []);
 
-  // Filter jobs by selected team
+  // Helper function to get date range based on filter type
+  const getDateRange = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    switch (dateFilter) {
+      case "yesterday": {
+        const start = new Date(now);
+        start.setDate(start.getDate() - 1);
+        const end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "today": {
+        const start = new Date(now);
+        const end = new Date(now);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "thisWeek": {
+        const start = new Date(now);
+        const dayOfWeek = start.getDay();
+        const diff = start.getDate() - dayOfWeek; // Sunday is 0
+        start.setDate(diff);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "thisMonth": {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "thisYear": {
+        const start = new Date(now.getFullYear(), 0, 1);
+        const end = new Date(now.getFullYear(), 11, 31);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "custom": {
+        if (!customStartDate || !customEndDate) {
+          return null;
+        }
+        const start = new Date(customStartDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      default:
+        return null; // "all" - no filter
+    }
+  }, [dateFilter, customStartDate, customEndDate]);
+
+  // Helper function to parse date string in various formats
+  const parseDate = (dateString: string | undefined | null): Date | null => {
+    if (!dateString) return null;
+    
+    try {
+      // Handle ISO format: "2026-01-13T06:00:00.000Z" or "2026-01-13T06:00"
+      if (dateString.includes("T")) {
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      
+      // Handle DD-MM-YYYY or DD/MM/YYYY format: "13-01-2026" or "13/01/2026"
+      const ddmmyyyyMatch = dateString.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+      if (ddmmyyyyMatch) {
+        const [, day, month, year] = ddmmyyyyMatch;
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      
+      // Handle YYYY-MM-DD format: "2026-01-13"
+      const yyyymmddMatch = dateString.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (yyyymmddMatch) {
+        const [, year, month, day] = yyyymmddMatch;
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      
+      // Fallback to standard Date parsing
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
+      
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Helper function to check if a date is within range
+  const isDateInRange = (dateString: string | undefined | null, dateRange: { start: Date; end: Date } | null): boolean => {
+    if (!dateRange || !dateString) {
+      // If no filter, include it. If filter exists but no date, exclude it.
+      return !dateRange;
+    }
+    
+    const date = parseDate(dateString);
+    if (!date) return false;
+    
+    // Normalize to date-only (remove time)
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const normalizedStart = new Date(dateRange.start.getFullYear(), dateRange.start.getMonth(), dateRange.start.getDate());
+    const normalizedEnd = new Date(dateRange.end.getFullYear(), dateRange.end.getMonth(), dateRange.end.getDate());
+    
+    return normalizedDate >= normalizedStart && normalizedDate <= normalizedEnd;
+  };
+
+  // Filter jobs by selected team and date range
   const filteredJobs = useMemo(() => {
-    if (!selectedTeam) return jobs;
-    return jobs.filter((j) => j.team === selectedTeam);
-  }, [jobs, selectedTeam]);
+    let filtered = jobs;
+    
+    // Filter by team
+    if (selectedTeam) {
+      filtered = filtered.filter((j) => j.team === selectedTeam);
+    }
+    
+    // Filter by date range
+    if (getDateRange) {
+      filtered = filtered.filter((j) => {
+        // For date filters, prioritize plannedDate (the scheduled date)
+        // but also check other dates for completeness
+        // If plannedDate exists and is in range, include it
+        if (j.plannedDate && isDateInRange(j.plannedDate, getDateRange)) {
+          return true;
+        }
+        
+        // For "yesterday" and "today" filters, only check plannedDate to avoid confusion
+        // For other filters, check all dates
+        if (dateFilter === "yesterday" || dateFilter === "today") {
+          return false; // Only plannedDate matters for these filters
+        }
+        
+        // For other filters, check other dates too
+        return (
+          isDateInRange(j.createdAt, getDateRange) ||
+          isDateInRange(j.startedAt, getDateRange) ||
+          isDateInRange(j.finishedAt, getDateRange)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [jobs, selectedTeam, getDateRange, dateFilter]);
+
+  // Filter transactions by date range
+  const filteredTransactions = useMemo(() => {
+    if (!getDateRange) return transactions;
+    
+    return transactions.filter((t) => {
+      if (!t.date) return false;
+      return isDateInRange(t.date, getDateRange);
+    });
+  }, [transactions, getDateRange]);
+
+  // Filter maintenance records by date range
+  const filteredMaintenanceRecords = useMemo(() => {
+    if (!getDateRange) return maintenanceRecords;
+    
+    return maintenanceRecords.filter((m) => {
+      if (!m.date) return false;
+      return isDateInRange(m.date, getDateRange);
+    });
+  }, [maintenanceRecords, getDateRange]);
 
   const stats = useMemo(() => {
     const totalJobs = filteredJobs.length;
@@ -142,9 +317,9 @@ export default function Home() {
     // Equipamentos
     const activeEquipment = equipment.filter((e) => e.status === "ativo").length;
 
-    // Transações financeiras
+    // Transações financeiras (using filtered transactions)
     const today = new Date().toISOString().split("T")[0];
-    const todayTransactions = transactions.filter((t) => t.date === today);
+    const todayTransactions = filteredTransactions.filter((t) => t.date === today);
     const todayEntradas = todayTransactions
       .filter((t) => t.type === "entrada")
       .reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -153,10 +328,10 @@ export default function Home() {
       .reduce((sum, t) => sum + (t.amount || 0), 0);
     const todaySaldo = todayEntradas - todaySaidas;
 
-    const totalEntradas = transactions
+    const totalEntradas = filteredTransactions
       .filter((t) => t.type === "entrada")
       .reduce((sum, t) => sum + (t.amount || 0), 0);
-    const totalSaidas = transactions
+    const totalSaidas = filteredTransactions
       .filter((t) => t.type === "saida")
       .reduce((sum, t) => sum + (t.amount || 0), 0);
     const totalSaldo = totalEntradas - totalSaidas;
@@ -189,7 +364,7 @@ export default function Home() {
       maxExecutionTime,
       formatDuration
     };
-  }, [filteredJobs, employees, teams, machines, equipment, transactions]);
+  }, [filteredJobs, employees, teams, machines, equipment, filteredTransactions]);
 
   const weekData = useMemo(() => {
     const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -331,7 +506,7 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-emerald-100">
             Visão geral do painel
@@ -341,7 +516,111 @@ export default function Home() {
           </h1>
           <p className="mt-1 text-sm text-slate-300">
             KPIs gerais, serviços, financeiro, funcionários e recursos. Dados em tempo real.
+            {dateFilter !== "all" && getDateRange && (
+              <span className="ml-2 text-emerald-300">
+                • Filtro: {dateFilter === "yesterday" && "Ontem"}
+                {dateFilter === "today" && "Hoje"}
+                {dateFilter === "thisWeek" && "Esta Semana"}
+                {dateFilter === "thisMonth" && "Este Mês"}
+                {dateFilter === "thisYear" && "Este Ano"}
+                {dateFilter === "custom" && getDateRange && `${customStartDate} até ${customEndDate}`}
+              </span>
+            )}
           </p>
+        </div>
+        
+        {/* Date Filter */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setDateFilter("all")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "all"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Todos
+            </button>
+            <button
+              onClick={() => setDateFilter("yesterday")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "yesterday"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Ontem
+            </button>
+            <button
+              onClick={() => setDateFilter("today")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "today"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Hoje
+            </button>
+            <button
+              onClick={() => setDateFilter("thisWeek")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "thisWeek"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Esta Semana
+            </button>
+            <button
+              onClick={() => setDateFilter("thisMonth")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "thisMonth"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Este Mês
+            </button>
+            <button
+              onClick={() => setDateFilter("thisYear")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "thisYear"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Este Ano
+            </button>
+            <button
+              onClick={() => setDateFilter("custom")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "custom"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Personalizado
+            </button>
+          </div>
+          
+          {dateFilter === "custom" && (
+            <div className="flex gap-2 items-center">
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+              />
+              <span className="text-xs text-slate-400">até</span>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -775,7 +1054,7 @@ export default function Home() {
           // Check maintenance history for nextMaintenanceDate
           const itemsWithEffectiveDates = allItemsWithMaintenance.map((item) => {
             // Find most recent maintenance record for this item
-            const itemMaintenance = maintenanceRecords
+            const itemMaintenance = filteredMaintenanceRecords
               .filter((m) => m.itemId === item._id && m.itemType === item.type)
               .sort((a, b) => {
                 const dateA = new Date(a.date).getTime();
@@ -801,7 +1080,7 @@ export default function Home() {
             .filter((item) => item.daysUntil < 0)
             .sort((a, b) => a.daysUntil - b.daysUntil);
 
-          const recentMaintenance = maintenanceRecords
+          const recentMaintenance = filteredMaintenanceRecords
             .filter((m) => {
               const maintenanceDate = new Date(m.date).getTime();
               const thirtyDaysAgo = new Date().getTime() - (30 * 24 * 60 * 60 * 1000);
@@ -814,11 +1093,11 @@ export default function Home() {
             })
             .slice(0, 5);
 
-          const totalMaintenanceCost = maintenanceRecords
+          const totalMaintenanceCost = filteredMaintenanceRecords
             .filter((m) => m.cost && m.cost > 0)
             .reduce((sum, m) => sum + (m.cost || 0), 0);
 
-          const thisMonthMaintenanceCost = maintenanceRecords
+          const thisMonthMaintenanceCost = filteredMaintenanceRecords
             .filter((m) => {
               if (!m.cost || m.cost <= 0) return false;
               const maintenanceDate = new Date(m.date);
@@ -856,7 +1135,7 @@ export default function Home() {
                 </div>
                 <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-4 shadow-lg shadow-black/30">
                   <div className="text-[11px] uppercase tracking-wide text-blue-200">Registros</div>
-                  <div className="mt-2 text-3xl font-semibold text-blue-100">{maintenanceRecords.length}</div>
+                  <div className="mt-2 text-3xl font-semibold text-blue-100">{filteredMaintenanceRecords.length}</div>
                   <div className="mt-1 text-xs text-blue-200/70">
                     Total de manutenções
                   </div>

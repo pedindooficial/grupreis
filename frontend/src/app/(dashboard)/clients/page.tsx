@@ -1962,18 +1962,54 @@ export default function ClientsPage() {
                                       · R$ {budget.finalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
                                   )}
+                                  {budget.approved && budget.clientSignedAt && (
+                                    <span className="ml-2 text-emerald-300">
+                                      · Assinado em {new Date(budget.clientSignedAt).toLocaleDateString("pt-BR")}
+                                    </span>
+                                  )}
+                                  {budget.rejected && budget.rejectionReason && (
+                                    <span className="ml-2 text-red-300">
+                                      · Rejeitado: {budget.rejectionReason.substring(0, 30)}...
+                                    </span>
+                                  )}
                                 </div>
                               </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedBudget(budget);
-                                  setBudgetMode("list");
-                                }}
-                                className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
-                              >
-                                Ver
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const res = await apiFetch(`/budgets/${budget._id}/generate-link`, {
+                                        method: "POST"
+                                      });
+                                      const data = await res.json().catch(() => null);
+                                      if (res.ok && data?.data?.publicLink) {
+                                        await navigator.clipboard.writeText(data.data.publicLink);
+                                        Swal.fire("Sucesso", "Link copiado para a área de transferência!", "success");
+                                      } else {
+                                        Swal.fire("Erro", data?.error || "Falha ao gerar link", "error");
+                                      }
+                                    } catch (err) {
+                                      console.error("Error generating link:", err);
+                                      Swal.fire("Erro", "Falha ao gerar link", "error");
+                                    }
+                                  }}
+                                  className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold"
+                                  title="Gerar/Copiar link público"
+                                >
+                                  🔗
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedBudget(budget);
+                                    setBudgetMode("list");
+                                  }}
+                                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                                >
+                                  Ver
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}

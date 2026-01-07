@@ -340,6 +340,7 @@ router.get("/", async (_req, res) => {
           clientName: 1,
           site: 1,
           team: 1,
+          teamId: 1,
           status: 1,
           plannedDate: 1,
           estimatedDuration: 1,
@@ -357,6 +358,7 @@ router.get("/", async (_req, res) => {
           clientSignedAt: 1,
           createdAt: 1,
           updatedAt: 1,
+          notes: 1,
           // Travel/Displacement fields
           selectedAddress: 1,
           travelDistanceKm: 1,
@@ -892,6 +894,26 @@ router.patch("/:id", async (req, res) => {
     console.error("PATCH /api/jobs/:id error", error);
     res.status(500).json({
       error: "Falha ao atualizar OS",
+      detail: error?.message || "Erro interno"
+    });
+  }
+});
+
+// GET single job by ID
+router.get("/:id", async (req, res) => {
+  try {
+    await connectDB();
+
+    const job = await JobModel.findById(req.params.id).lean();
+    if (!job) {
+      return res.status(404).json({ error: "OS não encontrada" });
+    }
+
+    res.json({ data: job });
+  } catch (error: any) {
+    console.error("GET /api/jobs/:id error", error);
+    res.status(500).json({
+      error: "Falha ao buscar OS",
       detail: error?.message || "Erro interno"
     });
   }

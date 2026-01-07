@@ -63,6 +63,92 @@ const mapAccessToCatalog = (access: string): "livre" | "limitado" | "restrito" =
   return mapping[access] || "livre";
 };
 
+// Map stored values to display values (reverse mapping)
+const normalizeLocalType = (value: string): string => {
+  if (!value) return "";
+  const trimmed = value.trim();
+  // First check if it's already in the correct format (case-insensitive)
+  const exactMatch = LOCAL_TYPES.find(opt => opt.toLowerCase() === trimmed.toLowerCase());
+  if (exactMatch) return exactMatch;
+  
+  // Then try mapping from stored format
+  const normalized = trimmed.toLowerCase();
+  const mapping: Record<string, string> = {
+    "residencial": "Residencial",
+    "comercial": "Comercial",
+    "industrial": "Industrial",
+    "rural": "Rural"
+  };
+  return mapping[normalized] || "";
+};
+
+const normalizeSoilType = (value: string): string => {
+  if (!value) return "";
+  const trimmed = value.trim();
+  // First check if it's already in the correct format (case-insensitive)
+  const exactMatch = SOIL_TYPES.find(opt => opt.toLowerCase() === trimmed.toLowerCase());
+  if (exactMatch) return exactMatch;
+  
+  // Then try mapping from stored format
+  const normalized = trimmed.toLowerCase();
+  const mapping: Record<string, string> = {
+    "terra_comum": "Terra comum",
+    "terra comum": "Terra comum",
+    "argiloso": "Argiloso",
+    "arenoso": "Arenoso",
+    "rochoso": "Rochoso",
+    "não sei informar": "Não sei informar",
+    "nao sei informar": "Não sei informar"
+  };
+  return mapping[normalized] || "";
+};
+
+const normalizeAccess = (value: string): string => {
+  if (!value) return "";
+  const trimmed = value.trim();
+  // First check if it's already in the correct format (case-insensitive)
+  const exactMatch = ACCESS_TYPES.find(opt => opt.toLowerCase() === trimmed.toLowerCase());
+  if (exactMatch) return exactMatch;
+  
+  // Then try mapping from stored format
+  const normalized = trimmed.toLowerCase();
+  const mapping: Record<string, string> = {
+    "facil": "Acesso livre e desimpedido",
+    "fácil": "Acesso livre e desimpedido",
+    "livre": "Acesso livre e desimpedido",
+    "acesso livre e desimpedido": "Acesso livre e desimpedido",
+    "medio": "Algumas limitações",
+    "médio": "Algumas limitações",
+    "limitado": "Algumas limitações",
+    "algumas limitações": "Algumas limitações",
+    "dificil": "Acesso restrito ou complicado",
+    "difícil": "Acesso restrito ou complicado",
+    "restrito": "Acesso restrito ou complicado",
+    "acesso restrito ou complicado": "Acesso restrito ou complicado"
+  };
+  return mapping[normalized] || "";
+};
+
+// Normalize diameter value: "30cm" -> "30", "30 cm" -> "30", "30" -> "30"
+const normalizeDiameter = (value: string): string => {
+  if (!value) return "";
+  const trimmed = value.trim();
+  // Extract numeric value (remove "cm", spaces, etc.)
+  const match = trimmed.match(/^(\d+)/);
+  if (match) {
+    const num = match[1];
+    // Check if it's a valid catalog diameter
+    if (CATALOG_DIAMETERS.includes(parseInt(num, 10))) {
+      return num;
+    }
+  }
+  // If it's already just a number string, return it if valid
+  if (/^\d+$/.test(trimmed) && CATALOG_DIAMETERS.includes(parseInt(trimmed, 10))) {
+    return trimmed;
+  }
+  return "";
+};
+
 // Helper function to format datetime for display
 const formatDateTime = (dateTimeString: string | null | undefined): string => {
   if (!dateTimeString) return "-";
@@ -565,14 +651,44 @@ export default function JobsPage() {
     });
 
   const populateFormWithJob = (job: any) => {
-    setForm({
-      clientId: job.clientId || "",
+    // Convert teamId to string (handle ObjectId objects and nested _id)
+    let teamIdString = "";
+    if (job.teamId) {
+      if (typeof job.teamId === 'string') {
+        teamIdString = job.teamId;
+      } else if (job.teamId._id) {
+        teamIdString = job.teamId._id.toString();
+      } else if (job.teamId.toString) {
+        teamIdString = job.teamId.toString();
+      }
+    } else if (job.team) {
+      // If teamId is missing but team name exists, try to find the teamId
+      const matchingTeam = teams.find((t) => t.name === job.team);
+      if (matchingTeam) {
+        teamIdString = typeof matchingTeam._id === 'string' ? matchingTeam._id : (matchingTeam._id?.toString?.() || String(matchingTeam._id));
+      }
+    }
+    
+    // Convert clientId to string
+    let clientIdString = "";
+    if (job.clientId) {
+      if (typeof job.clientId === 'string') {
+        clientIdString = job.clientId;
+      } else if (job.clientId._id) {
+        clientIdString = job.clientId._id.toString();
+      } else if (job.clientId.toString) {
+        clientIdString = job.clientId.toString();
+      }
+    }
+    
+    const newForm = {
+      clientId: clientIdString,
       clientName: job.clientName || "",
       site: job.site || "",
       team: job.team || "",
-      teamId: job.teamId || "",
+      teamId: teamIdString,
       status: job.status || "pendente",
-      plannedDate: job.plannedDate || "",
+      plannedDate: job.plannedDate ? convertFromISO(job.plannedDate) : "",
       notes: job.notes || "",
       value: job.value ? String(job.value) : "",
       discountPercent: job.discountPercent ? String(job.discountPercent) : "",
@@ -580,25 +696,46 @@ export default function JobsPage() {
       travelDistanceKm: job.travelDistanceKm || 0,
       travelPrice: job.travelPrice || 0,
       travelDescription: job.travelDescription || "",
-      services: (job.services || []).map((srv: any, index: number) => ({
-        id: `service-${Date.now()}-${index}`,
-        catalogId: srv.catalogId || undefined,
-        service: srv.service || "",
-        localType: srv.localType || "",
-        soilType: srv.soilType || "",
-        sptInfo: srv.sptInfo || "",
-        sptFileName: srv.sptFileName || "",
-        access: srv.access || "",
-        categories: srv.categories || [],
-        diametro: srv.diametro || "",
-        profundidade: srv.profundidade || "",
-        quantidade: srv.quantidade || "",
-        observacoes: srv.observacoes || "",
-        value: srv.value !== undefined ? String(srv.value) : "",
-        discountPercent: srv.discountPercent !== undefined ? String(srv.discountPercent) : "",
-        executionTime: srv.executionTime || 0
-      }))
-    });
+      services: (job.services || []).map((srv: any, index: number) => {
+        // Convert catalogId to string
+        let catalogIdString: string | undefined = undefined;
+        if (srv.catalogId) {
+          if (typeof srv.catalogId === 'string') {
+            catalogIdString = srv.catalogId;
+          } else if (srv.catalogId._id) {
+            catalogIdString = srv.catalogId._id.toString();
+          } else if (srv.catalogId.toString) {
+            catalogIdString = srv.catalogId.toString();
+          }
+        }
+        
+        const normalizedLocalType = normalizeLocalType(srv.localType || "");
+        const normalizedSoilType = normalizeSoilType(srv.soilType || "");
+        const normalizedAccess = normalizeAccess(srv.access || "");
+        const normalizedDiameter = normalizeDiameter(srv.diametro || "");
+        
+        return {
+          id: `service-${Date.now()}-${index}`,
+          catalogId: catalogIdString,
+          service: srv.service || "",
+          localType: normalizedLocalType,
+          soilType: normalizedSoilType,
+          sptInfo: srv.sptInfo || "",
+          sptFileName: srv.sptFileName || "",
+          access: normalizedAccess,
+          categories: srv.categories || [],
+          diametro: normalizedDiameter,
+          profundidade: srv.profundidade || "",
+          quantidade: srv.quantidade || "",
+          observacoes: srv.observacoes || "",
+          value: srv.value !== undefined ? String(srv.value) : "",
+          discountPercent: srv.discountPercent !== undefined ? String(srv.discountPercent) : "",
+          executionTime: srv.executionTime || 0
+        };
+      })
+    };
+    
+    setForm(newForm);
   };
 
   const startNew = () => {
@@ -1650,7 +1787,8 @@ export default function JobsPage() {
             <div className="space-y-1 text-sm">
               <label className="text-slate-200">Equipe</label>
               <select
-                value={form.teamId}
+                key={`team-select-${form.teamId || 'empty'}`}
+                value={form.teamId || ""}
                 onChange={(e) => {
                   const selectedTeam = teams.find((t) => t._id === e.target.value);
                   setForm((f) => ({
@@ -1662,11 +1800,14 @@ export default function JobsPage() {
                 className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
               >
                 <option value="">Selecione uma equipe</option>
-                {teams.map((t) => (
-                  <option key={t._id} value={t._id}>
-                    {t.name}
-                  </option>
-                ))}
+                {teams.map((t) => {
+                  const teamIdStr = typeof t._id === 'string' ? t._id : (t._id?.toString?.() || String(t._id));
+                  return (
+                    <option key={teamIdStr} value={teamIdStr}>
+                      {t.name}
+                    </option>
+                  );
+                })}
               </select>
               <div className="text-[11px] text-slate-400">
                 Equipes cadastradas em /teams.
@@ -1842,7 +1983,8 @@ export default function JobsPage() {
                     <div className="space-y-1 text-sm">
                       <label className="text-slate-200">Tipo de local</label>
                       <select
-                        value={srv.localType}
+                        key={`localType-${srv.id}-${srv.localType || 'empty'}`}
+                        value={srv.localType || ""}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
@@ -1865,7 +2007,8 @@ export default function JobsPage() {
                     <div className="space-y-1 text-sm">
                       <label className="text-slate-200">Tipo de solo</label>
                       <select
-                        value={srv.soilType}
+                        key={`soilType-${srv.id}-${srv.soilType || 'empty'}`}
+                        value={srv.soilType || ""}
                         onChange={(e) => {
                           const newSoilType = e.target.value;
                           setForm((f) => {
@@ -1901,7 +2044,8 @@ export default function JobsPage() {
                     <div className="space-y-1 text-sm">
                       <label className="text-slate-200">Acesso para máquina</label>
                       <select
-                        value={srv.access}
+                        key={`access-${srv.id}-${srv.access || 'empty'}`}
+                        value={srv.access || ""}
                         onChange={(e) => {
                           const newAccess = e.target.value;
                           setForm((f) => {
@@ -1955,7 +2099,8 @@ export default function JobsPage() {
                         <label className="text-slate-200 text-xs sm:text-sm">Diâmetro (30–120 cm)</label>
                         {(srv as any).catalogId ? (
                           <select
-                            value={srv.diametro}
+                            key={`diametro-${srv.id}-${srv.diametro || 'empty'}`}
+                            value={srv.diametro || ""}
                             onChange={(e) => {
                               const newDiameter = e.target.value;
                               setForm((f) => {
@@ -2622,9 +2767,32 @@ export default function JobsPage() {
               </button>
               {selected.status !== "cancelada" && (
                 <button
-                  onClick={() => {
-                    populateFormWithJob(selected);
-                    setMode("edit");
+                  onClick={async () => {
+                    // Fetch full job data to ensure we have all fields including teamId
+                    try {
+                      const res = await apiFetch(`/jobs/${selected._id}`, { cache: "no-store" });
+                      const data = await res.json().catch(() => null);
+                      if (res.ok && data?.data) {
+                        const fullJob = data.data;
+                        setMode("edit");
+                        setTimeout(() => {
+                          populateFormWithJob(fullJob);
+                        }, 0);
+                      } else {
+                        // Fallback to using selected job if fetch fails
+                        setMode("edit");
+                        setTimeout(() => {
+                          populateFormWithJob(selected);
+                        }, 0);
+                      }
+                    } catch (err) {
+                      console.error("Error fetching full job:", err);
+                      // Fallback to using selected job
+                      setMode("edit");
+                      setTimeout(() => {
+                        populateFormWithJob(selected);
+                      }, 0);
+                    }
                   }}
                   className="w-full sm:w-auto rounded-lg border border-amber-400/50 bg-amber-500/20 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/30"
                 >

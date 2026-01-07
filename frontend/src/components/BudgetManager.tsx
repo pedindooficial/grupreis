@@ -25,6 +25,61 @@ const ACCESS_LABELS: Record<string, string> = {
   "restrito": "Acesso restrito ou complicado"
 };
 
+// Normalize soil type from stored format to dropdown value
+const normalizeSoilTypeForBudget = (value: string): string => {
+  if (!value) return "";
+  const trimmed = value.trim().toLowerCase();
+  
+  // Direct match (already in correct format)
+  if (trimmed === "arenoso" || trimmed === "argiloso" || trimmed === "rochoso" || trimmed === "misturado" || trimmed === "outro") {
+    return trimmed;
+  }
+  
+  // Map from display labels or variations
+  const mapping: Record<string, string> = {
+    "arenoso": "arenoso",
+    "argiloso": "argiloso",
+    "rochoso": "rochoso",
+    "terra comum": "misturado",
+    "terra_comum": "misturado",
+    "misturado": "misturado",
+    "não sei informar": "outro",
+    "nao sei informar": "outro",
+    "outro": "outro"
+  };
+  
+  return mapping[trimmed] || "";
+};
+
+// Normalize access type from stored format to dropdown value
+const normalizeAccessForBudget = (value: string): string => {
+  if (!value) return "";
+  const trimmed = value.trim().toLowerCase();
+  
+  // Direct match (already in correct format)
+  if (trimmed === "livre" || trimmed === "limitado" || trimmed === "restrito") {
+    return trimmed;
+  }
+  
+  // Map from display labels or variations
+  const mapping: Record<string, string> = {
+    "livre": "livre",
+    "acesso livre e desimpedido": "livre",
+    "facil": "livre",
+    "fácil": "livre",
+    "limitado": "limitado",
+    "algumas limitações": "limitado",
+    "medio": "limitado",
+    "médio": "limitado",
+    "restrito": "restrito",
+    "acesso restrito ou complicado": "restrito",
+    "dificil": "restrito",
+    "difícil": "restrito"
+  };
+  
+  return mapping[trimmed] || "";
+};
+
 export default function BudgetManager({ clientId, clientName, onClose, initialBudgetId }: BudgetManagerProps) {
   const [mode, setMode] = useState<"list" | "form" | "detail">("list");
   const [budgets, setBudgets] = useState<any[]>([]);
@@ -72,6 +127,42 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
   useEffect(() => {
     loadData();
   }, [clientId]);
+
+  // Real-time updates: Poll for budget updates when viewing a budget detail
+  useEffect(() => {
+    if (mode === "detail" && selected?._id) {
+      // Only poll if budget is not yet approved/rejected (to save resources)
+      const needsPolling = !selected.approved && !selected.rejected;
+      
+      if (needsPolling) {
+        const interval = setInterval(async () => {
+          try {
+            const res = await apiFetch(`/budgets/${selected._id}`, { cache: "no-store" });
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.data) {
+              const updatedBudget = data.data;
+              // Update selected budget if it changed
+              if (
+                updatedBudget.approved !== selected.approved ||
+                updatedBudget.rejected !== selected.rejected ||
+                updatedBudget.clientSignature !== selected.clientSignature
+              ) {
+                setSelected(updatedBudget);
+                // Also update in budgets list
+                setBudgets((prev) =>
+                  prev.map((b: any) => (b._id === updatedBudget._id ? updatedBudget : b))
+                );
+              }
+            }
+          } catch (err) {
+            console.error("Error polling budget updates:", err);
+          }
+        }, 3000); // Poll every 3 seconds
+
+        return () => clearInterval(interval);
+      }
+    }
+  }, [mode, selected?._id, selected?.approved, selected?.rejected, selected?.clientSignature]);
 
   const loadData = async () => {
     try {
@@ -374,8 +465,8 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
         catalogId: s.catalogId,
         service: s.service || "",
         localType: s.localType || "",
-        soilType: s.soilType || "",
-        access: s.access || "",
+        soilType: normalizeSoilTypeForBudget(s.soilType || ""),
+        access: normalizeAccessForBudget(s.access || ""),
         diametro: s.diametro || "",
         profundidade: s.profundidade || "",
         quantidade: s.quantidade || "",
@@ -677,7 +768,18 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
 
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        Swal.fire("Erro", data?.error || "Falha ao converter orçamento", "error");
+        Swal.fire({
+          icon: "error",
+          title: "Erro ao converter",
+          html: `
+            <div style="text-align: left; color: #e2e8f0;">
+              <p style="margin-bottom: 0.5rem;">${data?.error || "Falha ao converter orçamento"}</p>
+              ${data?.detail ? `<p style="color: #cbd5e1; font-size: 0.875rem; margin-top: 0.5rem;">${data.detail}</p>` : ""}
+            </div>
+          `,
+          background: "#0f172a",
+          color: "#ffffff"
+        });
         return;
       }
 
@@ -821,16 +923,20 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                       <span
                         className={
                           "inline-block rounded-full px-2 py-1 text-xs font-semibold " +
-                          (budget.status === "aprovado"
+                          (budget.status === "aprovado" || budget.approved
                             ? "bg-green-500/20 text-green-300"
                             : budget.status === "convertido"
                             ? "bg-blue-500/20 text-blue-300"
-                            : budget.status === "rejeitado"
+                            : budget.status === "rejeitado" || budget.rejected
                             ? "bg-red-500/20 text-red-300"
                             : "bg-yellow-500/20 text-yellow-300")
                         }
                       >
-                        {STATUS_LABELS[budget.status]?.label || budget.status}
+                        {budget.approved
+                          ? "✅ Aprovado"
+                          : budget.rejected
+                          ? "❌ Rejeitado"
+                          : STATUS_LABELS[budget.status]?.label || budget.status}
                       </span>
                     </div>
                   </div>
@@ -857,20 +963,31 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                   </div>
                 )}
               </div>
-              <span
-                className={
-                  "rounded-full px-3 py-1 text-xs font-semibold " +
-                  (selected.status === "aprovado"
-                    ? "bg-green-500/20 text-green-300"
-                    : selected.status === "convertido"
-                    ? "bg-blue-500/20 text-blue-300"
-                    : selected.status === "rejeitado"
-                    ? "bg-red-500/20 text-red-300"
-                    : "bg-yellow-500/20 text-yellow-300")
-                }
-              >
-                {STATUS_LABELS[selected.status]?.label || selected.status}
-              </span>
+              <div className="flex flex-col items-end gap-2">
+                <span
+                  className={
+                    "rounded-full px-3 py-1 text-xs font-semibold " +
+                    (selected.status === "aprovado" || selected.approved
+                      ? "bg-green-500/20 text-green-300"
+                      : selected.status === "convertido"
+                      ? "bg-blue-500/20 text-blue-300"
+                      : selected.status === "rejeitado" || selected.rejected
+                      ? "bg-red-500/20 text-red-300"
+                      : "bg-yellow-500/20 text-yellow-300")
+                  }
+                >
+                  {selected.approved
+                    ? "✅ Aprovado"
+                    : selected.rejected
+                    ? "❌ Rejeitado"
+                    : STATUS_LABELS[selected.status]?.label || selected.status}
+                </span>
+                {selected.approved && selected.clientSignedAt && (
+                  <span className="text-xs text-emerald-200/70">
+                    Assinado em {new Date(selected.clientSignedAt).toLocaleString("pt-BR")}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Services */}
@@ -962,17 +1079,112 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                 <div className="text-xs text-slate-300">{selected.notes}</div>
               </div>
             )}
+
+            {/* Approval Status */}
+            {(selected.approved || selected.rejected) && (
+              <div className="mt-4 pt-4 border-t border-white/10">
+                {selected.approved ? (
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">✅</span>
+                      <span className="text-sm font-semibold text-emerald-300">Orçamento Aprovado</span>
+                    </div>
+                    {selected.clientSignedAt && (
+                      <div className="text-xs text-emerald-200/70">
+                        Assinado em {new Date(selected.clientSignedAt).toLocaleString("pt-BR")}
+                      </div>
+                    )}
+                    {selected.clientSignature && (
+                      <div className="mt-3 rounded border border-emerald-500/20 bg-white p-2">
+                        <img 
+                          src={selected.clientSignature} 
+                          alt="Assinatura do cliente" 
+                          className="max-w-full h-auto max-h-32"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">❌</span>
+                      <span className="text-sm font-semibold text-red-300">Orçamento Rejeitado</span>
+                    </div>
+                    {selected.rejectedAt && (
+                      <div className="text-xs text-red-200/70 mb-2">
+                        Rejeitado em {new Date(selected.rejectedAt).toLocaleString("pt-BR")}
+                      </div>
+                    )}
+                    {selected.rejectionReason && (
+                      <div className="text-xs text-red-200/80 whitespace-pre-wrap">
+                        <strong>Motivo:</strong> {selected.rejectionReason}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={async () => {
+                try {
+                  // Generate token if it doesn't exist
+                  if (!selected.publicToken) {
+                    const res = await apiFetch(`/budgets/${selected._id}/generate-link`, {
+                      method: "POST"
+                    });
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok || !data?.data?.publicToken) {
+                      Swal.fire("Erro", data?.error || "Falha ao gerar link", "error");
+                      return;
+                    }
+                    // Reload budget to get updated publicToken
+                    const budgetRes = await apiFetch(`/budgets/${selected._id}`, { cache: "no-store" });
+                    const budgetData = await budgetRes.json().catch(() => null);
+                    if (budgetRes.ok && budgetData?.data) {
+                      setSelected(budgetData.data);
+                      // Use the updated token
+                      const publicLink = `${window.location.origin}/budget/${budgetData.data.publicToken}`;
+                      await navigator.clipboard.writeText(publicLink);
+                      Swal.fire("Sucesso", "Link copiado para a área de transferência!", "success");
+                    }
+                  } else {
+                    // Token exists, just copy using current origin
+                    const publicLink = `${window.location.origin}/budget/${selected.publicToken}`;
+                    await navigator.clipboard.writeText(publicLink);
+                    Swal.fire("Sucesso", "Link copiado para a área de transferência!", "success");
+                  }
+                } catch (err) {
+                  console.error("Error generating/copying link:", err);
+                  Swal.fire("Erro", "Falha ao gerar/copiar link", "error");
+                }
+              }}
+              className="rounded-lg border border-emerald-400/50 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/30"
+            >
+              🔗 {selected.publicToken ? "Copiar Link Público" : "Gerar Link Público"}
+            </button>
+            {selected.publicToken && (
+              <button
+                onClick={async () => {
+                  const publicLink = `${window.location.origin}/budget/${selected.publicToken}`;
+                  await navigator.clipboard.writeText(publicLink);
+                  Swal.fire("Sucesso", "Link copiado!", "success");
+                }}
+                className="rounded-lg border border-blue-400/50 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-300 transition hover:border-blue-400 hover:bg-blue-500/30"
+              >
+                📋 Copiar Link
+              </button>
+            )}
             <button
               onClick={() => downloadPDF(selected._id)}
               className="flex-1 rounded-lg border border-emerald-400/50 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/30"
             >
               📄 Baixar PDF
             </button>
-            {selected.status !== "convertido" && (
+            {(selected.status !== "convertido" || !selected.jobId) && (
               <>
                 <button
                   onClick={() => editBudget(selected)}
@@ -980,12 +1192,41 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                 >
                   ✏️ Editar
                 </button>
-                <button
-                  onClick={() => convertToJob(selected._id)}
-                  className="flex-1 rounded-lg border border-blue-400/50 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-100 transition hover:border-blue-400 hover:bg-blue-500/30"
-                >
-                  🔄 Converter em OS
-                </button>
+                {selected.jobId ? (
+                  <button
+                    onClick={() => {
+                      Swal.fire({
+                        icon: "info",
+                        title: "Orçamento já convertido",
+                        html: `
+                          <div style="text-align: left; color: #e2e8f0;">
+                            <p>Este orçamento já foi convertido em uma OS anteriormente.</p>
+                            <p style="margin-top: 1rem; color: #cbd5e1;">
+                              Para converter novamente, você precisa <strong>editar o orçamento</strong> primeiro.
+                            </p>
+                            <p style="margin-top: 0.5rem; color: #94a3b8; font-size: 0.875rem;">
+                              Após modificar o orçamento, você poderá gerar uma nova OS com as alterações.
+                            </p>
+                          </div>
+                        `,
+                        confirmButtonText: "Entendi",
+                        background: "#0f172a",
+                        color: "#ffffff"
+                      });
+                    }}
+                    className="flex-1 rounded-lg border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-200/70 transition cursor-not-allowed"
+                    title="Edite o orçamento para converter novamente"
+                  >
+                    🔄 Converter em OS (já convertido)
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => convertToJob(selected._id)}
+                    className="flex-1 rounded-lg border border-blue-400/50 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-100 transition hover:border-blue-400 hover:bg-blue-500/30"
+                  >
+                    🔄 Converter em OS
+                  </button>
+                )}
                 <button
                   onClick={() => deleteBudget(selected._id)}
                   className="flex-1 rounded-lg border border-red-400/50 bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-100 transition hover:border-red-400 hover:bg-red-500/30"
@@ -1213,7 +1454,8 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                               <div>
                                 <label className="text-xs text-slate-300">Tipo de Solo</label>
                                 <select
-                                  value={service.soilType}
+                                  key={`soilType-${service.id}-${service.soilType || 'empty'}`}
+                                  value={service.soilType || ""}
                                   onChange={(e) => {
                                     updateService(service.id, { soilType: e.target.value });
                                     setTimeout(() => handleVariationSelect(service.id, undefined, e.target.value), 50);
@@ -1233,7 +1475,8 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                               <div>
                                 <label className="text-xs text-slate-300">Acesso para Máquina</label>
                                 <select
-                                  value={service.access}
+                                  key={`access-${service.id}-${service.access || 'empty'}`}
+                                  value={service.access || ""}
                                   onChange={(e) => {
                                     updateService(service.id, { access: e.target.value });
                                     setTimeout(() => handleVariationSelect(service.id, undefined, undefined, e.target.value), 50);

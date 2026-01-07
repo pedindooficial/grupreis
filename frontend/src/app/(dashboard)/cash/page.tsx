@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api-client";
 
 type TransactionType = "entrada" | "saida";
 type PaymentMethod = "dinheiro" | "pix" | "transferencia" | "cartao" | "cheque" | "outro";
+type DateFilterType = "yesterday" | "today" | "thisWeek" | "thisMonth" | "thisYear" | "custom" | "all";
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "dinheiro", label: "Dinheiro" },
@@ -35,7 +36,9 @@ export default function CashPage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState<DateFilterType>("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<TransactionType | "all">("all");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -87,11 +90,131 @@ export default function CashPage() {
     loadData();
   }, []);
 
+  // Helper function to get date range based on filter type
+  const getDateRange = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    switch (dateFilter) {
+      case "yesterday": {
+        const start = new Date(now);
+        start.setDate(start.getDate() - 1);
+        const end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "today": {
+        const start = new Date(now);
+        const end = new Date(now);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "thisWeek": {
+        const start = new Date(now);
+        const dayOfWeek = start.getDay();
+        const diff = start.getDate() - dayOfWeek; // Sunday is 0
+        start.setDate(diff);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "thisMonth": {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "thisYear": {
+        const start = new Date(now.getFullYear(), 0, 1);
+        const end = new Date(now.getFullYear(), 11, 31);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      case "custom": {
+        if (!customStartDate || !customEndDate) {
+          return null;
+        }
+        const start = new Date(customStartDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      default:
+        return null; // "all" - no filter
+    }
+  }, [dateFilter, customStartDate, customEndDate]);
+
+  // Helper function to parse date string in various formats
+  const parseDate = (dateString: string | undefined | null): Date | null => {
+    if (!dateString) return null;
+    
+    try {
+      // Handle ISO format: "2026-01-13T06:00:00.000Z" or "2026-01-13T06:00"
+      if (dateString.includes("T")) {
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      
+      // Handle DD-MM-YYYY or DD/MM/YYYY format: "13-01-2026" or "13/01/2026"
+      const ddmmyyyyMatch = dateString.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+      if (ddmmyyyyMatch) {
+        const [, day, month, year] = ddmmyyyyMatch;
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      
+      // Handle YYYY-MM-DD format: "2026-01-13"
+      const yyyymmddMatch = dateString.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (yyyymmddMatch) {
+        const [, year, month, day] = yyyymmddMatch;
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      
+      // Fallback to standard Date parsing
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        return date;
+      }
+      
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Helper function to check if a date is within range
+  const isDateInRange = (dateString: string | undefined | null, dateRange: { start: Date; end: Date } | null): boolean => {
+    if (!dateRange || !dateString) {
+      // If no filter, include it. If filter exists but no date, exclude it.
+      return !dateRange;
+    }
+    
+    const date = parseDate(dateString);
+    if (!date) return false;
+    
+    // Normalize to date-only (remove time)
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const normalizedStart = new Date(dateRange.start.getFullYear(), dateRange.start.getMonth(), dateRange.start.getDate());
+    const normalizedEnd = new Date(dateRange.end.getFullYear(), dateRange.end.getMonth(), dateRange.end.getDate());
+    
+    return normalizedDate >= normalizedStart && normalizedDate <= normalizedEnd;
+  };
+
   const filtered = useMemo(() => {
     let filtered = transactions;
 
-    if (dateFilter) {
-      filtered = filtered.filter((t) => t.date === dateFilter);
+    // Filter by date range
+    if (getDateRange) {
+      filtered = filtered.filter((t) => isDateInRange(t.date, getDateRange));
     }
 
     if (typeFilter !== "all") {
@@ -110,29 +233,59 @@ export default function CashPage() {
     }
 
     return filtered;
-  }, [transactions, dateFilter, typeFilter, search]);
+  }, [transactions, getDateRange, typeFilter, search]);
 
-  // Serviços realizados com sucesso (OS concluídas)
+  // Serviços realizados com sucesso (OS concluídas) - filtered by date
   const completedJobs = useMemo(() => {
-    return jobs.filter((j) => j.status === "concluida");
-  }, [jobs]);
+    let filtered = jobs.filter((j) => j.status === "concluida");
+    
+    // Filter by date range if date filter is active
+    if (getDateRange) {
+      filtered = filtered.filter((j) => {
+        // Check if any of the job dates fall within the range
+        return (
+          isDateInRange(j.plannedDate, getDateRange) ||
+          isDateInRange(j.createdAt, getDateRange) ||
+          isDateInRange(j.startedAt, getDateRange) ||
+          isDateInRange(j.finishedAt, getDateRange)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [jobs, getDateRange]);
 
   const totalServicesValue = useMemo(() => {
     return completedJobs.reduce((sum, job) => sum + (job.finalValue || job.value || 0), 0);
   }, [completedJobs]);
 
-  // Valores pendentes (OS pendentes ou em execução)
+  // Valores pendentes (OS pendentes ou em execução) - filtered by date
   const pendingJobs = useMemo(() => {
-    return jobs.filter((j) => j.status === "pendente" || j.status === "em_execucao");
-  }, [jobs]);
+    let filtered = jobs.filter((j) => j.status === "pendente" || j.status === "em_execucao");
+    
+    // Filter by date range if date filter is active
+    if (getDateRange) {
+      filtered = filtered.filter((j) => {
+        // Check if any of the job dates fall within the range
+        return (
+          isDateInRange(j.plannedDate, getDateRange) ||
+          isDateInRange(j.createdAt, getDateRange) ||
+          isDateInRange(j.startedAt, getDateRange) ||
+          isDateInRange(j.finishedAt, getDateRange)
+        );
+      });
+    }
+    
+    return filtered;
+  }, [jobs, getDateRange]);
 
   const totalPendingValue = useMemo(() => {
     return pendingJobs.reduce((sum, job) => sum + (job.finalValue || job.value || 0), 0);
   }, [pendingJobs]);
 
-  // Estatísticas de pagamento
+  // Estatísticas de pagamento (using filtered transactions)
   const paymentStats = useMemo(() => {
-    const byMethod = transactions.reduce((acc, t) => {
+    const byMethod = filtered.reduce((acc, t) => {
       const method = t.paymentMethod || "outro";
       if (!acc[method]) {
         acc[method] = { entrada: 0, saida: 0 };
@@ -146,14 +299,14 @@ export default function CashPage() {
     }, {} as Record<string, { entrada: number; saida: number }>);
 
     return byMethod;
-  }, [transactions]);
+  }, [filtered]);
 
-  // Pagamentos de salário
+  // Pagamentos de salário (using filtered transactions)
   const salaryPayments = useMemo(() => {
-    return transactions.filter(
+    return filtered.filter(
       (t) => t.type === "saida" && (t.category === "Salário" || t.description?.toLowerCase().includes("salário"))
     );
-  }, [transactions]);
+  }, [filtered]);
 
   const totalSalaryPaid = useMemo(() => {
     return salaryPayments.reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -474,6 +627,16 @@ export default function CashPage() {
           <h1 className="text-xl sm:text-2xl font-semibold text-white">Financeiro</h1>
         <p className="text-xs sm:text-sm text-slate-300">
             Controle financeiro completo: serviços realizados, pagamentos, salários e movimentações.
+            {dateFilter !== "all" && getDateRange && (
+              <span className="ml-2 text-emerald-300">
+                • Filtro: {dateFilter === "yesterday" && "Ontem"}
+                {dateFilter === "today" && "Hoje"}
+                {dateFilter === "thisWeek" && "Esta Semana"}
+                {dateFilter === "thisMonth" && "Este Mês"}
+                {dateFilter === "thisYear" && "Este Ano"}
+                {dateFilter === "custom" && getDateRange && `${customStartDate} até ${customEndDate}`}
+              </span>
+            )}
           </p>
         </div>
         {mode === "list" && (
@@ -486,6 +649,142 @@ export default function CashPage() {
           </button>
         )}
       </div>
+
+      {/* Filtros - Moved to top */}
+      {mode === "list" && (
+        <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-3 sm:px-4 py-3">
+          {/* Search and Type Filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por descrição, cliente ou OS"
+              className="w-full sm:flex-1 sm:min-w-64 rounded-md border border-white/10 bg-slate-900/60 px-3 py-2.5 sm:py-2 text-sm text-white outline-none placeholder:text-slate-400 transition focus:border-emerald-400/60 touch-manipulation"
+            />
+            <div className="relative flex-1 sm:flex-none min-w-[140px]">
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value as any)}
+                className="w-full appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-2.5 sm:py-2 pr-7 text-xs sm:text-sm font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
+              >
+                <option value="all">Todos os tipos</option>
+                <option value="entrada">Entradas</option>
+                <option value="saida">Saídas</option>
+              </select>
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-300">
+                ▼
+              </span>
+            </div>
+            {(dateFilter !== "all" || typeFilter !== "all" || search) && (
+              <button
+                onClick={() => {
+                  setDateFilter("all");
+                  setCustomStartDate("");
+                  setCustomEndDate("");
+                  setTypeFilter("all");
+                  setSearch("");
+                }}
+                className="rounded-md border border-white/10 bg-white/5 px-3 py-2.5 sm:py-2 text-xs font-semibold text-slate-200 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+          
+          {/* Date Filter Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-300 font-medium">Filtrar por data:</span>
+            <button
+              onClick={() => setDateFilter("all")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "all"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Todos
+            </button>
+            <button
+              onClick={() => setDateFilter("yesterday")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "yesterday"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Ontem
+            </button>
+            <button
+              onClick={() => setDateFilter("today")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "today"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Hoje
+            </button>
+            <button
+              onClick={() => setDateFilter("thisWeek")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "thisWeek"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Esta Semana
+            </button>
+            <button
+              onClick={() => setDateFilter("thisMonth")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "thisMonth"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Este Mês
+            </button>
+            <button
+              onClick={() => setDateFilter("thisYear")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "thisYear"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Este Ano
+            </button>
+            <button
+              onClick={() => setDateFilter("custom")}
+              className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                dateFilter === "custom"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Personalizado
+            </button>
+            
+            {dateFilter === "custom" && (
+              <div className="flex gap-2 items-center">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                />
+                <span className="text-xs text-slate-400">até</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-xs text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Cashier Status */}
       {mode === "list" && (
@@ -719,50 +1018,6 @@ export default function CashPage() {
                 <div className="col-span-full text-center text-sm text-slate-400">
                   Nenhuma transação registrada ainda
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Filtros */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 sm:px-4 py-3">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por descrição, cliente ou OS"
-              className="w-full sm:flex-1 sm:min-w-64 rounded-md border border-white/10 bg-slate-900/60 px-3 py-2.5 sm:py-2 text-sm text-white outline-none placeholder:text-slate-400 transition focus:border-emerald-400/60 touch-manipulation"
-            />
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="flex-1 sm:flex-none rounded-md border border-white/10 bg-slate-900 px-3 py-2.5 sm:py-2 text-xs sm:text-sm font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
-              />
-              <div className="relative flex-1 sm:flex-none min-w-[140px]">
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value as any)}
-                  className="w-full appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-2.5 sm:py-2 pr-7 text-xs sm:text-sm font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
-                >
-                  <option value="all">Todos os tipos</option>
-                  <option value="entrada">Entradas</option>
-                  <option value="saida">Saídas</option>
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-300">
-                  ▼
-                </span>
-              </div>
-              {(dateFilter || typeFilter !== "all" || search) && (
-                <button
-                  onClick={() => {
-                    setDateFilter("");
-                    setTypeFilter("all");
-                    setSearch("");
-                  }}
-                  className="rounded-md border border-white/10 bg-white/5 px-3 py-2.5 sm:py-2 text-xs font-semibold text-slate-200 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
-                >
-                  Limpar
-                </button>
               )}
             </div>
           </div>

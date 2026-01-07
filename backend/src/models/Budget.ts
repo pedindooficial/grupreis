@@ -39,6 +39,15 @@ export interface Budget {
   travelDistanceKm?: number;
   travelPrice?: number;
   travelDescription?: string;
+  // Approval and signature fields
+  approved?: boolean;
+  approvedAt?: Date;
+  rejected?: boolean;
+  rejectedAt?: Date;
+  rejectionReason?: string;
+  clientSignature?: string; // Base64 encoded signature image
+  clientSignedAt?: Date;
+  publicToken?: string; // Unique token for public access
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -87,7 +96,16 @@ const BudgetSchema = new Schema<Budget>(
     selectedAddress: { type: String, trim: true }, // Address used for distance calculation
     travelDistanceKm: { type: Number, min: 0 },
     travelPrice: { type: Number, min: 0 },
-    travelDescription: { type: String, trim: true }
+    travelDescription: { type: String, trim: true },
+    // Approval and signature fields
+    approved: { type: Boolean, default: false },
+    approvedAt: { type: Date },
+    rejected: { type: Boolean, default: false },
+    rejectedAt: { type: Date },
+    rejectionReason: { type: String, trim: true },
+    clientSignature: { type: String }, // Base64 encoded signature image
+    clientSignedAt: { type: Date },
+    publicToken: { type: String, unique: true, sparse: true } // Unique token for public access
   },
   { timestamps: true }
 );
@@ -96,6 +114,7 @@ BudgetSchema.index({ seq: 1 });
 BudgetSchema.index({ clientId: 1 });
 BudgetSchema.index({ status: 1 });
 BudgetSchema.index({ createdAt: -1 });
+BudgetSchema.index({ publicToken: 1 });
 
 const BudgetModel = (models.Budget as Model<Budget>) || model<Budget>("Budget", BudgetSchema);
 
