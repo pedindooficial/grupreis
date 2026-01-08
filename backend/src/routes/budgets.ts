@@ -643,6 +643,7 @@ router.get("/:id/pdf", async (req, res) => {
       doc.rect(50, signatureBoxY, 230, signatureBoxHeight).stroke();
       
       try {
+        if (!budget.clientSignature) throw new Error("Client signature not found");
         const clientBase64Data = budget.clientSignature.replace(
           /^data:image\/\w+;base64,/,
           ""
@@ -681,6 +682,7 @@ router.get("/:id/pdf", async (req, res) => {
       doc.rect(320, signatureBoxY, 230, signatureBoxHeight).stroke();
 
       try {
+        if (!settings.companySignature) throw new Error("Company signature not found");
         const companyBase64Data = settings.companySignature.replace(
           /^data:image\/\w+;base64,/,
           ""
@@ -709,6 +711,7 @@ router.get("/:id/pdf", async (req, res) => {
       doc.rect(50, signatureBoxY, 500, signatureBoxHeight).stroke();
       
       try {
+        if (!budget.clientSignature) throw new Error("Client signature not found");
         const clientBase64Data = budget.clientSignature.replace(
           /^data:image\/\w+;base64,/,
           ""
@@ -747,6 +750,7 @@ router.get("/:id/pdf", async (req, res) => {
       doc.rect(50, signatureBoxY, 500, signatureBoxHeight).stroke();
 
       try {
+        if (!settings.companySignature) throw new Error("Company signature not found");
         const companyBase64Data = settings.companySignature.replace(
           /^data:image\/\w+;base64,/,
           ""

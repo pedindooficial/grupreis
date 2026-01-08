@@ -62,8 +62,10 @@ router.get("/financial", async (req, res) => {
     // Group by month
     const revenueByMonth: Record<string, { revenue: number; expenses: number }> = {};
     transactions.forEach((t) => {
-      // Use date field if available, otherwise use createdAt
-      const transactionDate = t.date ? new Date(t.date) : new Date(t.createdAt);
+      // Use date field if available, otherwise use createdAt (with fallback to current date)
+      const transactionDate = t.date 
+        ? new Date(t.date) 
+        : (t.createdAt ? new Date(t.createdAt) : new Date());
       const monthKey = transactionDate.toLocaleDateString("pt-BR", {
         month: "short",
         year: "numeric"
