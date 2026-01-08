@@ -12,18 +12,27 @@ router.get("/public/services", async (req, res) => {
   try {
     await connectDB();
     
-    // Get only active catalog items with their names
+    // Get only active catalog items with their names and price variations
     const catalogItems = await CatalogModel.find({ active: true })
-      .select("name category active")
+      .select("name category active priceVariations")
       .sort({ name: 1 })
       .lean();
     
-    // Extract unique service names
-    const serviceNames = catalogItems.map((item) => ({
-      name: item.name,
-      category: item.category || undefined,
-      id: item._id?.toString()
-    }));
+    // Extract unique service names and diameters
+    const serviceNames = catalogItems.map((item) => {
+      // Extract unique diameters from price variations
+      const diameters = item.priceVariations
+        ? Array.from(new Set(item.priceVariations.map((pv: any) => pv.diameter)))
+            .sort((a: number, b: number) => a - b) // Sort diameters ascending
+        : [];
+      
+      return {
+        name: item.name,
+        category: item.category || undefined,
+        id: item._id?.toString(),
+        diameters: diameters // Array of unique diameters in cm
+      };
+    });
     
     res.json({
       data: serviceNames,
