@@ -23,6 +23,7 @@ import OrcamentoRequestsPage from './app/(dashboard)/orcamento-requests/page';
 import OrcamentosPage from './app/(dashboard)/orcamentos/page';
 import RoadmapPage from './app/(dashboard)/roadmap/page';
 import SocialPage from './app/(dashboard)/social/page';
+import ReportsPage from './app/(dashboard)/reports/page';
 import OperationsPage from './app/operations/[token]/page';
 import OperationsTeamPage from './app/operations/team/[id]/page';
 import LocationCapturePage from './app/location-capture/[token]/page';
@@ -75,6 +76,7 @@ function App() {
                     <Route path="/orcamentos" element={<OrcamentosPage />} />
                     <Route path="/roadmap" element={<RoadmapPage />} />
                     <Route path="/social" element={<SocialPage />} />
+                    <Route path="/reports" element={<ReportsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </DashboardLayout>

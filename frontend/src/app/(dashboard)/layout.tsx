@@ -188,6 +188,25 @@ const ICONS = {
       <path d="M10 9H8" />
     </svg>
   ),
+  reports: (
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 3v18h18" />
+      <path d="M7 12h4" />
+      <path d="M7 8h4" />
+      <path d="M7 16h4" />
+      <path d="M13 12h4" />
+      <path d="M13 8h4" />
+      <path d="M13 16h4" />
+    </svg>
+  ),
   roadmap: (
     <svg
       className="h-5 w-5"
@@ -354,6 +373,11 @@ function Sidebar() {
       label: "Social", 
       href: "/social", 
       icon: ICONS.social
+    },
+    { 
+      label: "Relatórios", 
+      href: "/reports", 
+      icon: ICONS.reports
     }
   ];
 
@@ -465,6 +489,11 @@ export default function DashboardLayout({
               label: "Social", 
               href: "/social", 
               icon: ICONS.social
+            },
+            { 
+              label: "Relatórios", 
+              href: "/reports", 
+              icon: ICONS.reports
             }
           ]}
         />
