@@ -329,7 +329,7 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
     // Only search if all three are defined
     if (!finalDiametro || !finalSoilType || !finalAccess) return;
 
-    // Convert diameter from "30cm" to 30 (number) to match catalog format
+    // Convert diameter from "25cm" to 25 (number) to match catalog format (supports 25-120cm)
     const diameterNum = parseInt(finalDiametro, 10);
     if (isNaN(diameterNum)) return;
 
@@ -1540,8 +1540,8 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                                   className="mt-1 w-full rounded border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
                                 >
                                   <option value="">Selecione...</option>
-                                  {[...Array(19)].map((_, i) => {
-                                    const diameter = 30 + (i * 5);
+                                  {[...Array(20)].map((_, i) => {
+                                    const diameter = 25 + (i * 5);
                                     return (
                                       <option key={diameter} value={diameter + "cm"}>
                                         {diameter}cm

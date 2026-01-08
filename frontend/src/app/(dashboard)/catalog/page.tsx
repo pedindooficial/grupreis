@@ -19,7 +19,7 @@ const ACCESS_TYPES: { value: MachineAccess; label: string }[] = [
   { value: "restrito", label: "Acesso restrito ou complicado" }
 ];
 
-const COMMON_DIAMETERS = [30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 120];
+const COMMON_DIAMETERS = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120];
 
 // Component to display photos with presigned URLs
 function PhotoGrid({ photoKeys, onRemove }: { photoKeys: string[]; onRemove: (index: number) => void }) {

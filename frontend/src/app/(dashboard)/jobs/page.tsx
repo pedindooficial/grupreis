@@ -129,7 +129,7 @@ const normalizeAccess = (value: string): string => {
   return mapping[normalized] || "";
 };
 
-// Normalize diameter value: "30cm" -> "30", "30 cm" -> "30", "30" -> "30"
+// Normalize diameter value: "25cm" -> "25", "25 cm" -> "25", "25" -> "25" (supports 25-120cm)
 const normalizeDiameter = (value: string): string => {
   if (!value) return "";
   const trimmed = value.trim();
@@ -284,7 +284,7 @@ const calculateServicePrice = (
   };
 };
 
-const CATALOG_DIAMETERS = [30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 120];
+const CATALOG_DIAMETERS = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120];
 const ACCESS_TYPES = [
   "Acesso livre e desimpedido",
   "Algumas limitações",
@@ -2290,7 +2290,7 @@ export default function JobsPage() {
 
                     <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 sm:col-span-2">
                       <div className="space-y-1 text-sm">
-                        <label className="text-slate-200 text-xs sm:text-sm">Diâmetro (30–120 cm)</label>
+                        <label className="text-slate-200 text-xs sm:text-sm">Diâmetro (25–120 cm)</label>
                         {(srv as any).catalogId ? (
                           <select
                             key={`diametro-${srv.id}-${srv.diametro || 'empty'}`}
@@ -2328,7 +2328,7 @@ export default function JobsPage() {
                         ) : (
                           <input
                             type="number"
-                            min={30}
+                            min={25}
                             max={120}
                             value={srv.diametro}
                             onChange={(e) =>
