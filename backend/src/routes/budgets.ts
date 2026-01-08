@@ -898,19 +898,25 @@ router.post("/public/:token/approve", async (req, res) => {
       return res.status(404).json({ error: "Orçamento não encontrado" });
     }
 
-    // Check if already approved or rejected
-    if (budget.approved || budget.rejected) {
+    // Check if already approved (but allow approving after rejection)
+    if (budget.approved) {
       return res.status(400).json({ 
-        error: "Este orçamento já foi processado" 
+        error: "Este orçamento já foi aprovado" 
       });
     }
 
-    // Update budget with approval
+    // Update budget with approval (even if previously rejected)
     budget.approved = true;
     budget.approvedAt = new Date();
     budget.clientSignature = parsed.data.signature;
     budget.clientSignedAt = new Date();
     budget.status = "aprovado";
+    // Clear rejection status if it was previously rejected
+    if (budget.rejected) {
+      budget.rejected = false;
+      budget.rejectedAt = undefined;
+      budget.rejectionReason = undefined;
+    }
     await budget.save();
 
     res.json({ 

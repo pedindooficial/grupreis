@@ -256,9 +256,17 @@ export default function PublicBudgetPage() {
         </div>
 
         {/* Approval Actions */}
-        {!isProcessed && (
+        {!budget.approved && (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Aprovar ou Rejeitar Orçamento</h2>
+            {budget.rejected ? (
+              <div className="mb-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                <p className="text-yellow-200 text-sm">
+                  Este orçamento foi rejeitado anteriormente. Você pode aprová-lo agora caso tenha mudado de ideia ou se um desconto foi aplicado.
+                </p>
+              </div>
+            ) : (
+              <h2 className="text-xl font-semibold text-white mb-4">Aprovar ou Rejeitar Orçamento</h2>
+            )}
             
             {!showSignature && !showRejectForm && (
               <div className="flex flex-col sm:flex-row gap-4">
@@ -269,17 +277,19 @@ export default function PublicBudgetPage() {
                   }}
                   className="flex-1 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-3 text-white font-semibold shadow-lg transition hover:from-emerald-600 hover:to-emerald-700"
                 >
-                  ✅ Aprovar Orçamento
+                  {budget.rejected ? "✅ Aprovar Orçamento (Após Rejeição)" : "✅ Aprovar Orçamento"}
                 </button>
-                <button
-                  onClick={() => {
-                    setShowRejectForm(true);
-                    setShowSignature(false);
-                  }}
-                  className="flex-1 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-6 py-3 text-white font-semibold shadow-lg transition hover:from-red-600 hover:to-red-700"
-                >
-                  ❌ Rejeitar Orçamento
-                </button>
+                {!budget.rejected && (
+                  <button
+                    onClick={() => {
+                      setShowRejectForm(true);
+                      setShowSignature(false);
+                    }}
+                    className="flex-1 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-6 py-3 text-white font-semibold shadow-lg transition hover:from-red-600 hover:to-red-700"
+                  >
+                    ❌ Rejeitar Orçamento
+                  </button>
+                )}
               </div>
             )}
 
