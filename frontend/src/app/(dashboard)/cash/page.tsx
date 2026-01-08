@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, apiUrl } from "@/lib/api-client";
 
 type TransactionType = "entrada" | "saida";
 type PaymentMethod = "dinheiro" | "pix" | "transferencia" | "cartao" | "cheque" | "outro";
@@ -44,6 +44,7 @@ export default function CashPage() {
   const [loading, setLoading] = useState(true);
   const [currentCashier, setCurrentCashier] = useState<any | null>(null);
   const [cashierLoading, setCashierLoading] = useState(false);
+  const [cashiers, setCashiers] = useState<any[]>([]);
 
   const [form, setForm] = useState({
     type: "entrada" as TransactionType,
@@ -62,12 +63,13 @@ export default function CashPage() {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [clientsRes, jobsRes, employeesRes, transactionsRes, cashierRes] = await Promise.all([
+        const [clientsRes, jobsRes, employeesRes, transactionsRes, cashierRes, cashiersRes] = await Promise.all([
           apiFetch("/clients", { cache: "no-store" }),
           apiFetch("/jobs", { cache: "no-store" }),
           apiFetch("/employees", { cache: "no-store" }),
           apiFetch("/cash", { cache: "no-store" }),
-          apiFetch("/cashiers/current", { cache: "no-store" })
+          apiFetch("/cashiers/current", { cache: "no-store" }),
+          apiFetch("/cashiers?status=fechado", { cache: "no-store" })
         ]);
 
         const clientsData = await clientsRes.json().catch(() => null);
@@ -75,12 +77,14 @@ export default function CashPage() {
         const employeesData = await employeesRes.json().catch(() => null);
         const transactionsData = await transactionsRes.json().catch(() => null);
         const cashierData = await cashierRes.json().catch(() => null);
+        const cashiersData = await cashiersRes.json().catch(() => null);
 
         setClients(Array.isArray(clientsData?.data) ? clientsData.data : []);
         setJobs(Array.isArray(jobsData?.data) ? jobsData.data : []);
         setEmployees(Array.isArray(employeesData?.data) ? employeesData.data : []);
         setTransactions(Array.isArray(transactionsData?.data) ? transactionsData.data : []);
         setCurrentCashier(cashierData?.data || null);
+        setCashiers(Array.isArray(cashiersData?.data) ? cashiersData.data : []);
       } catch (err) {
         console.error("Erro ao carregar dados", err);
       } finally {
@@ -567,17 +571,85 @@ export default function CashPage() {
     const result = await Swal.fire({
       title: "Fechar Caixa",
       html: `
-        <div class="text-left space-y-3">
-          <p class="text-sm text-slate-300">Confirme o saldo final do caixa.</p>
-          <input id="swal-closing-balance" type="number" step="0.01" min="0" value="${currentCashier.currentBalance || 0}" class="swal2-input" placeholder="Saldo final (R$)">
-          <input id="swal-closed-by" type="text" class="swal2-input" placeholder="Fechado por (opcional)">
-          <textarea id="swal-notes" class="swal2-textarea" placeholder="Observações (opcional)"></textarea>
+        <div class="space-y-4 text-left">
+          <div class="rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 shadow-xl shadow-black/40">
+            <p class="text-xs sm:text-sm text-slate-300 mb-2">
+              Revise as informações abaixo antes de encerrar o caixa.
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+              <div class="space-y-1">
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">Saldo atual</div>
+                <div class="text-base font-semibold text-emerald-300">
+                  R$ ${(currentCashier.currentBalance || 0).toFixed(2).replace(".", ",")}
+                </div>
+              </div>
+              <div class="space-y-1">
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">Aberto em</div>
+                <div class="text-xs text-slate-200">
+                  ${currentCashier.openedAt ? new Date(currentCashier.openedAt).toLocaleString("pt-BR") : "-"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label for="swal-closing-balance" class="block text-[11px] font-medium text-slate-300 mb-1">
+                Saldo final do caixa (R$)
+              </label>
+              <input
+                id="swal-closing-balance"
+                type="number"
+                step="0.01"
+                min="0"
+                value="${currentCashier.currentBalance || 0}"
+                class="w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:border-emerald-400/60"
+                placeholder="Saldo final do caixa"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="swal-closed-by" class="block text-[11px] font-medium text-slate-300 mb-1">
+                  Fechado por <span class="text-slate-500">(opcional)</span>
+                </label>
+                <input
+                  id="swal-closed-by"
+                  type="text"
+                  class="w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:border-emerald-400/60"
+                  placeholder="Nome do responsável"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-slate-300 mb-1">
+                  Observações <span class="text-slate-500">(opcional)</span>
+                </label>
+                <textarea
+                  id="swal-notes"
+                  rows="3"
+                  class="w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:border-emerald-400/60 resize-none"
+                  placeholder="Anote qualquer detalhe importante sobre o fechamento"
+                ></textarea>
+              </div>
+            </div>
+          </div>
         </div>
       `,
       showCancelButton: true,
       confirmButtonText: "Fechar Caixa",
       cancelButtonText: "Cancelar",
-      confirmButtonColor: "#ef4444",
+      buttonsStyling: false,
+      customClass: {
+        // Dark modal container with padding so the content doesn't look like it's floating
+        popup:
+          "bg-slate-950/95 border border-white/10 rounded-2xl shadow-2xl shadow-black/70 !p-4 sm:!p-6",
+        title: "text-base sm:text-lg font-semibold text-white mb-1",
+        htmlContainer: "px-1 pb-1",
+        confirmButton:
+          "inline-flex justify-center rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 mr-2",
+        cancelButton:
+          "inline-flex justify-center rounded-lg border border-white/15 bg-slate-800/80 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-700/80 focus:outline-none focus:ring-2 focus:ring-slate-500/60 focus:ring-offset-2 focus:ring-offset-slate-900"
+      },
       preConfirm: () => {
         const balanceInput = document.getElementById("swal-closing-balance") as HTMLInputElement;
         const closedByInput = document.getElementById("swal-closed-by") as HTMLInputElement;
@@ -611,7 +683,33 @@ export default function CashPage() {
       }
 
       setCurrentCashier(data.data);
-      Swal.fire("Sucesso", "Caixa fechado com sucesso.", "success");
+
+      const cashierId = data?.data?._id;
+
+      await Swal.fire({
+        title: "Caixa fechado com sucesso",
+        text: "Deseja gerar o relatório em PDF para impressão?",
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonText: "Gerar PDF",
+        cancelButtonText: "Fechar",
+        buttonsStyling: false,
+        customClass: {
+          popup:
+            "bg-slate-950/95 border border-white/10 rounded-2xl shadow-2xl shadow-black/70 !p-4 sm:!p-5",
+          title: "text-base sm:text-lg font-semibold text-white mb-1",
+          htmlContainer: "text-xs sm:text-sm text-slate-200",
+          confirmButton:
+            "inline-flex justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 mr-2",
+          cancelButton:
+            "inline-flex justify-center rounded-lg border border-white/15 bg-slate-800/80 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-700/80 focus:outline-none focus:ring-2 focus:ring-slate-500/60 focus:ring-offset-2 focus:ring-offset-slate-900"
+        }
+      }).then((resultAlert) => {
+        if (resultAlert.isConfirmed && cashierId) {
+          // Open PDF report in a new tab for printing
+          window.open(apiUrl(`/cashiers/${cashierId}/pdf`), "_blank");
+        }
+      });
     } catch (err) {
       console.error(err);
       Swal.fire("Erro", "Falha ao fechar caixa.", "error");
@@ -848,6 +946,125 @@ export default function CashPage() {
           {(!currentCashier || currentCashier.status === "fechado") && (
             <div className="mt-3 rounded-lg border border-yellow-400/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
               ⚠️ Abra um caixa para registrar transações financeiras.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cashiers history / PDF reports */}
+      {mode === "list" && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 mb-3">
+            <div>
+              <h2 className="text-sm sm:text-base font-semibold text-white">Histórico de Caixas</h2>
+              <p className="text-[10px] sm:text-xs text-slate-400">
+                Veja o caixa atual e caixas anteriores e gere relatórios em PDF.
+              </p>
+            </div>
+          </div>
+
+          {(!currentCashier && cashiers.length === 0) && (
+            <div className="text-xs sm:text-sm text-slate-400 py-4 text-center">
+              Nenhum caixa registrado até o momento.
+            </div>
+          )}
+
+          {(currentCashier || cashiers.length > 0) && (
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {currentCashier && (
+                <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="space-y-0.5 text-[11px] sm:text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="font-semibold text-emerald-200">
+                        Caixa atual ({currentCashier.status === "aberto" ? "aberto" : "fechado"})
+                      </span>
+                    </div>
+                    <div className="text-slate-200">
+                      Aberto em:{" "}
+                      <span className="font-medium">
+                        {currentCashier.openedAt
+                          ? new Date(currentCashier.openedAt).toLocaleString("pt-BR")
+                          : "-"}
+                      </span>
+                    </div>
+                    <div className="text-slate-300">
+                      Saldo:{" "}
+                      <span className="font-semibold text-emerald-300">
+                        {formatCurrency(
+                          currentCashier.status === "aberto"
+                            ? currentCashier.currentBalance || currentCashier.openingBalance || 0
+                            : currentCashier.closingBalance ?? currentCashier.openingBalance ?? 0
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!currentCashier?._id) return;
+                        window.open(apiUrl(`/cashiers/${currentCashier._id}/pdf`), "_blank");
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/60 bg-emerald-500/10 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-emerald-200 hover:bg-emerald-500/20 transition"
+                    >
+                      <span>📄</span>
+                      <span>Relatório PDF</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {cashiers.length > 0 && (
+                <div className="space-y-1.5 mt-1">
+                  {cashiers.map((c) => (
+                    <div
+                      key={c._id}
+                      className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11px] sm:text-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-slate-500" />
+                          <span className="font-semibold text-slate-100">
+                            Caixa fechado
+                          </span>
+                        </div>
+                        <div className="text-slate-300">
+                          Aberto em:{" "}
+                          <span className="font-medium">
+                            {c.openedAt ? new Date(c.openedAt).toLocaleString("pt-BR") : "-"}
+                          </span>
+                        </div>
+                        <div className="text-slate-300">
+                          Fechado em:{" "}
+                          <span className="font-medium">
+                            {c.closedAt ? new Date(c.closedAt).toLocaleString("pt-BR") : "-"}
+                          </span>
+                        </div>
+                        <div className="text-slate-300">
+                          Saldo final:{" "}
+                          <span className="font-semibold text-emerald-300">
+                            {formatCurrency(c.closingBalance ?? c.openingBalance ?? 0)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!c._id) return;
+                            window.open(apiUrl(`/cashiers/${c._id}/pdf`), "_blank");
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-[11px] sm:text-xs font-medium text-slate-100 hover:bg-white/10 transition"
+                        >
+                          <span>📄</span>
+                          <span>Relatório PDF</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
