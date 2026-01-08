@@ -209,9 +209,9 @@ export default function CatalogPage() {
       text: "Escolha o diâmetro para a nova variação de preço:",
       input: "select",
       inputOptions: COMMON_DIAMETERS.reduce((acc, d) => {
-        acc[d] = `${d} cm`;
+        acc[String(d)] = `${d} cm`;
         return acc;
-      }, {} as Record<number, string>),
+      }, {} as Record<string, string>),
       inputPlaceholder: "Selecione o diâmetro",
       showCancelButton: true,
       confirmButtonText: "Adicionar",
@@ -234,7 +234,7 @@ export default function CatalogPage() {
       ...f,
       priceVariations: [
         ...f.priceVariations,
-        { diameter: selectedDiameter, soilType: "argiloso", access: "livre", price: 0, executionTime: undefined }
+        { diameter: selectedDiameter, soilType: "misturado", access: "livre", price: 0, executionTime: undefined }
       ]
     }));
     // Expand the group for the newly added variation
@@ -657,7 +657,7 @@ export default function CatalogPage() {
                                 ...f,
                                 priceVariations: [
                                   ...f.priceVariations,
-                                  { diameter, soilType: "argiloso", access: "livre", price: 0 }
+                                  { diameter, soilType: "misturado", access: "livre", price: 0 }
                                 ]
                               }));
                             }}
