@@ -325,6 +325,109 @@ const SERVICE_DEFAULT_CATS: Record<string, string[]> = {
   "4.3": ["Outro (especifique)"]
 };
 
+// Helper function to get date range for date filter
+const getDateRange = (filterType: string): { start: Date; end: Date } | null => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  switch (filterType) {
+    case "ontem": {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const start = new Date(yesterday);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(yesterday);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    case "hoje": {
+      const start = new Date(today);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(today);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    case "amanha": {
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const start = new Date(tomorrow);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(tomorrow);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    case "esse_mes": {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      firstDay.setHours(0, 0, 0, 0);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      lastDay.setHours(23, 59, 59, 999);
+      return { start: firstDay, end: lastDay };
+    }
+    case "esse_ano": {
+      const firstDay = new Date(now.getFullYear(), 0, 1);
+      firstDay.setHours(0, 0, 0, 0);
+      const lastDay = new Date(now.getFullYear(), 11, 31);
+      lastDay.setHours(23, 59, 59, 999);
+      return { start: firstDay, end: lastDay };
+    }
+    default:
+      return null;
+  }
+};
+
+// Helper function to extract date part from ISO string (YYYY-MM-DD)
+const extractDatePart = (dateString: string): string | null => {
+  if (!dateString) return null;
+  // Handle ISO format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DD
+  const match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+};
+
+// Helper function to normalize date to YYYY-MM-DD format for comparison
+const normalizeDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+// Helper function to check if a job's plannedDate matches the date filter
+const matchesDateFilter = (
+  jobPlannedDate: string | null | undefined,
+  filterType: string,
+  customStart?: string,
+  customEnd?: string
+): boolean => {
+  if (filterType === "all") return true;
+  
+  // If job has no plannedDate, exclude it from date-specific filters
+  if (!jobPlannedDate || !jobPlannedDate.trim()) return false;
+  
+  try {
+    // Extract date part to normalize comparison (ignore time component)
+    const jobDatePart = extractDatePart(jobPlannedDate);
+    if (!jobDatePart) return false;
+    
+    if (filterType === "custom") {
+      if (!customStart || !customEnd) return true; // If custom dates not set, show all
+      // Compare date strings directly (YYYY-MM-DD format)
+      return jobDatePart >= customStart && jobDatePart <= customEnd;
+    }
+    
+    const range = getDateRange(filterType);
+    if (!range) return true;
+    
+    // Normalize range dates to YYYY-MM-DD format for comparison
+    const rangeStartStr = normalizeDate(range.start);
+    const rangeEndStr = normalizeDate(range.end);
+    
+    // Compare date strings directly
+    return jobDatePart >= rangeStartStr && jobDatePart <= rangeEndStr;
+  } catch {
+    return false;
+  }
+};
+
 export default function JobsPage() {
   const [mode, setMode] = useState<"list" | "form" | "detail" | "edit">("list");
   const [selected, setSelected] = useState<any | null>(null);
@@ -333,6 +436,29 @@ export default function JobsPage() {
   const [teams, setTeams] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
+  
+  // Set default dates to today and tomorrow
+  const getTodayDate = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  };
+  
+  const getTomorrowDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+  };
+  
+  const todayStr = getTodayDate();
+  const tomorrowStr = getTomorrowDate();
+  
+  const [dateFilter, setDateFilter] = useState<"all" | "ontem" | "hoje" | "amanha" | "esse_mes" | "esse_ano" | "custom">("custom");
+  // Temporary state for custom date inputs (not applied until "Buscar" is clicked)
+  const [tempCustomDateStart, setTempCustomDateStart] = useState(todayStr);
+  const [tempCustomDateEnd, setTempCustomDateEnd] = useState(tomorrowStr);
+  // Applied custom dates (used in filtering) - set to today and tomorrow by default
+  const [customDateStart, setCustomDateStart] = useState(todayStr);
+  const [customDateEnd, setCustomDateEnd] = useState(tomorrowStr);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -549,9 +675,15 @@ export default function JobsPage() {
         job.site.toLowerCase().includes(term);
       const matchesStatus =
         statusFilter === "all" ? true : job.status === statusFilter;
-      return matchesTerm && matchesStatus;
+      const matchesDate = matchesDateFilter(
+        job.plannedDate,
+        dateFilter,
+        customDateStart,
+        customDateEnd
+      );
+      return matchesTerm && matchesStatus && matchesDate;
     });
-  }, [jobs, search, statusFilter]);
+  }, [jobs, search, statusFilter, dateFilter, customDateStart, customDateEnd]);
 
   // Calcular valor total automaticamente a partir dos serviços
   const servicesValuesKey = useMemo(() => {
@@ -1462,6 +1594,68 @@ export default function JobsPage() {
                 </span>
               </div>
             </div>
+            <div className="flex items-center gap-2 text-xs text-slate-200">
+              <span className="hidden sm:inline">Data:</span>
+              <div className="relative flex-1 sm:flex-initial">
+                <select
+                  value={dateFilter}
+                  onChange={(e) => {
+                    setDateFilter(e.target.value as any);
+                    if (e.target.value !== "custom") {
+                      setCustomDateStart("");
+                      setCustomDateEnd("");
+                      setTempCustomDateStart("");
+                      setTempCustomDateEnd("");
+                    } else {
+                      // Initialize temp dates with current applied dates when switching to custom
+                      setTempCustomDateStart(customDateStart);
+                      setTempCustomDateEnd(customDateEnd);
+                    }
+                  }}
+                  className="w-full sm:w-auto appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-3 pr-7 text-xs font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
+                >
+                  <option value="all">Todas</option>
+                  <option value="ontem">Ontem</option>
+                  <option value="hoje">Hoje</option>
+                  <option value="amanha">Amanhã</option>
+                  <option value="esse_mes">Esse Mês</option>
+                  <option value="esse_ano">Esse ano</option>
+                  <option value="custom">Período personalizado</option>
+                </select>
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-300">
+                  ▼
+                </span>
+              </div>
+            </div>
+            {dateFilter === "custom" && (
+              <div className="flex items-center gap-2 text-xs text-slate-200">
+                <input
+                  type="date"
+                  value={tempCustomDateStart}
+                  onChange={(e) => setTempCustomDateStart(e.target.value)}
+                  className="w-full sm:w-auto rounded-md border border-white/10 bg-slate-900 px-3 py-3 text-xs text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
+                  placeholder="Data inicial"
+                />
+                <span className="text-slate-400">até</span>
+                <input
+                  type="date"
+                  value={tempCustomDateEnd}
+                  onChange={(e) => setTempCustomDateEnd(e.target.value)}
+                  className="w-full sm:w-auto rounded-md border border-white/10 bg-slate-900 px-3 py-3 text-xs text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
+                  placeholder="Data final"
+                />
+                <button
+                  onClick={() => {
+                    setCustomDateStart(tempCustomDateStart);
+                    setCustomDateEnd(tempCustomDateEnd);
+                  }}
+                  disabled={!tempCustomDateStart || !tempCustomDateEnd}
+                  className="rounded-md border border-emerald-400/50 bg-emerald-500/20 px-4 py-3 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation active:scale-95"
+                >
+                  Buscar
+                </button>
+              </div>
+            )}
           </div>
 
           <JobsMap jobs={filtered} />

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { apiFetch } from "@/lib/api-client";
+import TeamAvailabilityCalendar from "./_components/TeamAvailabilityCalendar";
 
 declare global {
   interface Window {
@@ -184,6 +185,14 @@ export default function RoadmapPage() {
     return valid;
   }, [filteredJobs]);
 
+  // Closest team per job (cached results)
+  const [closestTeams, setClosestTeams] = useState<Record<string, {
+    teamId: string;
+    teamName: string;
+    distanceKm: number;
+    eta: string;
+  }>>({});
+
   // Update teams ref whenever teams change
   useEffect(() => {
     teamsRef.current = teams;
@@ -196,6 +205,31 @@ export default function RoadmapPage() {
     concluida: jobs.filter(j => j.status === "concluida").length,
     cancelada: jobs.filter(j => j.status === "cancelada").length
   }), [jobs]);
+
+// Calculate straight-line distance between two points (Haversine) in km
+const haversineDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371; // Earth radius in km
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10; // 0.1 km precision
+};
+
+const formatEta = (distanceKm: number): string => {
+  if (!distanceKm || distanceKm <= 0) return "-";
+  const avgSpeedKmH = 40; // Approximate average speed
+  const hours = distanceKm / avgSpeedKmH;
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h > 0) return `${h}h ${m}min`;
+  return `${m}min`;
+};
 
   const initializeMap = useCallback(() => {
     if (!mapRef.current || !window.google || !window.google.maps) {
@@ -953,12 +987,12 @@ export default function RoadmapPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Roadmap de OS</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-white">Roadmap de OS</h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
             Visualize todas as Ordens de Serviço em um mapa interativo
           </p>
         </div>
@@ -999,8 +1033,11 @@ export default function RoadmapPage() {
         </div>
       </div>
 
+      {/* Team Availability Calendar */}
+      <TeamAvailabilityCalendar dateFrom={dateFrom || undefined} dateTo={dateTo || undefined} />
+
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         <div className="rounded-lg border border-white/10 bg-white/5 p-2 sm:p-3">
           <div className="text-xs text-slate-400 uppercase">Total</div>
           <div className="text-lg sm:text-xl font-bold text-white">{stats.total}</div>
@@ -1025,14 +1062,14 @@ export default function RoadmapPage() {
 
       {/* Filters */}
       {showFilters && (
-        <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 space-y-3 sm:space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="rounded-lg sm:rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3 space-y-2 sm:space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             <div>
-              <label className="block text-xs text-slate-400 mb-2">Equipe</label>
+              <label className="block text-[10px] sm:text-xs text-slate-400 mb-1">Equipe</label>
               <select
                 value={selectedTeam}
                 onChange={(e) => setSelectedTeam(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900 text-white text-sm"
+                className="w-full px-2 py-1.5 rounded-lg border border-white/10 bg-slate-900 text-white text-xs sm:text-sm"
               >
                 <option value="all">Todas as equipes</option>
                 {teams.map(team => (
@@ -1041,11 +1078,11 @@ export default function RoadmapPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-2">Status</label>
+              <label className="block text-[10px] sm:text-xs text-slate-400 mb-1">Status</label>
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900 text-white text-sm"
+                className="w-full px-2 py-1.5 rounded-lg border border-white/10 bg-slate-900 text-white text-xs sm:text-sm"
               >
                 <option value="all">Todos os status</option>
                 <option value="pendente">Pendente</option>
@@ -1055,21 +1092,21 @@ export default function RoadmapPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-2">Data Inicial</label>
+              <label className="block text-[10px] sm:text-xs text-slate-400 mb-1">Data Inicial</label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900 text-white text-sm"
+                className="w-full px-2 py-1.5 rounded-lg border border-white/10 bg-slate-900 text-white text-xs sm:text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-2">Data Final</label>
+              <label className="block text-[10px] sm:text-xs text-slate-400 mb-1">Data Final</label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-slate-900 text-white text-sm"
+                className="w-full px-2 py-1.5 rounded-lg border border-white/10 bg-slate-900 text-white text-xs sm:text-sm"
               />
             </div>
           </div>
@@ -1081,7 +1118,7 @@ export default function RoadmapPage() {
                 setDateFrom("");
                 setDateTo("");
               }}
-              className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition text-sm"
+              className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition text-xs sm:text-sm"
             >
               Limpar Filtros
             </button>
@@ -1090,8 +1127,8 @@ export default function RoadmapPage() {
       )}
 
       {/* Map */}
-      <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 overflow-hidden relative">
-        <div ref={mapRef} className="w-full h-[400px] sm:h-[400px] md:h-[450px] lg:h-[500px] xl:h-[600px] min-h-[300px]" />
+      <div className="rounded-lg sm:rounded-xl border border-white/10 bg-white/5 overflow-hidden relative">
+        <div ref={mapRef} className="w-full h-[350px] sm:h-[400px] md:h-[450px] lg:h-[500px] min-h-[300px]" />
         {mapLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50">
             <div className="text-slate-400">Carregando mapa...</div>
@@ -1116,12 +1153,12 @@ export default function RoadmapPage() {
       </div>
 
       {/* Job List - Always visible */}
-      <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-          <h2 className="text-base sm:text-lg font-semibold text-white">Lista de OS ({filteredJobs.length})</h2>
-          <div className="text-xs text-slate-400 hidden sm:block">Clique em uma OS para ver no mapa</div>
+      <div className="rounded-lg sm:rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2 sm:mb-3">
+          <h2 className="text-sm sm:text-base font-semibold text-white">Lista de OS ({filteredJobs.length})</h2>
+          <div className="text-[10px] sm:text-xs text-slate-400 hidden sm:block">Clique em uma OS para ver no mapa</div>
         </div>
-        <div className="space-y-2 max-h-48 sm:max-h-64 md:max-h-72 lg:max-h-96 overflow-y-auto">
+        <div className="space-y-1.5 sm:space-y-2 max-h-40 sm:max-h-48 md:max-h-64 lg:max-h-80 overflow-y-auto">
           {filteredJobs.length === 0 ? (
             <div className="text-center text-slate-400 py-8">
               Nenhuma OS encontrada com os filtros aplicados
@@ -1137,49 +1174,122 @@ export default function RoadmapPage() {
                     setSelectedJob(job);
                   }
                 }}
-                className={`rounded-lg border p-2 sm:p-3 cursor-pointer transition ${
+                className={`rounded-lg border p-1.5 sm:p-2 cursor-pointer transition ${
                   job.latitude && job.longitude
                     ? "border-white/10 bg-white/5 hover:bg-white/10 hover:border-emerald-400/50"
                     : "border-white/5 bg-white/5 opacity-60"
                 }`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="font-semibold text-white text-xs sm:text-sm truncate">{job.title}</div>
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                      <div className="font-semibold text-white text-[11px] sm:text-xs truncate">{job.title}</div>
                       {job.latitude && job.longitude && (
-                        <svg className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                       )}
                     </div>
-                    {job.seq && <div className="text-xs text-slate-400 mt-0.5">OS #{job.seq}</div>}
-                    <div className="text-xs text-slate-400 mt-1 truncate">{job.clientName}</div>
-                    <div className="text-xs text-slate-400 truncate">{job.site}</div>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded ${getStatusColor(job.status)}`}>
+                    {job.seq && <div className="text-[10px] sm:text-xs text-slate-400 mt-0.5">OS #{job.seq}</div>}
+                    <div className="text-[10px] sm:text-xs text-slate-400 mt-0.5 truncate">{job.clientName}</div>
+                    <div className="text-[10px] sm:text-xs text-slate-400 truncate">{job.site}</div>
+                    <div className="flex items-center gap-1.5 sm:gap-2 mt-1.5 sm:mt-2 flex-wrap">
+                      <span className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded ${getStatusColor(job.status)}`}>
                         {getStatusLabel(job.status)}
                       </span>
-                      <span className="text-xs text-slate-400 truncate">{job.team}</span>
+                      <span className="text-[10px] sm:text-xs text-slate-400 truncate">{job.team}</span>
                       {job.plannedDate && (
-                        <span className="text-xs text-slate-500 hidden sm:inline">• {formatDate(job.plannedDate)}</span>
+                        <span className="text-[10px] sm:text-xs text-slate-500 hidden sm:inline">• {formatDate(job.plannedDate)}</span>
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1 sm:gap-1">
+                  <div className="flex flex-col items-end gap-1.5 sm:gap-2">
                     {job.finalValue && (
-                      <div className="text-xs sm:text-sm font-semibold text-emerald-300">
+                      <div className="text-[11px] sm:text-xs font-semibold text-emerald-300">
                         {formatCurrency(job.finalValue)}
                       </div>
                     )}
                     {job.latitude && job.longitude ? (
-                      <div className="text-xs text-emerald-400 font-medium">📍 Ver no mapa</div>
+                      <div className="flex flex-col sm:flex-row items-end gap-1.5 sm:gap-2">
+                        <div className="text-[10px] sm:text-xs text-emerald-400 font-medium">📍 Ver no mapa</div>
+                        {teamsWithLocation.length > 0 && !closestTeams[job._id] && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+
+                              if (!job.latitude || !job.longitude) return;
+
+                              let bestTeam: { teamId: string; teamName: string; distanceKm: number; eta: string } | null = null;
+
+                              teamsWithLocation.forEach((team) => {
+                                if (!team.currentLocation) return;
+                                const distanceKm = haversineDistanceKm(
+                                  job.latitude,
+                                  job.longitude,
+                                  team.currentLocation.latitude,
+                                  team.currentLocation.longitude
+                                );
+                                if (!bestTeam || distanceKm < bestTeam.distanceKm) {
+                                  bestTeam = {
+                                    teamId: team._id,
+                                    teamName: team.name,
+                                    distanceKm,
+                                    eta: formatEta(distanceKm)
+                                  };
+                                }
+                              });
+
+                              if (bestTeam) {
+                                setClosestTeams((prev) => ({
+                                  ...prev,
+                                  [job._id]: bestTeam
+                                }));
+                              }
+                            }}
+                            className="text-[10px] sm:text-xs px-2.5 py-1.5 rounded border border-blue-400/60 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 transition whitespace-nowrap"
+                          >
+                            Equipe mais próxima
+                          </button>
+                        )}
+                      </div>
                     ) : (
-                      <div className="text-xs text-slate-500">Sem localização</div>
+                      <div className="text-[10px] sm:text-xs text-slate-500">Sem localização</div>
                     )}
                   </div>
                 </div>
+                {closestTeams[job._id] && (() => {
+                  const closestTeamData = closestTeams[job._id];
+                  const team = teamsWithLocation.find(t => t._id === closestTeamData.teamId);
+                  const locationTimestamp = team?.currentLocation?.timestamp;
+                  const timeAgo = locationTimestamp 
+                    ? Math.floor((Date.now() - new Date(locationTimestamp).getTime()) / 1000 / 60)
+                    : null;
+                  let timeText = "";
+                  if (timeAgo !== null) {
+                    if (timeAgo < 1) timeText = "Agora mesmo";
+                    else if (timeAgo < 60) timeText = `${timeAgo}min atrás`;
+                    else if (timeAgo < 1440) timeText = `${Math.floor(timeAgo / 60)}h atrás`;
+                    else timeText = `${Math.floor(timeAgo / 1440)}d atrás`;
+                  }
+                  
+                  return (
+                    <div className="mt-1.5 sm:mt-2 rounded border border-blue-500/40 bg-blue-500/10 px-2 py-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-blue-100">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <span className="font-semibold">Equipe mais próxima:</span>
+                        <span className="font-medium">{closestTeamData.teamName}</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-[9px] sm:text-[10px]">
+                        <span>{closestTeamData.distanceKm.toFixed(1)} km</span>
+                        <span>• ETA aprox.: {closestTeamData.eta}</span>
+                        {timeText && (
+                          <span className="text-blue-200/70 italic">• {timeText}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ))
           )}
@@ -1271,12 +1381,12 @@ export default function RoadmapPage() {
       )}
 
       {/* Team List - Always visible */}
-      <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-          <h2 className="text-base sm:text-lg font-semibold text-white">Localizações das Equipes ({teamsWithLocation.length})</h2>
-          <div className="text-xs text-slate-400 hidden sm:block">Clique em uma equipe para ver no mapa</div>
+      <div className="rounded-lg sm:rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2 sm:mb-3">
+          <h2 className="text-sm sm:text-base font-semibold text-white">Localizações das Equipes ({teamsWithLocation.length})</h2>
+          <div className="text-[10px] sm:text-xs text-slate-400 hidden sm:block">Clique em uma equipe para ver no mapa</div>
         </div>
-        <div className="space-y-2 max-h-48 sm:max-h-64 md:max-h-72 lg:max-h-96 overflow-y-auto">
+        <div className="space-y-1.5 sm:space-y-2 max-h-40 sm:max-h-48 md:max-h-64 lg:max-h-80 overflow-y-auto">
           {teamsWithLocation.length === 0 ? (
             <div className="text-center text-slate-400 py-8">
               Nenhuma equipe com localização disponível
@@ -1299,29 +1409,29 @@ export default function RoadmapPage() {
                 <div
                   key={team._id}
                   onClick={() => navigateToTeam(team)}
-                  className="rounded-lg border border-purple-500/50 bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-400/50 p-2 sm:p-3 cursor-pointer transition"
+                  className="rounded-lg border border-purple-500/50 bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-400/50 p-1.5 sm:p-2 cursor-pointer transition"
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="font-semibold text-white text-xs sm:text-sm truncate">👥 {team.name}</div>
-                        <svg className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                        <div className="font-semibold text-white text-[11px] sm:text-xs truncate">👥 {team.name}</div>
+                        <svg className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                       </div>
                       {team.currentLocation?.address && (
-                        <div className="text-xs text-slate-400 mt-1 line-clamp-2">{team.currentLocation.address}</div>
+                        <div className="text-[10px] sm:text-xs text-slate-400 mt-0.5 line-clamp-2">{team.currentLocation.address}</div>
                       )}
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span className={`text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded ${
+                      <div className="flex items-center gap-1.5 sm:gap-2 mt-1.5 sm:mt-2 flex-wrap">
+                        <span className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded ${
                           team.status === "ativa" 
                             ? "bg-green-500/20 text-green-300 border-green-500/50" 
                             : "bg-red-500/20 text-red-300 border-red-500/50"
                         }`}>
                           {team.status === "ativa" ? "Ativa" : "Inativa"}
                         </span>
-                        <span className="text-xs text-slate-400">📍 {timeText}</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400">📍 {timeText}</span>
                       </div>
                     </div>
                   </div>

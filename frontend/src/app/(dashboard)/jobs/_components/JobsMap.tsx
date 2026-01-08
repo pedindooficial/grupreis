@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 interface Job {
   _id: string;
@@ -46,6 +47,8 @@ export default function JobsMap({ jobs }: JobsMapProps) {
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [teams, setTeams] = useState<any[]>([]);
+  const teamMarkersRef = useRef<any[]>([]);
 
   const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
@@ -171,11 +174,21 @@ export default function JobsMap({ jobs }: JobsMapProps) {
         center: defaultCenter,
         disableDefaultUI: false,
         zoomControl: true,
-        mapTypeControl: false,
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+          style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+          position: window.google.maps.ControlPosition.TOP_RIGHT,
+          // Use HYBRID so Satellite view shows roads and labels
+          mapTypeIds: [
+            window.google.maps.MapTypeId.ROADMAP,
+            window.google.maps.MapTypeId.HYBRID
+          ]
+        },
         scaleControl: true,
         streetViewControl: false,
         rotateControl: false,
         fullscreenControl: true,
+        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
         styles: [
           {
             featureType: "all",
@@ -243,6 +256,8 @@ export default function JobsMap({ jobs }: JobsMapProps) {
 
     if (jobsWithAddress.length === 0) {
       addDebug("Nenhum job com endereço para geocodificar");
+      // Clear job sites state when there are no jobs
+      setJobSites([]);
       return;
     }
 
@@ -427,10 +442,24 @@ export default function JobsMap({ jobs }: JobsMapProps) {
       // Aplicar filtros iniciais
       applyFilters();
       
+      // Recriar marcadores de equipes após atualizar os jobs,
+      // garantindo que não desapareçam após a geocodificação
+      try {
+        createTeamMarkers(mapInstance);
+      } catch (err) {
+        console.error("Erro ao recriar marcadores de equipes:", err);
+      }
+      
       addDebug(`✅ ${markersRef.current.length} marcador(es) adicionado(s)`);
     } else {
       addDebug("⚠️ Nenhum marcador foi criado");
       setJobSites([]);
+      // Mesmo sem marcadores de OS, ainda podemos mostrar as equipes
+      try {
+        createTeamMarkers(mapInstance);
+      } catch (err) {
+        console.error("Erro ao criar marcadores de equipes (sem OS):", err);
+      }
     }
   };
 
@@ -620,6 +649,187 @@ export default function JobsMap({ jobs }: JobsMapProps) {
     return statusColors[bestStatus] || "#6b7280";
   };
 
+  // Update map styles when map type changes (handled by Google Maps control)
+  useEffect(() => {
+    if (mapInstanceRef.current && window.google && window.google.maps) {
+      // Listen to map type changes to update styles
+      const listener = window.google.maps.event.addListener(
+        mapInstanceRef.current,
+        'maptypeid_changed',
+        () => {
+          const currentMapType = mapInstanceRef.current.getMapTypeId();
+          if (currentMapType === window.google.maps.MapTypeId.ROADMAP) {
+            mapInstanceRef.current.setOptions({
+              styles: [
+                {
+                  featureType: "all",
+                  elementType: "geometry",
+                  stylers: [{ color: "#242f3e" }]
+                },
+                {
+                  featureType: "all",
+                  elementType: "labels.text.stroke",
+                  stylers: [{ color: "#242f3e" }]
+                },
+                {
+                  featureType: "all",
+                  elementType: "labels.text.fill",
+                  stylers: [{ color: "#746855" }]
+                },
+                {
+                  featureType: "water",
+                  elementType: "geometry",
+                  stylers: [{ color: "#17263c" }]
+                },
+                {
+                  featureType: "landscape",
+                  elementType: "geometry",
+                  stylers: [{ color: "#2c3e50" }]
+                }
+              ]
+            });
+          } else {
+            mapInstanceRef.current.setOptions({ styles: [] });
+          }
+        }
+      );
+      
+      return () => {
+        window.google.maps.event.removeListener(listener);
+      };
+    }
+  }, [mapReady]);
+
+  // Load teams with locations
+  useEffect(() => {
+    const loadTeams = async () => {
+      try {
+        const res = await apiFetch("/teams?locations=true", { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.data) {
+          setTeams(Array.isArray(data.data) ? data.data : []);
+        }
+      } catch (err) {
+        console.error("Error loading teams:", err);
+      }
+    };
+    loadTeams();
+  }, []);
+
+  // Create team location markers
+  const createTeamMarkers = (mapInstance: any) => {
+    if (!window.google || !window.google.maps || !mapInstance) return;
+
+    // Clear existing team markers
+    teamMarkersRef.current.forEach((marker) => {
+      if (marker) marker.setMap(null);
+    });
+    teamMarkersRef.current = [];
+
+    const teamsWithLocation = teams.filter(
+      (team) => team.currentLocation?.latitude && team.currentLocation?.longitude
+    );
+
+    if (teamsWithLocation.length === 0) return;
+
+    // Agrupar equipes por mesma coordenada (para exibir todas quando estiverem no mesmo ponto)
+    const teamsByLocation = new Map<string, any[]>();
+    teamsWithLocation.forEach((team) => {
+      const lat = team.currentLocation.latitude;
+      const lng = team.currentLocation.longitude;
+      const key = `${lat.toFixed(5)}_${lng.toFixed(5)}`;
+      if (!teamsByLocation.has(key)) {
+        teamsByLocation.set(key, []);
+      }
+      teamsByLocation.get(key)!.push(team);
+    });
+
+    teamsByLocation.forEach((teamsAtLocation, key) => {
+      const [latStr, lngStr] = key.split("_");
+      const position = {
+        lat: parseFloat(latStr),
+        lng: parseFloat(lngStr)
+      };
+
+      const count = teamsAtLocation.length;
+
+      // Custom icon for team cluster
+      const teamIcon = {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale: count > 1 ? 9 : 8,
+        fillColor: "#8b5cf6",
+        fillOpacity: 1,
+        strokeColor: "#ffffff",
+        strokeWeight: 2
+      };
+
+      const marker = new window.google.maps.Marker({
+        position,
+        map: mapInstance,
+        icon: teamIcon,
+        label: count > 1 ? {
+          text: String(count),
+          color: "#ffffff",
+          fontSize: "10px",
+          fontWeight: "bold"
+        } : undefined,
+        title: count > 1
+          ? `Equipes neste local: ${teamsAtLocation.map((t: any) => t.name).join(", ")}`
+          : `Equipe: ${teamsAtLocation[0].name}`,
+        zIndex: 1000
+      });
+
+      // Build info window content listing all teams at this location
+      const teamsHtml = teamsAtLocation.map((team: any) => {
+        const timestamp = new Date(team.currentLocation.timestamp);
+        const timeAgo = Math.floor((Date.now() - timestamp.getTime()) / 1000 / 60);
+        let timeText = "";
+        if (timeAgo < 1) timeText = "Agora mesmo";
+        else if (timeAgo < 60) timeText = `${timeAgo}min atrás`;
+        else if (timeAgo < 1440) timeText = `${Math.floor(timeAgo / 60)}h atrás`;
+        else timeText = `${Math.floor(timeAgo / 1440)}d atrás`;
+
+        return `
+          <div style="margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb;">
+            <div style="font-weight: 600; font-size: 13px; color: #111827;">${team.name}</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
+              ${team.currentLocation.address || "Endereço não disponível"}
+            </div>
+            <div style="font-size: 10px; color: #9ca3af; font-style: italic; margin-top: 2px;">
+              Atualizado: ${timeText}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div style="padding: 8px; min-width: 220px;">
+            <div style="font-weight: bold; font-size: 14px; margin-bottom: 6px; color: #8b5cf6;">
+              👥 ${count > 1 ? `${count} equipes neste local` : teamsAtLocation[0].name}
+            </div>
+            ${teamsHtml}
+          </div>
+        `
+      });
+
+      marker.addListener("click", () => {
+        infoWindow.open(mapInstance, marker);
+      });
+
+      teamMarkersRef.current.push(marker);
+    });
+
+    addDebug(`Marcadores de equipes criados: ${teamsWithLocation.length} em ${teamsByLocation.size} localizações`);
+  };
+
+  // Update team markers when teams or map changes
+  useEffect(() => {
+    if (mapReady && mapInstanceRef.current && window.google && window.google.maps && teams.length > 0) {
+      createTeamMarkers(mapInstanceRef.current);
+    }
+  }, [teams, mapReady]);
+
   // Atualizar marcadores quando jobs mudarem OU quando o mapa ficar pronto
   useEffect(() => {
     addDebug(
@@ -641,6 +851,9 @@ export default function JobsMap({ jobs }: JobsMapProps) {
           if (marker) marker.setMap(null);
         });
         markersRef.current = [];
+        // Clear job sites ref and state
+        jobSitesRef.current.clear();
+        setJobSites([]);
       }
     } else {
       addDebug("Mapa ou Google Maps não disponível para atualizar marcadores");
