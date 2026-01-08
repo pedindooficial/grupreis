@@ -20,6 +20,7 @@ import DocumentsPage from './app/(dashboard)/documents/page';
 import AuditPage from './app/(dashboard)/audit/page';
 import SettingsPage from './app/(dashboard)/settings/page';
 import OrcamentoRequestsPage from './app/(dashboard)/orcamento-requests/page';
+import OrcamentosPage from './app/(dashboard)/orcamentos/page';
 import RoadmapPage from './app/(dashboard)/roadmap/page';
 import SocialPage from './app/(dashboard)/social/page';
 import OperationsPage from './app/operations/[token]/page';
@@ -71,6 +72,7 @@ function App() {
                     <Route path="/audit" element={<AuditPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/orcamento-requests" element={<OrcamentoRequestsPage />} />
+                    <Route path="/orcamentos" element={<OrcamentosPage />} />
                     <Route path="/roadmap" element={<RoadmapPage />} />
                     <Route path="/social" element={<SocialPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />

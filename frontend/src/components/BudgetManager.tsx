@@ -123,6 +123,11 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
   });
 
   const [calculatingDistance, setCalculatingDistance] = useState(false);
+  const [clientData, setClientData] = useState<any>(null);
+  const [teamsWithLocation, setTeamsWithLocation] = useState<any[]>([]);
+  const [selectedClientAddress, setSelectedClientAddress] = useState<string>("");
+  const [startPointType, setStartPointType] = useState<"sede" | "team">("sede");
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
 
   useEffect(() => {
     loadData();
@@ -167,20 +172,40 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
   const loadData = async () => {
     try {
       setLoading(true);
-      const [budgetsRes, catalogRes, teamsRes] = await Promise.all([
+      const [budgetsRes, catalogRes, teamsRes, clientRes, teamsWithLocRes] = await Promise.all([
         apiFetch("/budgets/client/" + clientId, { cache: "no-store" }),
         apiFetch("/catalog", { cache: "no-store" }),
-        apiFetch("/teams", { cache: "no-store" })
+        apiFetch("/teams", { cache: "no-store" }),
+        apiFetch("/clients/" + clientId, { cache: "no-store" }),
+        apiFetch("/teams?locations=true", { cache: "no-store" })
       ]);
 
       const budgetsData = await budgetsRes.json().catch(() => null);
       const catalogData = await catalogRes.json().catch(() => null);
       const teamsData = await teamsRes.json().catch(() => null);
+      const clientData = await clientRes.json().catch(() => null);
+      const teamsWithLocData = await teamsWithLocRes.json().catch(() => null);
 
       const budgetsList = budgetsData?.data || [];
       setBudgets(budgetsList);
       setCatalog(catalogData?.data || []);
       setTeams(Array.isArray(teamsData?.data) ? teamsData.data : []);
+      setClientData(clientData?.data || null);
+      
+      // Filter teams with valid locations
+      const teamsWithLoc = (Array.isArray(teamsWithLocData?.data) ? teamsWithLocData.data : [])
+        .filter((t: any) => t.currentLocation?.latitude && t.currentLocation?.longitude && t.status === "ativa");
+      setTeamsWithLocation(teamsWithLoc);
+      
+      // Set default selected client address (first address if available)
+      if (clientData?.data) {
+        const client = clientData.data;
+        if (client.addresses && Array.isArray(client.addresses) && client.addresses.length > 0) {
+          setSelectedClientAddress(client.addresses[0].address || "");
+        } else if (client.address) {
+          setSelectedClientAddress(client.address);
+        }
+      }
       
       // Auto-select budget if initialBudgetId is provided
       if (initialBudgetId && budgetsList.length > 0) {
@@ -329,18 +354,87 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
     }
   };
 
-  const calculateTravelPrice = async (clientAddress: string) => {
+  const getStartAddress = async (): Promise<string | null> => {
+    if (startPointType === "team" && selectedTeamId) {
+      const selectedTeam = teamsWithLocation.find((t) => t._id === selectedTeamId);
+      if (selectedTeam?.currentLocation?.address) {
+        return selectedTeam.currentLocation.address;
+      } else if (selectedTeam?.currentLocation?.latitude && selectedTeam?.currentLocation?.longitude) {
+        // Use coordinates if no address
+        return `${selectedTeam.currentLocation.latitude},${selectedTeam.currentLocation.longitude}`;
+      }
+      return null;
+    } else if (startPointType === "sede") {
+      // Get headquarters address from settings
+      try {
+        const res = await apiFetch("/settings", { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.data?.headquartersAddress) {
+          return data.data.headquartersAddress;
+        }
+      } catch (err) {
+        console.error("Error fetching settings:", err);
+      }
+    }
+    return null;
+  };
+
+  const openRouteInMaps = async () => {
+    const clientAddress = selectedClientAddress;
     if (!clientAddress || !clientAddress.trim()) {
-      Swal.fire("Atenção", "Endereço do cliente não informado", "warning");
+      Swal.fire("Atenção", "Selecione um endereço do cliente", "warning");
       return;
     }
 
+    const startAddress = await getStartAddress();
+    if (!startAddress) {
+      Swal.fire("Atenção", "Não foi possível determinar o ponto de partida", "warning");
+      return;
+    }
+
+    // Build Google Maps directions URL
+    const origin = encodeURIComponent(startAddress);
+    const destination = encodeURIComponent(clientAddress.trim());
+    const mapsUrl = `https://www.google.com/maps/dir/${origin}/${destination}`;
+    
+    // Open in new tab
+    window.open(mapsUrl, "_blank");
+  };
+
+  const calculateTravelPrice = async () => {
+    const clientAddress = selectedClientAddress;
+    if (!clientAddress || !clientAddress.trim()) {
+      Swal.fire("Atenção", "Selecione um endereço do cliente", "warning");
+      return;
+    }
+
+    // Determine start address based on selection
+    let startAddress: string | undefined = undefined;
+    
+    if (startPointType === "team" && selectedTeamId) {
+      const selectedTeam = teamsWithLocation.find((t) => t._id === selectedTeamId);
+      if (selectedTeam?.currentLocation?.address) {
+        startAddress = selectedTeam.currentLocation.address;
+      } else if (selectedTeam?.currentLocation?.latitude && selectedTeam?.currentLocation?.longitude) {
+        // If team has coordinates but no address, we'll use coordinates
+        // But for now, let's try to get address via reverse geocoding or use coordinates directly
+        startAddress = `${selectedTeam.currentLocation.latitude},${selectedTeam.currentLocation.longitude}`;
+      } else {
+        Swal.fire("Atenção", "A equipe selecionada não possui localização válida", "warning");
+        return;
+      }
+    }
+    // If startPointType === "sede", startAddress will be undefined, and backend will use headquartersAddress
+
     try {
       setCalculatingDistance(true);
-      console.log("Calculando distância para:", clientAddress);
+      console.log("Calculando distância de:", startAddress || "Endereço da Sede", "para:", clientAddress);
       const res = await apiFetch("/distance/calculate", {
         method: "POST",
-        body: JSON.stringify({ clientAddress })
+        body: JSON.stringify({ 
+          clientAddress: clientAddress.trim(),
+          startAddress: startAddress?.trim() || undefined
+        })
       });
 
       const data = await res.json().catch(() => null);
@@ -425,6 +519,9 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
           travelPrice: data.data.travelPrice || 0,
           travelDescription: data.data.travelDescription || ""
         }));
+        
+        // Update selected client address in state
+        setSelectedClientAddress(clientAddress);
 
         Swal.fire({
           title: "Distância Calculada",
@@ -491,6 +588,10 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
       notes: budget.notes || "",
       validUntil: budget.validUntil || ""
     });
+    // Set selected client address when editing
+    if (budget.selectedAddress) {
+      setSelectedClientAddress(budget.selectedAddress);
+    }
     // Expand all services when editing
     setExpandedServices(new Set(budget.services.map((_: any, idx: number) => Date.now().toString() + idx)));
     setMode("form");
@@ -1573,79 +1674,134 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
               </div>
 
             {/* Travel/Displacement */}
-            <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 p-4">
-              <div className="flex items-center justify-between mb-3">
+            <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 p-4 space-y-3">
+              <div className="flex items-center justify-between">
                 <h4 className="text-sm font-semibold text-white flex items-center gap-2">
                   🚗 Deslocamento
                 </h4>
+              </div>
+              
+              {/* Client Address Selection */}
+              <div>
+                <label className="text-xs text-slate-300 mb-1 block">Endereço do Cliente *</label>
+                {clientData && (
+                  <>
+                    {clientData.addresses && Array.isArray(clientData.addresses) && clientData.addresses.length > 0 ? (
+                      <select
+                        value={selectedClientAddress}
+                        onChange={(e) => setSelectedClientAddress(e.target.value)}
+                        className="w-full rounded border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                      >
+                        {clientData.addresses.map((addr: any, idx: number) => (
+                          <option key={idx} value={addr.address || ""}>
+                            {addr.label ? `${addr.label}: ${addr.address}` : addr.address}
+                          </option>
+                        ))}
+                      </select>
+                    ) : clientData.address ? (
+                      <input
+                        type="text"
+                        value={selectedClientAddress}
+                        onChange={(e) => setSelectedClientAddress(e.target.value)}
+                        className="w-full rounded border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                        placeholder="Endereço do cliente"
+                      />
+                    ) : (
+                      <div className="text-xs text-yellow-300 bg-yellow-500/10 border border-yellow-500/30 rounded p-2">
+                        Cliente sem endereço cadastrado. Adicione um endereço na página de clientes.
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Start Point Selection */}
+              <div>
+                <label className="text-xs text-slate-300 mb-1 block">Ponto de Partida</label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      id="start-sede"
+                      name="startPoint"
+                      checked={startPointType === "sede"}
+                      onChange={() => {
+                        setStartPointType("sede");
+                        setSelectedTeamId("");
+                      }}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <label htmlFor="start-sede" className="text-xs text-slate-200 cursor-pointer">
+                      Endereço da Sede (padrão)
+                    </label>
+                  </div>
+                  {teamsWithLocation.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        id="start-team"
+                        name="startPoint"
+                        checked={startPointType === "team"}
+                        onChange={() => setStartPointType("team")}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <label htmlFor="start-team" className="text-xs text-slate-200 cursor-pointer">
+                        Localização da Equipe
+                      </label>
+                    </div>
+                  )}
+                  {startPointType === "team" && teamsWithLocation.length > 0 && (
+                    <select
+                      value={selectedTeamId}
+                      onChange={(e) => setSelectedTeamId(e.target.value)}
+                      className="w-full rounded border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white ml-6"
+                    >
+                      <option value="">Selecione a equipe...</option>
+                      {teamsWithLocation.map((team: any) => {
+                        const timeAgo = team.currentLocation?.timestamp 
+                          ? Math.floor((Date.now() - new Date(team.currentLocation.timestamp).getTime()) / 1000 / 60)
+                          : null;
+                        let timeText = "";
+                        if (timeAgo !== null) {
+                          if (timeAgo < 1) timeText = "Agora mesmo";
+                          else if (timeAgo < 60) timeText = `${timeAgo}min atrás`;
+                          else if (timeAgo < 1440) timeText = `${Math.floor(timeAgo / 60)}h atrás`;
+                          else timeText = `${Math.floor(timeAgo / 1440)}d atrás`;
+                        }
+                        return (
+                          <option key={team._id} value={team._id}>
+                            {team.name} {team.currentLocation?.address ? `- ${team.currentLocation.address.substring(0, 40)}...` : ""} {timeText ? `(${timeText})` : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  )}
+                  {startPointType === "team" && teamsWithLocation.length === 0 && (
+                    <div className="text-xs text-yellow-300 bg-yellow-500/10 border border-yellow-500/30 rounded p-2 ml-6">
+                      Nenhuma equipe com localização disponível.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={async () => {
-                    try {
-                      // Get client data
-                      const res = await apiFetch(`/clients/${clientId}`);
-                      const data = await res.json();
-                      console.log("Dados do cliente:", data);
-                      
-                      let addresses: string[] = [];
-                      
-                      // Collect all available addresses
-                      if (data?.data?.addresses && Array.isArray(data.data.addresses) && data.data.addresses.length > 0) {
-                        addresses = data.data.addresses
-                          .map((addr: any) => addr.address)
-                          .filter((addr: string) => addr && addr.trim());
-                      } else if (data?.data?.address) {
-                        addresses = [data.data.address];
-                      }
-                      
-                      if (addresses.length === 0) {
-                        Swal.fire("Atenção", "Cliente sem endereço cadastrado", "warning");
-                        return;
-                      }
-                      
-                      let selectedAddress = addresses[0];
-                      
-                      // If multiple addresses, ask user to select
-                      if (addresses.length > 1) {
-                        const { value: selection } = await Swal.fire({
-                          title: "Selecione o Endereço",
-                          html: `
-                            <div class="text-left">
-                              <p class="mb-3 text-sm text-slate-600">Este cliente possui ${addresses.length} endereços cadastrados. Selecione qual usar para o cálculo de deslocamento:</p>
-                              <select id="addressSelect" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
-                                ${addresses.map((addr, idx) => 
-                                  `<option value="${idx}">${addr}</option>`
-                                ).join("")}
-                              </select>
-                            </div>
-                          `,
-                          showCancelButton: true,
-                          confirmButtonText: "Calcular",
-                          cancelButtonText: "Cancelar",
-                          preConfirm: () => {
-                            const select = document.getElementById("addressSelect") as HTMLSelectElement;
-                            return select ? parseInt(select.value) : 0;
-                          }
-                        });
-                        
-                        if (selection === undefined) return; // User cancelled
-                        selectedAddress = addresses[selection];
-                      }
-                      
-                      if (selectedAddress && selectedAddress.trim()) {
-                        calculateTravelPrice(selectedAddress.trim());
-                      } else {
-                        Swal.fire("Atenção", "Endereço inválido", "warning");
-                      }
-                    } catch (err) {
-                      console.error(err);
-                      Swal.fire("Erro", "Falha ao buscar endereço do cliente", "error");
-                    }
-                  }}
-                  disabled={calculatingDistance}
-                  className="px-3 py-1 rounded text-xs font-semibold border border-blue-400/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30 transition disabled:opacity-50"
+                  onClick={calculateTravelPrice}
+                  disabled={calculatingDistance || !selectedClientAddress}
+                  className="flex-1 px-3 py-2 rounded text-xs font-semibold border border-blue-400/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {calculatingDistance ? "Calculando..." : "📍 Calcular"}
+                </button>
+                <button
+                  type="button"
+                  onClick={openRouteInMaps}
+                  disabled={!selectedClientAddress || (startPointType === "team" && !selectedTeamId)}
+                  className="px-3 py-2 rounded text-xs font-semibold border border-emerald-400/50 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Abrir rota no Google Maps"
+                >
+                  🗺️ Ver Rota
                 </button>
               </div>
               {form.travelDistanceKm > 0 ? (
@@ -1660,6 +1816,24 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                       R$ {form.travelPrice.toFixed(2)}
                     </span>
                   </div>
+                  {form.selectedAddress && (
+                    <div className="text-xs text-blue-200/80 pt-1">
+                      📍 Destino: {form.selectedAddress}
+                    </div>
+                  )}
+                  {startPointType === "team" && selectedTeamId && (
+                    <div className="text-xs text-purple-200/80 pt-1">
+                      🚗 Origem: {teamsWithLocation.find((t) => t._id === selectedTeamId)?.name || "Equipe"} 
+                      {teamsWithLocation.find((t) => t._id === selectedTeamId)?.currentLocation?.address 
+                        ? ` - ${teamsWithLocation.find((t) => t._id === selectedTeamId)?.currentLocation?.address}` 
+                        : " (localização atual)"}
+                    </div>
+                  )}
+                  {startPointType === "sede" && (
+                    <div className="text-xs text-blue-200/80 pt-1">
+                      🏢 Origem: Endereço da Sede
+                    </div>
+                  )}
                   {form.travelDescription && (
                     <div className="text-xs text-slate-400 pt-2 border-t border-blue-400/20">
                       {form.travelDescription}
@@ -1668,7 +1842,7 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
                 </div>
               ) : (
                 <p className="text-xs text-slate-400">
-                  Clique em "Calcular" para obter a distância e o preço de deslocamento.
+                  Selecione o endereço do cliente e o ponto de partida, depois clique em "Calcular" para obter a distância e o preço de deslocamento.
                 </p>
               )}
             </div>

@@ -341,7 +341,7 @@ function Sidebar() {
     { label: "Catálogo", href: "/catalog", icon: ICONS.catalog },
     { 
       label: "Orçamentos", 
-      href: "/orcamento-requests", 
+      href: "/orcamentos", 
       icon: ICONS.orcamentos,
       badge: pendingOrcamentoCount > 0 ? pendingOrcamentoCount : null
     },
@@ -452,7 +452,7 @@ export default function DashboardLayout({
             { label: "Catálogo", href: "/catalog", icon: ICONS.catalog },
             { 
               label: "Orçamentos", 
-              href: "/orcamento-requests", 
+              href: "/orcamentos", 
               icon: ICONS.orcamentos,
               badge: pendingOrcamentoCount > 0 ? pendingOrcamentoCount : null
             },

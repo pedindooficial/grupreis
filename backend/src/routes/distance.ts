@@ -7,7 +7,8 @@ import TravelPricingModel from "../models/TravelPricing";
 const router = Router();
 
 const calculateDistanceSchema = z.object({
-  clientAddress: z.string().min(1, "Endereço do cliente é obrigatório")
+  clientAddress: z.string().min(1, "Endereço do cliente é obrigatório"),
+  startAddress: z.string().optional() // Optional: if not provided, uses headquartersAddress from settings
 });
 
 // Helper to normalize address format for Google Maps
@@ -39,24 +40,33 @@ router.post("/calculate", async (req, res) => {
 
     await connectDB();
 
-    // Get company address from settings
-    const settings = await SettingsModel.findOne().lean();
-    console.log("Settings encontrado:", settings ? "Sim" : "Não");
+    // Determine start address: use provided startAddress, or fallback to headquartersAddress from settings
+    let startAddress: string;
     
-    if (!settings || !settings.headquartersAddress) {
-      return res.status(400).json({ 
-        error: "Endereço da empresa não configurado. Configure em Configurações." 
-      });
+    if (parsed.data.startAddress && parsed.data.startAddress.trim()) {
+      // Use provided start address (could be team location or custom address)
+      startAddress = normalizeAddress(parsed.data.startAddress);
+    } else {
+      // Fallback to headquarters address from settings
+      const settings = await SettingsModel.findOne().lean();
+      console.log("Settings encontrado:", settings ? "Sim" : "Não");
+      
+      if (!settings || !settings.headquartersAddress) {
+        return res.status(400).json({ 
+          error: "Endereço da empresa não configurado. Configure em Configurações." 
+        });
+      }
+      
+      startAddress = normalizeAddress(settings.headquartersAddress);
     }
 
     // Normalize addresses for better Google Maps compatibility
-    const companyAddress = normalizeAddress(settings.headquartersAddress);
     const clientAddress = normalizeAddress(parsed.data.clientAddress);
     
-    console.log("Endereço da empresa (normalizado):", companyAddress);
+    console.log("Endereço de origem (normalizado):", startAddress);
     console.log("Endereço do cliente (normalizado):", clientAddress);
     
-    console.log("Endereço empresa:", companyAddress);
+    console.log("Endereço origem:", startAddress);
     console.log("Endereço cliente:", clientAddress);
 
     // Use Google Maps Distance Matrix API
@@ -68,7 +78,7 @@ router.post("/calculate", async (req, res) => {
     }
 
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(
-      companyAddress
+      startAddress
     )}&destinations=${encodeURIComponent(
       clientAddress
     )}&mode=driving&language=pt-BR&key=${apiKey}`;
@@ -119,7 +129,7 @@ router.post("/calculate", async (req, res) => {
       if (element?.status === "NOT_FOUND") {
         errorMessage = "Endereço não encontrado";
         errorDetail = `O Google Maps não conseguiu localizar um dos endereços:\n\n` +
-          `📍 Empresa: ${companyAddress}\n\n` +
+          `📍 Origem: ${startAddress}\n\n` +
           `📍 Cliente: ${clientAddress}\n\n` +
           `Verifique se os endereços estão completos e corretos.`;
       } else if (element?.status === "ZERO_RESULTS") {
@@ -216,7 +226,7 @@ router.post("/calculate", async (req, res) => {
         durationText,
         travelPrice,
         travelDescription,
-        companyAddress,
+        startAddress,
         clientAddress
       }
     });
