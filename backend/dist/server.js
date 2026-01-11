@@ -32,14 +32,45 @@ const distance_1 = __importDefault(require("./routes/distance"));
 const maintenance_1 = __importDefault(require("./routes/maintenance"));
 const orcamento_requests_1 = __importDefault(require("./routes/orcamento-requests"));
 const social_media_1 = __importDefault(require("./routes/social-media"));
+const reports_1 = __importDefault(require("./routes/reports"));
+const client_auth_1 = __importDefault(require("./routes/client-auth"));
+const client_protected_1 = __importDefault(require("./routes/client-protected"));
 const db_1 = require("./db");
 const mongoose_1 = __importDefault(require("mongoose"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 4000;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
+// Support multiple origins (comma-separated)
+const allowedOrigins = FRONTEND_ORIGIN === "*"
+    ? "*"
+    : FRONTEND_ORIGIN.split(",").map(origin => origin.trim().toLowerCase());
 app.use((0, cors_1.default)({
-    origin: FRONTEND_ORIGIN === "*" ? "*" : [FRONTEND_ORIGIN],
-    credentials: true
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin)
+            return callback(null, true);
+        // Normalize origin (lowercase, remove trailing slash)
+        const normalizedOrigin = origin.toLowerCase().replace(/\/$/, "");
+        // If wildcard is enabled, allow all
+        if (allowedOrigins === "*") {
+            return callback(null, true);
+        }
+        // Check if origin is in the allowed list (case-insensitive, handle trailing slashes)
+        if (Array.isArray(allowedOrigins)) {
+            const isAllowed = allowedOrigins.some(allowed => {
+                const normalizedAllowed = allowed.replace(/\/$/, "");
+                return normalizedOrigin === normalizedAllowed;
+            });
+            if (isAllowed) {
+                return callback(null, true);
+            }
+        }
+        // Origin not allowed
+        callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept", "x-user-id", "x-user-email", "x-client-id"]
 }));
 app.use(express_1.default.json());
 // Health check endpoint
@@ -108,6 +139,9 @@ app.use("/api/distance", distance_1.default);
 app.use("/api/maintenance", maintenance_1.default);
 app.use("/api/orcamento-requests", orcamento_requests_1.default);
 app.use("/api/social-media", social_media_1.default);
+app.use("/api/reports", reports_1.default);
+app.use("/api/client-auth", client_auth_1.default);
+app.use("/api/client-protected", client_protected_1.default);
 // Use HTTPS with self-signed certs only in development
 // Production should use HTTP behind reverse proxy (Nginx) with proper SSL
 const isDevelopment = process.env.NODE_ENV !== 'production';

@@ -5,75 +5,20 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { apiFetch, apiUrl } from "@/lib/api-client";
 import BudgetManager from "@/components/BudgetManager";
+import {
+  STATUS_LABELS,
+  STATUS_COLORS,
+  SERVICE_TYPE_LABELS,
+  LOCATION_TYPE_LABELS,
+  SOIL_TYPE_LABELS,
+  ACCESS_LABELS,
+  DEADLINE_LABELS,
+  formatDate,
+  OrcamentoRequestStatus
+} from "./constants";
+import RequestsFilters from "./components/RequestsFilters";
 
 type TabType = "requests" | "new";
-type OrcamentoRequestStatus = "pendente" | "em_contato" | "convertido" | "descartado";
-
-const STATUS_LABELS: Record<OrcamentoRequestStatus, string> = {
-  pendente: "Pendente",
-  em_contato: "Em Contato",
-  convertido: "Convertido",
-  descartado: "Descartado"
-};
-
-const STATUS_COLORS: Record<OrcamentoRequestStatus, string> = {
-  pendente: "bg-yellow-500/20 text-yellow-300 border-yellow-500/50",
-  em_contato: "bg-blue-500/20 text-blue-300 border-blue-500/50",
-  convertido: "bg-green-500/20 text-green-300 border-green-500/50",
-  descartado: "bg-red-500/20 text-red-300 border-red-500/50"
-};
-
-const SERVICE_TYPE_LABELS: Record<string, string> = {
-  estacas: "Estacas para fundação",
-  fossa: "Fossa séptica",
-  sumidouro: "Sumidouro / Poço",
-  drenagem: "Drenagem pluvial",
-  postes: "Postes / Cercas / Alambrados",
-  outro: "Outro"
-};
-
-const LOCATION_TYPE_LABELS: Record<string, string> = {
-  residencial: "Residencial",
-  comercial: "Comercial",
-  industrial: "Industrial",
-  rural: "Rural"
-};
-
-const SOIL_TYPE_LABELS: Record<string, string> = {
-  terra_comum: "Terra comum",
-  argiloso: "Argiloso",
-  arenoso: "Arenoso",
-  rochoso: "Rochoso",
-  nao_sei: "Não sei informar"
-};
-
-const ACCESS_LABELS: Record<string, string> = {
-  facil: "Fácil",
-  medio: "Médio",
-  dificil: "Difícil"
-};
-
-const DEADLINE_LABELS: Record<string, string> = {
-  urgente: "Urgente",
-  "30_dias": "Até 30 dias",
-  mais_30: "Mais de 30 dias"
-};
-
-const formatDate = (dateString: string | undefined | null): string => {
-  if (!dateString) return "-";
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-  } catch {
-    return dateString;
-  }
-};
 
 export default function OrcamentosPage() {
   const navigate = useNavigate();
@@ -100,8 +45,10 @@ export default function OrcamentosPage() {
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [statusFilter, setStatusFilter] = useState<OrcamentoRequestStatus | "all">("all");
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [requestClients, setRequestClients] = useState<Record<string, any>>({}); // Map request ID to client info
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Filter requests locally based on search and status
@@ -124,14 +71,6 @@ export default function OrcamentosPage() {
     });
   }, [allRequests, statusFilter, search]);
 
-  useEffect(() => {
-    if (activeTab === "new") {
-      loadClients();
-    } else if (activeTab === "requests") {
-      loadRequests();
-    }
-  }, [activeTab]);
-
   const loadClients = async () => {
     try {
       setLoadingClients(true);
@@ -147,25 +86,95 @@ export default function OrcamentosPage() {
     }
   };
 
+  const checkClientForRequest = async (requestId: string) => {
+    try {
+      const res = await apiFetch(`/orcamento-requests/${requestId}/check-client`);
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.data) {
+        return data.data;
+      }
+    } catch (error) {
+      // Silently fail - not critical
+    }
+    return null;
+  };
+
   const loadRequests = useCallback(async () => {
     try {
       setLoadingRequests(true);
-      const res = await apiFetch("/orcamento-requests");
+      // Use longer timeout for initial load
+      const url = `/orcamento-requests${showArchived ? "?showArchived=true" : ""}`;
+      const res = await apiFetch(url, { timeout: 120000 }); // 2 minutes
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.data) {
-        setAllRequests(Array.isArray(data.data) ? data.data : []);
+        const requests = Array.isArray(data.data) ? data.data : [];
+        setAllRequests(requests);
+        
+        // Check for existing clients for each request (limit concurrent requests)
+        // This is done asynchronously and doesn't block the UI
+        const clientMap: Record<string, any> = {};
+        const pendingRequests = requests.filter((r: any) => r.status !== "convertido" && r._id);
+        
+        // Process in smaller batches with shorter timeout to avoid blocking
+        const batchSize = 3;
+        const checkClientWithTimeout = async (requestId: string) => {
+          try {
+            // Use shorter timeout for individual client checks
+            const res = await apiFetch(`/orcamento-requests/${requestId}/check-client`, { timeout: 10000 });
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.data?.hasClient && data?.data?.client) {
+              return { requestId, client: data.data.client };
+            }
+          } catch (err) {
+            // Silently fail for individual client checks
+            console.warn(`Failed to check client for request ${requestId}:`, err);
+          }
+          return null;
+        };
+
+        // Process batches sequentially to avoid overwhelming the server
+        for (let i = 0; i < pendingRequests.length; i += batchSize) {
+          const batch = pendingRequests.slice(i, i + batchSize);
+          const results = await Promise.all(
+            batch.map((request: any) => checkClientWithTimeout(request._id))
+          );
+          
+          results.forEach((result) => {
+            if (result) {
+              clientMap[result.requestId] = result.client;
+            }
+          });
+          
+          // Update state incrementally
+          if (Object.keys(clientMap).length > 0) {
+            setRequestClients((prev) => ({ ...prev, ...clientMap }));
+          }
+        }
       } else {
         console.error("Failed to load requests:", data);
         Swal.fire("Erro", data?.error || "Não foi possível carregar solicitações.", "error");
       }
     } catch (error: any) {
       console.error("Error loading requests:", error);
-      Swal.fire("Erro", "Não foi possível carregar solicitações.", "error");
+      // Don't show error if it's just a timeout - data might still load via SSE
+      if (!error.message?.includes("expirada")) {
+        Swal.fire("Erro", "Não foi possível carregar solicitações.", "error");
+      }
     } finally {
       setLoadingRequests(false);
     }
-  }, []);
+  }, [showArchived]);
+
+  // Load data when tab or showArchived changes
+  useEffect(() => {
+    if (activeTab === "new") {
+      loadClients();
+    } else if (activeTab === "requests") {
+      // Call loadRequests after it's defined
+      loadRequests();
+    }
+  }, [activeTab, showArchived, loadRequests]);
 
   // Real-time updates using Server-Sent Events (SSE) for requests
   useEffect(() => {
@@ -198,6 +207,17 @@ export default function OrcamentosPage() {
                 if (exists) return prev;
                 return [data.request, ...prev];
               });
+              // Check for existing client for new request
+              if (data.request?._id && data.request.status !== "convertido") {
+                checkClientForRequest(data.request._id).then((clientInfo) => {
+                  if (clientInfo?.hasClient && clientInfo.client) {
+                    setRequestClients((prev) => ({
+                      ...prev,
+                      [data.request._id]: clientInfo.client
+                    }));
+                  }
+                });
+              }
               if (data.request) {
                 Swal.fire({
                   title: "Nova Solicitação!",
@@ -247,10 +267,21 @@ export default function OrcamentosPage() {
         eventSource.onerror = (error) => {
           console.error("SSE error:", error);
           eventSource.close();
-          setTimeout(connectSSE, 5000);
+          eventSourceRef.current = null;
+          
+          // Only reconnect if still on requests tab and connection was not manually closed
+          if (activeTab === "requests" && eventSource.readyState === EventSource.CLOSED) {
+            // Wait before reconnecting to avoid rapid reconnection loops
+            setTimeout(() => {
+              if (activeTab === "requests" && !eventSourceRef.current) {
+                connectSSE();
+              }
+            }, 10000); // 10 seconds delay
+          }
         };
       } catch (error) {
         console.error("Error setting up SSE:", error);
+        // Don't retry immediately on setup error
       }
     };
 
@@ -263,6 +294,20 @@ export default function OrcamentosPage() {
       }
     };
   }, [activeTab]);
+
+  // Check for client when request is selected
+  useEffect(() => {
+    if (selectedRequest && !requestClients[selectedRequest._id] && selectedRequest.status !== "convertido") {
+      checkClientForRequest(selectedRequest._id).then((clientInfo) => {
+        if (clientInfo?.hasClient && clientInfo.client) {
+          setRequestClients((prev) => ({
+            ...prev,
+            [selectedRequest._id]: clientInfo.client
+          }));
+        }
+      });
+    }
+  }, [selectedRequest]);
 
   const updateStatus = async (id: string, status: OrcamentoRequestStatus, notes?: string) => {
     try {
@@ -286,6 +331,95 @@ export default function OrcamentosPage() {
     } catch (error: any) {
       console.error("Error updating status:", error);
       Swal.fire("Erro", "Não foi possível atualizar status.", "error");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const archiveRequest = async (id: string, archive: boolean) => {
+    try {
+      setUpdating(true);
+      const res = await apiFetch(`/orcamento-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: archive })
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        // Reload requests to reflect archive status
+        await loadRequests();
+        if (selectedRequest?._id === id) {
+          setSelectedRequest((prev) => (prev ? { ...prev, archived: archive, archivedAt: archive ? new Date() : null } : null));
+        }
+        Swal.fire("Sucesso", archive ? "Solicitação arquivada com sucesso!" : "Solicitação desarquivada com sucesso!", "success");
+      } else {
+        Swal.fire("Erro", data?.error || "Não foi possível arquivar solicitação.", "error");
+      }
+    } catch (error: any) {
+      console.error("Error archiving request:", error);
+      Swal.fire("Erro", "Não foi possível arquivar solicitação.", "error");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const convertToBudget = async (request: any, clientId: string) => {
+    try {
+      setUpdating(true);
+      const res = await apiFetch(`/orcamento-requests/${request._id}/convert-to-budget`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId,
+          notes: `Convertido de solicitação #${request.seq || request._id?.slice(-6)}`
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.data) {
+        const { request: updatedRequest, client, budget } = data.data;
+        const budgetId = budget?._id?.toString() || data.budgetId;
+        const finalClientId = client?._id?.toString() || clientId;
+        
+        let message = "Orçamento criado com sucesso!<br><br>";
+        if (budget) {
+          message += `✓ Orçamento criado: <strong>${budget.title}</strong> (ID: ${budget._id?.slice(-6) || budgetId?.slice(-6)})<br>`;
+        }
+        
+        let buttonsHtml = '<div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">';
+        if (finalClientId && budgetId) {
+          buttonsHtml += `<button id="btn-go-budget" style="padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">Ver Orçamento</button>`;
+        }
+        buttonsHtml += '</div>';
+        
+        await Swal.fire({
+          title: "Sucesso!",
+          html: message + buttonsHtml,
+          icon: "success",
+          confirmButtonText: "OK",
+          didOpen: () => {
+            if (finalClientId && budgetId) {
+              const budgetBtn = document.getElementById("btn-go-budget");
+              if (budgetBtn) {
+                budgetBtn.addEventListener("click", () => {
+                  Swal.close();
+                  navigate(`/clients?clientId=${finalClientId}&budgetId=${budgetId}`);
+                });
+              }
+            }
+          }
+        });
+        
+        await loadRequests();
+        if (updatedRequest) {
+          setSelectedRequest(updatedRequest);
+        }
+      } else {
+        Swal.fire("Erro", data?.error || "Não foi possível criar orçamento.", "error");
+      }
+    } catch (error: any) {
+      console.error("Error converting to budget:", error);
+      Swal.fire("Erro", "Não foi possível criar orçamento.", "error");
     } finally {
       setUpdating(false);
     }
@@ -532,29 +666,14 @@ export default function OrcamentosPage() {
       {activeTab === "requests" && (
         <div className="space-y-4">
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Buscar por nome, telefone, email ou endereço..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 text-sm text-white placeholder-slate-400 outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-              />
-            </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as OrcamentoRequestStatus | "all")}
-              className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2.5 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-            >
-              <option value="all">Todos os status</option>
-              {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <RequestsFilters
+            search={search}
+            setSearch={setSearch}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            showArchived={showArchived}
+            setShowArchived={setShowArchived}
+          />
 
           {/* Requests List */}
           {loadingRequests ? (
@@ -572,76 +691,141 @@ export default function OrcamentosPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-white/10">
-                  {filteredRequests.map((request) => (
-                    <div
-                      key={request._id}
-                      className="p-4 sm:p-6 hover:bg-slate-800/30 transition cursor-pointer"
-                      onClick={() => setSelectedRequest(request)}
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start gap-3 mb-2">
-                            <span className="text-xs font-mono text-slate-400 bg-slate-800/50 px-2 py-1 rounded">
-                              #{request.seq || request._id?.slice(-6)}
-                            </span>
-                            <span
-                              className={`px-2 py-1 rounded text-xs font-semibold border ${STATUS_COLORS[request.status || "pendente"]}`}
-                            >
-                              {STATUS_LABELS[request.status || "pendente"]}
-                            </span>
-                          </div>
-                          <h3 className="text-white font-semibold text-base sm:text-lg mb-1 break-words">
-                            {request.name}
-                          </h3>
-                          <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-slate-400">
-                            {request.phone && (
-                              <span className="flex items-center gap-1">
-                                <span>📞</span>
-                                <span>{request.phone}</span>
+                  {filteredRequests.map((request) => {
+                    const existingClient = requestClients[request._id];
+                    const hasExistingClient = !!existingClient && request.status !== "convertido";
+                    
+                    return (
+                      <div
+                        key={request._id}
+                        className={`p-4 sm:p-6 hover:bg-slate-800/30 transition cursor-pointer ${
+                          hasExistingClient ? "border-l-4 border-blue-500/50 bg-blue-500/5" : ""
+                        }`}
+                        onClick={() => setSelectedRequest(request)}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start gap-3 mb-2">
+                              <span className="text-xs font-mono text-slate-400 bg-slate-800/50 px-2 py-1 rounded">
+                                #{request.seq || request._id?.slice(-6)}
                               </span>
-                            )}
-                            {request.email && (
-                              <span className="flex items-center gap-1">
-                                <span>📧</span>
-                                <span>{request.email}</span>
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-semibold border ${STATUS_COLORS[request.status || "pendente"]}`}
+                              >
+                                {STATUS_LABELS[request.status || "pendente"]}
                               </span>
+                              {hasExistingClient && (
+                                <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/50">
+                                  Cliente Existente
+                                </span>
+                              )}
+                              {request.archived && (
+                                <span className="px-2 py-1 rounded text-xs font-semibold bg-slate-500/20 text-slate-300 border border-slate-500/50">
+                                  Arquivado
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-white font-semibold text-base sm:text-lg mb-1 break-words">
+                              {request.name}
+                            </h3>
+                            {hasExistingClient && (
+                              <div className="mb-2 p-2 rounded bg-blue-500/10 border border-blue-500/20">
+                                <p className="text-xs text-blue-200">
+                                  <span className="font-semibold">Cliente encontrado:</span> {existingClient.name}
+                                  {existingClient.phone && ` - ${existingClient.phone}`}
+                                </p>
+                              </div>
                             )}
-                            {request.address && (
-                              <span className="flex items-center gap-1">
-                                <span>📍</span>
-                                <span className="truncate max-w-[200px]">{request.address}</span>
-                              </span>
+                            <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-slate-400">
+                              {request.phone && (
+                                <span className="flex items-center gap-1">
+                                  <span>📞</span>
+                                  <span>{request.phone}</span>
+                                </span>
+                              )}
+                              {request.email && (
+                                <span className="flex items-center gap-1">
+                                  <span>📧</span>
+                                  <span>{request.email}</span>
+                                </span>
+                              )}
+                              {request.address && (
+                                <span className="flex items-center gap-1">
+                                  <span>📍</span>
+                                  <span className="truncate max-w-[200px]">{request.address}</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-2 text-xs text-slate-500">
+                              {request.services?.length || 0} serviço(s) · {formatDate(request.createdAt)}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            {request.status !== "convertido" && (
+                              <>
+                                {hasExistingClient ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      convertToBudget(request, existingClient.id);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 text-xs font-semibold hover:bg-blue-500/30 transition border border-blue-500/30"
+                                  >
+                                    Criar Orçamento
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      convertToClient(request);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/30 transition border border-emerald-500/30"
+                                  >
+                                    Converter
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteRequest(request._id);
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 text-xs font-semibold hover:bg-red-500/30 transition border border-red-500/30 flex items-center gap-1.5"
+                                  title="Excluir solicitação"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  <span>Excluir</span>
+                                </button>
+                              </>
                             )}
-                          </div>
-                          <div className="mt-2 text-xs text-slate-500">
-                            {request.services?.length || 0} serviço(s) · {formatDate(request.createdAt)}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {request.status !== "convertido" && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                convertToClient(request);
+                                archiveRequest(request._id, !request.archived);
                               }}
-                              className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/30 transition border border-emerald-500/30"
+                              className="px-3 py-1.5 rounded-lg bg-slate-500/20 text-slate-300 text-xs font-semibold hover:bg-slate-500/30 transition border border-slate-500/30 flex items-center gap-1.5"
+                              title={request.archived ? "Desarquivar solicitação" : "Arquivar solicitação"}
                             >
-                              Converter
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                              </svg>
+                              <span>{request.archived ? "Desarquivar" : "Arquivar"}</span>
                             </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedRequest(request);
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 text-slate-200 text-xs font-semibold hover:bg-white/10 transition border border-white/10"
-                          >
-                            Ver Detalhes
-                          </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRequest(request);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-white/5 text-slate-200 text-xs font-semibold hover:bg-white/10 transition border border-white/10"
+                            >
+                              Ver Detalhes
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -818,18 +1002,46 @@ export default function OrcamentosPage() {
                   <div className="flex flex-wrap gap-3 pt-4 border-t border-white/10">
                     {selectedRequest.status !== "convertido" && (
                       <>
-                        <button
-                          onClick={() => convertToClient(selectedRequest, false)}
-                          className="px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 transition"
-                        >
-                          Converter para Cliente
-                        </button>
-                        <button
-                          onClick={() => convertToClient(selectedRequest, true)}
-                          className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 transition"
-                        >
-                          Converter + Criar Orçamento
-                        </button>
+                        {requestClients[selectedRequest._id] ? (
+                          <>
+                            <div className="w-full p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 mb-2">
+                              <p className="text-sm text-blue-200 font-semibold mb-1">
+                                ✓ Cliente já existe no sistema
+                              </p>
+                              <p className="text-xs text-blue-300">
+                                {requestClients[selectedRequest._id].name}
+                                {requestClients[selectedRequest._id].phone && ` - ${requestClients[selectedRequest._id].phone}`}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => convertToBudget(selectedRequest, requestClients[selectedRequest._id].id)}
+                              className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 transition"
+                            >
+                              Criar Orçamento com Cliente Existente
+                            </button>
+                            <button
+                              onClick={() => convertToClient(selectedRequest, false)}
+                              className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 font-semibold hover:bg-emerald-500/30 transition border border-emerald-500/30"
+                            >
+                              Converter para Cliente (Atualizar)
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => convertToClient(selectedRequest, false)}
+                              className="px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 transition"
+                            >
+                              Converter para Cliente
+                            </button>
+                            <button
+                              onClick={() => convertToClient(selectedRequest, true)}
+                              className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 transition"
+                            >
+                              Converter + Criar Orçamento
+                            </button>
+                          </>
+                        )}
                         <select
                           value={selectedRequest.status || "pendente"}
                           onChange={(e) =>
@@ -844,6 +1056,12 @@ export default function OrcamentosPage() {
                             </option>
                           ))}
                         </select>
+                        <button
+                          onClick={() => deleteRequest(selectedRequest._id)}
+                          className="px-4 py-2 rounded-lg bg-red-500 text-white font-semibold hover:bg-red-600 transition"
+                        >
+                          Excluir Solicitação
+                        </button>
                       </>
                     )}
                     {selectedRequest.status === "convertido" && (selectedRequest.clientId || selectedRequest.budgetId) && (
@@ -884,14 +1102,12 @@ export default function OrcamentosPage() {
                         )}
                       </div>
                     )}
-                    {selectedRequest.status !== "convertido" && (
-                      <button
-                        onClick={() => deleteRequest(selectedRequest._id)}
-                        className="px-4 py-2 rounded-lg bg-red-500/20 text-red-300 font-semibold hover:bg-red-500/30 transition border border-red-500/30"
-                      >
-                        Excluir
-                      </button>
-                    )}
+                    <button
+                      onClick={() => archiveRequest(selectedRequest._id, !selectedRequest.archived)}
+                      className="px-4 py-2 rounded-lg bg-slate-500/20 text-slate-300 font-semibold hover:bg-slate-500/30 transition border border-slate-500/30"
+                    >
+                      {selectedRequest.archived ? "Desarquivar" : "Arquivar"}
+                    </button>
                     <button
                       onClick={() => setSelectedRequest(null)}
                       className="ml-auto px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-200 font-semibold hover:bg-white/10 transition"

@@ -61,7 +61,7 @@ const jobSchema = zod_1.z.object({
 router.get("/roadmap", async (req, res) => {
     try {
         await (0, db_1.connectDB)();
-        const { status, teamId, dateFrom, dateTo } = req.query;
+        const { status, teamId, dateFrom, dateTo, includeWithoutLocation } = req.query;
         // Build filter
         const filter = {};
         if (status) {
@@ -70,25 +70,36 @@ router.get("/roadmap", async (req, res) => {
         if (teamId) {
             filter.teamId = teamId;
         }
-        // Only get jobs with location data
-        filter.siteLatitude = { $exists: true, $ne: null };
-        filter.siteLongitude = { $exists: true, $ne: null };
-        // Date filtering
-        if (dateFrom || dateTo) {
-            filter.plannedDate = {};
-            if (dateFrom) {
-                filter.plannedDate.$gte = dateFrom;
-            }
-            if (dateTo) {
-                filter.plannedDate.$lte = dateTo;
-            }
+        // Only get jobs with location data unless includeWithoutLocation is true
+        if (includeWithoutLocation !== "true") {
+            filter.siteLatitude = { $exists: true, $ne: null };
+            filter.siteLongitude = { $exists: true, $ne: null };
         }
-        const jobs = await Job_1.default.find(filter)
+        // Date filtering - plannedDate is stored as ISO string, so we need to filter by date part
+        let jobs = await Job_1.default.find(filter)
             .populate("teamId", "name status currentLocation")
             .populate("clientId", "name phone email")
             .select("title seq clientName site siteLatitude siteLongitude team teamId status plannedDate startedAt finishedAt estimatedDuration value finalValue services")
             .lean()
             .sort({ plannedDate: 1, createdAt: -1 });
+        // Filter by date range if provided (extract date part from plannedDate ISO string)
+        if (dateFrom || dateTo) {
+            jobs = jobs.filter((job) => {
+                if (!job.plannedDate)
+                    return false;
+                const jobDateStr = job.plannedDate.split('T')[0]; // Extract YYYY-MM-DD from ISO string
+                if (dateFrom && dateTo) {
+                    return jobDateStr >= dateFrom && jobDateStr <= dateTo;
+                }
+                else if (dateFrom) {
+                    return jobDateStr >= dateFrom;
+                }
+                else if (dateTo) {
+                    return jobDateStr <= dateTo;
+                }
+                return true;
+            });
+        }
         // Format response
         const roadmapData = jobs.map((job) => ({
             _id: job._id,
@@ -122,6 +133,122 @@ router.get("/roadmap", async (req, res) => {
         console.error("GET /api/jobs/roadmap error", error);
         res.status(500).json({
             error: "Falha ao carregar dados do roadmap",
+            detail: error?.message || "Erro interno"
+        });
+    }
+});
+// Team availability calendar endpoint - MUST be before router.get("/") to avoid route conflicts
+router.get("/team-availability", async (req, res) => {
+    try {
+        await (0, db_1.connectDB)();
+        const { dateFrom, dateTo } = req.query;
+        // Default to current week if no dates provided
+        const startDateStr = dateFrom ? dateFrom : new Date().toISOString().split('T')[0];
+        const endDateStr = dateTo ? dateTo : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        // Get all teams
+        const teams = await Team_1.default.find({ status: "ativa" }).select("_id name").lean();
+        // Get all jobs in the date range with teamId
+        // plannedDate is stored as ISO string, so we need to filter by date part
+        const jobs = await Job_1.default.find({
+            teamId: { $exists: true, $ne: null },
+            plannedDate: { $exists: true, $ne: null },
+            status: { $in: ["pendente", "em_execucao"] }
+        })
+            .select("teamId plannedDate estimatedDuration services startedAt finishedAt status")
+            .lean();
+        // Filter jobs by date range (since plannedDate is ISO string, extract date part)
+        const filteredJobs = jobs.filter((job) => {
+            if (!job.plannedDate)
+                return false;
+            const jobDateStr = job.plannedDate.split('T')[0];
+            return jobDateStr >= startDateStr && jobDateStr <= endDateStr;
+        });
+        // Aggregate jobs by team and date
+        const teamAvailability = {};
+        // Initialize all teams
+        teams.forEach(team => {
+            teamAvailability[team._id.toString()] = {};
+        });
+        // Process each job
+        for (const job of filteredJobs) {
+            if (!job.teamId || !job.plannedDate)
+                continue;
+            const teamId = job.teamId.toString();
+            const jobDate = job.plannedDate.split('T')[0]; // Extract date part
+            // Calculate duration
+            let duration = job.estimatedDuration || 120; // Default 2 hours
+            // If no estimatedDuration, calculate from services
+            if (!job.estimatedDuration && job.services && Array.isArray(job.services)) {
+                let totalMinutes = 0;
+                for (const service of job.services) {
+                    if (service.executionTime && service.quantidade) {
+                        const quantidade = parseInt(service.quantidade, 10) || 1;
+                        const profundidade = parseFloat(service.profundidade) || 1;
+                        totalMinutes += service.executionTime * quantidade * profundidade;
+                    }
+                }
+                if (totalMinutes > 0) {
+                    duration = totalMinutes + 30; // Add 30 minutes gap
+                }
+            }
+            // Parse plannedDate to get start time (preserve local time, avoid timezone conversion)
+            // plannedDate format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm
+            let startTime;
+            let endTime;
+            try {
+                // Extract date and time parts directly to avoid timezone conversion
+                const dateTimeMatch = job.plannedDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+                if (dateTimeMatch) {
+                    const [, year, month, day, hours, minutes, seconds] = dateTimeMatch;
+                    // Create ISO string without timezone conversion
+                    const startDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes), seconds ? parseInt(seconds) : 0);
+                    startTime = startDate.toISOString();
+                    // Calculate end time
+                    const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
+                    endTime = endDate.toISOString();
+                }
+                else {
+                    // Fallback to Date parsing if format doesn't match
+                    const plannedDateTime = new Date(job.plannedDate);
+                    startTime = plannedDateTime.toISOString();
+                    endTime = new Date(plannedDateTime.getTime() + duration * 60 * 1000).toISOString();
+                }
+            }
+            catch {
+                // If parsing fails, use Date object as fallback
+                const plannedDateTime = new Date(job.plannedDate);
+                startTime = plannedDateTime.toISOString();
+                endTime = new Date(plannedDateTime.getTime() + duration * 60 * 1000).toISOString();
+            }
+            if (!teamAvailability[teamId]) {
+                teamAvailability[teamId] = {};
+            }
+            if (!teamAvailability[teamId][jobDate]) {
+                teamAvailability[teamId][jobDate] = [];
+            }
+            teamAvailability[teamId][jobDate].push({
+                startTime,
+                endTime,
+                duration,
+                jobId: job._id.toString(),
+                status: job.status
+            });
+        }
+        // Format response with team names
+        const result = teams.map(team => {
+            const teamId = team._id.toString();
+            return {
+                teamId,
+                teamName: team.name,
+                availability: teamAvailability[teamId] || {}
+            };
+        });
+        res.json({ data: result });
+    }
+    catch (error) {
+        console.error("GET /api/jobs/team-availability error", error);
+        res.status(500).json({
+            error: "Falha ao carregar disponibilidade das equipes",
             detail: error?.message || "Erro interno"
         });
     }
@@ -309,6 +436,7 @@ router.get("/", async (_req, res) => {
                     clientName: 1,
                     site: 1,
                     team: 1,
+                    teamId: 1,
                     status: 1,
                     plannedDate: 1,
                     estimatedDuration: 1,
@@ -326,6 +454,7 @@ router.get("/", async (_req, res) => {
                     clientSignedAt: 1,
                     createdAt: 1,
                     updatedAt: 1,
+                    notes: 1,
                     // Travel/Displacement fields
                     selectedAddress: 1,
                     travelDistanceKm: 1,
@@ -801,6 +930,24 @@ router.patch("/:id", async (req, res) => {
         console.error("PATCH /api/jobs/:id error", error);
         res.status(500).json({
             error: "Falha ao atualizar OS",
+            detail: error?.message || "Erro interno"
+        });
+    }
+});
+// GET single job by ID
+router.get("/:id", async (req, res) => {
+    try {
+        await (0, db_1.connectDB)();
+        const job = await Job_1.default.findById(req.params.id).lean();
+        if (!job) {
+            return res.status(404).json({ error: "OS não encontrada" });
+        }
+        res.json({ data: job });
+    }
+    catch (error) {
+        console.error("GET /api/jobs/:id error", error);
+        res.status(500).json({
+            error: "Falha ao buscar OS",
             detail: error?.message || "Erro interno"
         });
     }

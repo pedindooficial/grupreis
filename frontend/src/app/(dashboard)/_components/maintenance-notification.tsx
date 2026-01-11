@@ -42,6 +42,10 @@ export default function MaintenanceNotification() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right?: number; left?: number; width?: number } | null>(null);
+  
+  // Cache for maintenance history (24 hours)
+  const maintenanceHistoryCache = useRef<Map<string, { data: MaintenanceRecord[]; timestamp: number }>>(new Map());
+  const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
   useEffect(() => {
     setMounted(true);
@@ -154,54 +158,79 @@ export default function MaintenanceNotification() {
   const getMaintenanceAlerts = async (equipment: any[], machines: any[]): Promise<MaintenanceItem[]> => {
     const alerts: MaintenanceItem[] = [];
 
-    // Check equipment
-    for (const item of equipment) {
-      if (item.status === "ativo") {
-        const effectiveNextMaintenance = await getEffectiveNextMaintenance(item._id, item.nextMaintenance);
-        if (effectiveNextMaintenance) {
-          const daysUntil = getDaysUntil(effectiveNextMaintenance);
-          if (daysUntil <= 30 && daysUntil >= -7) {
-            // Within 30 days or up to 7 days overdue
-            alerts.push({
-              _id: item._id,
-              name: item.name,
-              type: "equipment",
-              nextMaintenance: effectiveNextMaintenance,
-              status: item.status,
-              fullData: item // Store full data for details
-            });
+    // Process equipment in batches
+    const activeEquipment = equipment.filter(item => item.status === "ativo");
+    const batchSize = 3;
+    
+    for (let i = 0; i < activeEquipment.length; i += batchSize) {
+      const batch = activeEquipment.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map(async (item) => {
+          try {
+            const effectiveNextMaintenance = await getEffectiveNextMaintenance(item._id, item.nextMaintenance);
+            if (effectiveNextMaintenance) {
+              const daysUntil = getDaysUntil(effectiveNextMaintenance);
+              if (daysUntil <= 30 && daysUntil >= -7) {
+                return {
+                  _id: item._id,
+                  name: item.name,
+                  type: "equipment" as const,
+                  nextMaintenance: effectiveNextMaintenance,
+                  status: item.status,
+                  fullData: item
+                };
+              }
+            }
+          } catch (err) {
+            // Silently fail for individual items
+            console.warn(`Failed to get maintenance for equipment ${item._id}:`, err);
           }
+          return null;
+        })
+      );
+      
+      batchResults.forEach((result) => {
+        if (result.status === "fulfilled" && result.value) {
+          alerts.push(result.value);
         }
-      }
+      });
     }
 
-    // Check machines
-    for (const item of machines) {
-      if (item.status === "ativa") {
-        const effectiveNextMaintenance = await getEffectiveNextMaintenance(item._id, item.nextMaintenance);
-        if (effectiveNextMaintenance) {
-          const daysUntil = getDaysUntil(effectiveNextMaintenance);
-          // Debug log
-          console.log(`Machine ${item.name}: effectiveNextMaintenance="${effectiveNextMaintenance}", daysUntil=${daysUntil}, status="${item.status}"`);
-          if (daysUntil <= 30 && daysUntil >= -7) {
-            // Within 30 days or up to 7 days overdue
-            alerts.push({
-              _id: item._id,
-              name: item.name,
-              type: "machine",
-              nextMaintenance: effectiveNextMaintenance,
-              status: item.status,
-              fullData: item // Store full data for details
-            });
-          } else {
-            console.log(`Machine ${item.name} excluded: daysUntil=${daysUntil} (not within -7 to 30 days range)`);
+    // Process machines in batches
+    const activeMachines = machines.filter(item => item.status === "ativa");
+    
+    for (let i = 0; i < activeMachines.length; i += batchSize) {
+      const batch = activeMachines.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map(async (item) => {
+          try {
+            const effectiveNextMaintenance = await getEffectiveNextMaintenance(item._id, item.nextMaintenance);
+            if (effectiveNextMaintenance) {
+              const daysUntil = getDaysUntil(effectiveNextMaintenance);
+              if (daysUntil <= 30 && daysUntil >= -7) {
+                return {
+                  _id: item._id,
+                  name: item.name,
+                  type: "machine" as const,
+                  nextMaintenance: effectiveNextMaintenance,
+                  status: item.status,
+                  fullData: item
+                };
+              }
+            }
+          } catch (err) {
+            // Silently fail for individual items
+            console.warn(`Failed to get maintenance for machine ${item._id}:`, err);
           }
-        } else {
-          console.log(`Machine ${item.name} excluded: no effective nextMaintenance date`);
+          return null;
+        })
+      );
+      
+      batchResults.forEach((result) => {
+        if (result.status === "fulfilled" && result.value) {
+          alerts.push(result.value);
         }
-      } else {
-        console.log(`Machine ${item.name} excluded: status="${item.status}" (expected "ativa")`);
-      }
+      });
     }
 
     // Sort by urgency (overdue first, then by days until)
@@ -214,16 +243,39 @@ export default function MaintenanceNotification() {
     });
   };
 
-  // Load maintenance history for an item
+  // Load maintenance history for an item (cached for 24 hours)
   const loadMaintenanceHistory = async (itemId: string): Promise<MaintenanceRecord[]> => {
+    const now = Date.now();
+    const cached = maintenanceHistoryCache.current.get(itemId);
+    
+    // Check if we have valid cached data (less than 24 hours old)
+    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+      return cached.data;
+    }
+    
     try {
-      const res = await apiFetch(`/maintenance/item/${itemId}`, { cache: "no-store" });
+      // Use longer timeout for maintenance history
+      const res = await apiFetch(`/maintenance/item/${itemId}`, { cache: "no-store", timeout: 120000 });
       const data = await res.json().catch(() => null);
       if (res.ok && data?.data) {
-        return Array.isArray(data.data) ? data.data : [];
+        const history = Array.isArray(data.data) ? data.data : [];
+        // Update cache
+        maintenanceHistoryCache.current.set(itemId, {
+          data: history,
+          timestamp: now
+        });
+        return history;
       }
-    } catch (err) {
-      console.error("Erro ao carregar histórico de manutenção:", err);
+    } catch (err: any) {
+      // Don't log timeout errors as they're expected in some cases
+      if (!err?.message?.includes("expirada")) {
+        console.error("Erro ao carregar histórico de manutenção:", err);
+      }
+      
+      // If we have cached data (even if expired), return it as fallback
+      if (cached) {
+        return cached.data;
+      }
     }
     return [];
   };
@@ -232,9 +284,10 @@ export default function MaintenanceNotification() {
   const loadMaintenanceData = async () => {
     try {
       setLoading(true);
+      // Use longer timeout for maintenance data
       const [equipmentRes, machinesRes] = await Promise.all([
-        apiFetch("/equipment", { cache: "no-store" }),
-        apiFetch("/machines", { cache: "no-store" })
+        apiFetch("/equipment", { cache: "no-store", timeout: 120000 }),
+        apiFetch("/machines", { cache: "no-store", timeout: 120000 })
       ]);
 
       const equipmentData = await equipmentRes.json().catch(() => null);
@@ -246,39 +299,71 @@ export default function MaintenanceNotification() {
       const alerts = await getMaintenanceAlerts(equipment, machines);
       
       // Load maintenance history for each alert
-      const alertsWithHistory = await Promise.all(
-        alerts.map(async (alert) => {
-          const history = await loadMaintenanceHistory(alert._id);
-          const sortedHistory = history.sort((a, b) => {
-            const dateA = new Date(a.date).getTime();
-            const dateB = new Date(b.date).getTime();
-            return dateB - dateA; // Most recent first
-          });
-          
-          // Find last maintenance (most recent past maintenance)
-          const lastMaintenance = sortedHistory.find(
-            (m) => new Date(m.date).getTime() <= new Date().getTime()
-          );
-          
-          // Find upcoming maintenance (next future maintenance from history)
-          const upcomingMaintenance = sortedHistory.find(
-            (m) => {
-              const maintenanceDate = new Date(m.date).getTime();
-              const today = new Date().getTime();
-              return maintenanceDate > today;
+      // Process alerts in batches to avoid overwhelming the server
+      const alertsWithHistory = [];
+      const batchSize = 3;
+      for (let i = 0; i < alerts.length; i += batchSize) {
+        const batch = alerts.slice(i, i + batchSize);
+        const batchResults = await Promise.allSettled(
+          batch.map(async (alert) => {
+            try {
+              const history = await loadMaintenanceHistory(alert._id);
+              const sortedHistory = history.sort((a, b) => {
+                const dateA = new Date(a.date).getTime();
+                const dateB = new Date(b.date).getTime();
+                return dateB - dateA; // Most recent first
+              });
+              
+              // Find last maintenance (most recent past maintenance)
+              const lastMaintenance = sortedHistory.find(
+                (m) => new Date(m.date).getTime() <= new Date().getTime()
+              );
+              
+              // Find upcoming maintenance (next future maintenance from history)
+              const upcomingMaintenance = sortedHistory.find(
+                (m) => {
+                  const maintenanceDate = new Date(m.date).getTime();
+                  const today = new Date().getTime();
+                  return maintenanceDate > today;
+                }
+              ) || sortedHistory.find(
+                (m) => m.nextMaintenanceDate && new Date(m.nextMaintenanceDate).getTime() > new Date().getTime()
+              );
+              
+              return {
+                ...alert,
+                maintenanceHistory: sortedHistory,
+                lastMaintenance: lastMaintenance || undefined,
+                upcomingMaintenance: upcomingMaintenance || undefined
+              };
+            } catch (err) {
+              // Return alert without history if loading fails
+              return {
+                ...alert,
+                maintenanceHistory: [],
+                lastMaintenance: undefined,
+                upcomingMaintenance: undefined
+              };
             }
-          ) || sortedHistory.find(
-            (m) => m.nextMaintenanceDate && new Date(m.nextMaintenanceDate).getTime() > new Date().getTime()
-          );
-          
-          return {
-            ...alert,
-            maintenanceHistory: sortedHistory,
-            lastMaintenance: lastMaintenance || undefined,
-            upcomingMaintenance: upcomingMaintenance || undefined
-          };
-        })
-      );
+          })
+        );
+        
+        // Add successful results
+        batchResults.forEach((result) => {
+          if (result.status === "fulfilled") {
+            alertsWithHistory.push(result.value);
+          } else {
+            // If failed, add alert without history
+            const alert = batch[batchResults.indexOf(result)];
+            alertsWithHistory.push({
+              ...alert,
+              maintenanceHistory: [],
+              lastMaintenance: undefined,
+              upcomingMaintenance: undefined
+            });
+          }
+        });
+      }
       
       setItems(alertsWithHistory);
     } catch (err) {

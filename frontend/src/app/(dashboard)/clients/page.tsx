@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import Swal from "sweetalert2";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, apiUrl } from "@/lib/api-client";
 import BudgetManager from "@/components/BudgetManager";
+import { safeLog, safeErrorLog } from "@/utils/security";
 
 type PersonType = "cpf" | "cnpj";
 
@@ -100,6 +101,10 @@ export default function ClientsPage() {
   const [selectedBudget, setSelectedBudget] = useState<any | null>(null);
   const [pendingBudgetId, setPendingBudgetId] = useState<string | null>(null);
   const [clientJobs, setClientJobs] = useState<any[]>([]);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const selectedClientRef = useRef<any | null>(null);
+  const loadClientBudgetsRef = useRef<((clientId: string) => Promise<void>) | null>(null);
+  const loadClientJobsRef = useRef<((clientId: string) => Promise<void>) | null>(null);
   const emptyAddress = {
     label: "",
     address: "",
@@ -132,44 +137,191 @@ export default function ClientsPage() {
   
   const [newAddressForm, setNewAddressForm] = useState(emptyAddress);
 
-  useEffect(() => {
-    const loadClients = async () => {
-      try {
-        setLoading(true);
-        const res = await apiFetch("/clients", { cache: "no-store" });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) {
-          console.error("Erro ao carregar clientes", data);
-          return;
-        }
-        const clientsData = data?.data || [];
-        setClients(clientsData);
-        
-        // Check for query parameters to auto-select client and budget
-        const params = new URLSearchParams(window.location.search);
-        const clientId = params.get("clientId");
-        const budgetId = params.get("budgetId");
-        
-        if (clientId && clientsData.length > 0) {
-          const client = clientsData.find((c: any) => c._id === clientId);
-          if (client) {
-            setSelectedClient(client);
-            // If budgetId is also provided, open budget manager
-            if (budgetId) {
-              setPendingBudgetId(budgetId);
-              setBudgetMode("list");
-            }
-            // Clean up URL parameters
-            window.history.replaceState({}, "", "/clients");
+  const loadClients = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await apiFetch("/clients", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        safeErrorLog("Erro ao carregar clientes", data);
+        return;
+      }
+      const clientsData = data?.data || [];
+      setClients(clientsData);
+      
+      // Check for query parameters to auto-select client and budget
+      const params = new URLSearchParams(window.location.search);
+      const clientId = params.get("clientId");
+      const budgetId = params.get("budgetId");
+      
+      if (clientId && clientsData.length > 0) {
+        const client = clientsData.find((c: any) => c._id === clientId);
+        if (client) {
+          setSelectedClient(client);
+          // If budgetId is also provided, open budget manager
+          if (budgetId) {
+            setPendingBudgetId(budgetId);
+            setBudgetMode("list");
           }
+          // Clean up URL parameters
+          window.history.replaceState({}, "", "/clients");
         }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+      }
+    } catch (err) {
+      safeErrorLog("Error loading clients", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadClients();
+  }, [loadClients]);
+
+  const loadClientBudgets = useCallback(async (clientId: string) => {
+    try {
+      if (!clientId) {
+        safeErrorLog("loadClientBudgets: clientId is empty", { clientId });
+        return;
+      }
+      
+      safeLog("loadClientBudgets: Loading budgets for client", { clientId });
+      const res = await apiFetch(`/budgets/client/${clientId}`, { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      
+      if (res.ok) {
+        safeLog("loadClientBudgets: Success", { count: data?.data?.length || 0 });
+        setBudgets(data?.data || []);
+      } else {
+        safeErrorLog("loadClientBudgets: API error", { status: res.status, error: data?.error });
+      }
+    } catch (err) {
+      safeErrorLog("Erro ao carregar orçamentos", err);
+    }
+  }, []);
+
+  const loadClientJobs = useCallback(async (clientId: string) => {
+    try {
+      const res = await apiFetch("/jobs", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.data) {
+        // Filter jobs by clientId
+        const clientJobs = Array.isArray(data.data)
+          ? data.data.filter((job: any) => job.clientId === clientId)
+          : [];
+        setClientJobs(clientJobs);
+      }
+    } catch (err) {
+      safeErrorLog("Erro ao carregar OSs do cliente", err);
+    }
+  }, []);
+
+  // Keep refs in sync with functions
+  useEffect(() => {
+    loadClientBudgetsRef.current = loadClientBudgets;
+    loadClientJobsRef.current = loadClientJobs;
+  }, [loadClientBudgets, loadClientJobs]);
+
+  // Real-time updates using Server-Sent Events (SSE)
+  useEffect(() => {
+    const connectSSE = () => {
+      try {
+        const url = apiUrl("/clients/watch");
+        const eventSource = new EventSource(url);
+        eventSourceRef.current = eventSource;
+
+        eventSource.onopen = () => {
+          safeLog("SSE connected for clients watch");
+        };
+
+        eventSource.onmessage = (event) => {
+          try {
+            // Skip keepalive messages
+            if (event.data.startsWith(":")) {
+              return;
+            }
+
+            const data = JSON.parse(event.data);
+            
+            if (data.type === "client") {
+              if (data.operation === "insert") {
+                // New client added
+                setClients((prev) => {
+                  const exists = prev.some((c) => c._id === data.client?._id);
+                  if (exists) return prev;
+                  return [data.client, ...prev];
+                });
+              } else if (data.operation === "update") {
+                // Client updated
+                setClients((prev) => {
+                  return prev.map((c) => 
+                    c._id === data.clientId ? { ...c, ...data.client } : c
+                  );
+                });
+                
+                // Update selected client if it's the one being updated
+                setSelectedClient((prev) => {
+                  if (prev && prev._id === data.clientId) {
+                    return { ...prev, ...data.client };
+                  }
+                  return prev;
+                });
+              } else if (data.operation === "delete") {
+                // Client deleted
+                setClients((prev) => prev.filter((c) => c._id !== data.clientId));
+                
+                // Clear selection if deleted client was selected
+                setSelectedClient((prev) => {
+                  if (prev && prev._id === data.clientId) {
+                    return null;
+                  }
+                  return prev;
+                });
+              }
+            } else if (data.type === "budget") {
+              // Budget changed - reload budgets if viewing a client
+              const currentSelected = selectedClientRef.current;
+              if (currentSelected && data.budget?.clientId === currentSelected._id) {
+                loadClientBudgetsRef.current?.(currentSelected._id);
+              }
+            } else if (data.type === "job") {
+              // Job changed - reload jobs if viewing a client
+              const currentSelected = selectedClientRef.current;
+              if (currentSelected && data.job?.clientId === currentSelected._id) {
+                loadClientJobsRef.current?.(currentSelected._id);
+              }
+            }
+          } catch (error) {
+            safeErrorLog("Error parsing SSE message", error);
+          }
+        };
+
+        eventSource.onerror = (error) => {
+          safeErrorLog("SSE error", error);
+          // Try to reconnect after 5 seconds
+          setTimeout(() => {
+            if (eventSourceRef.current?.readyState === EventSource.CLOSED) {
+              eventSource.close();
+              connectSSE();
+            }
+          }, 5000);
+        };
+      } catch (error) {
+        safeErrorLog("Error setting up SSE", error);
       }
     };
-    loadClients();
+
+    connectSSE();
+
+    // Cleanup on unmount
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+    // Note: We use refs for loadClientBudgets and loadClientJobs to avoid
+    // dependency issues, as they are stable functions
   }, []);
 
   const stats = useMemo(
@@ -194,6 +346,11 @@ export default function ClientsPage() {
       return matchesType && matchesTerm;
     });
   }, [clients, filterType, search]);
+
+  // Keep ref in sync with selectedClient
+  useEffect(() => {
+    selectedClientRef.current = selectedClient;
+  }, [selectedClient]);
 
   useEffect(() => {
     if (selectedClient) {
@@ -255,41 +412,15 @@ export default function ClientsPage() {
       });
 
       // Load client budgets and jobs
-      loadClientBudgets(selectedClient._id);
-      loadClientJobs(selectedClient._id);
-    }
-  }, [selectedClient]);
-
-  const loadClientBudgets = async (clientId: string) => {
-    try {
-      const res = await apiFetch(`/budgets/client/${clientId}`, { cache: "no-store" });
-      const data = await res.json().catch(() => null);
-      if (res.ok) {
-        setBudgets(data?.data || []);
+      const clientId = typeof selectedClient._id === 'object' 
+        ? selectedClient._id.toString() 
+        : selectedClient._id;
+      if (clientId) {
+        loadClientBudgets(clientId);
+        loadClientJobs(clientId);
       }
-    } catch (err) {
-      console.error("Erro ao carregar orçamentos:", err);
     }
-  };
-
-  const loadClientJobs = async (clientId: string) => {
-    try {
-      const res = await apiFetch("/jobs", { cache: "no-store" });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.data) {
-        // Filter jobs by clientId
-        const jobs = Array.isArray(data.data) ? data.data : [];
-        const clientJobsList = jobs.filter((job: any) => 
-          job.clientId === clientId || 
-          (typeof job.clientId === 'object' && job.clientId?._id === clientId) ||
-          (typeof job.clientId === 'object' && job.clientId?.toString() === clientId)
-        );
-        setClientJobs(clientJobsList);
-      }
-    } catch (err) {
-      console.error("Erro ao carregar OSs do cliente:", err);
-    }
-  };
+  }, [selectedClient, loadClientBudgets, loadClientJobs]);
 
   const openNewClient = () => {
     setMode("select");
@@ -357,7 +488,7 @@ export default function ClientsPage() {
       setClients((prev) => [data.data, ...prev]);
       cancelFlow();
     } catch (err) {
-      console.error(err);
+      safeErrorLog("Error loading clients", err);
       Swal.fire("Erro", "Falha ao salvar cliente.", "error");
     } finally {
       setSaving(false);
@@ -401,8 +532,8 @@ export default function ClientsPage() {
         return;
       }
       
-      console.log("✅ Cliente atualizado:", data.data);
-      console.log("📍 Endereços após atualização:", data.data.addresses);
+      safeLog("✅ Cliente atualizado", data.data);
+      safeLog("📍 Endereços após atualização", data.data.addresses);
       
       Swal.fire("Sucesso", "Cliente atualizado.", "success");
       
@@ -419,7 +550,7 @@ export default function ClientsPage() {
       setEditingAddressIndex(null);
       setNewAddressForm(emptyAddress);
     } catch (err) {
-      console.error(err);
+      safeErrorLog("Error loading clients", err);
       Swal.fire("Erro", "Falha ao atualizar cliente.", "error");
     } finally {
       setSaving(false);
@@ -469,12 +600,12 @@ export default function ClientsPage() {
     
     if (!result.isConfirmed) return;
     
-    console.log(`🗑️ Removendo endereço ${index}:`, addressToRemove);
+    safeLog(`🗑️ Removendo endereço ${index}`, addressToRemove);
     
     if (editing) {
       setEditForm(f => {
         const newAddresses = f.addresses.filter((_, i) => i !== index);
-        console.log(`📍 Endereços restantes (${newAddresses.length}):`, newAddresses);
+        safeLog(`📍 Endereços restantes (${newAddresses.length})`, newAddresses);
         return {
           ...f,
           addresses: newAddresses
@@ -483,7 +614,7 @@ export default function ClientsPage() {
     } else {
       setForm(f => {
         const newAddresses = f.addresses.filter((_, i) => i !== index);
-        console.log(`📍 Endereços restantes (${newAddresses.length}):`, newAddresses);
+        safeLog(`📍 Endereços restantes (${newAddresses.length})`, newAddresses);
         return {
           ...f,
           addresses: newAddresses
@@ -634,7 +765,7 @@ export default function ClientsPage() {
             // New address is last
             const targetAddress = addresses[addresses.length - 1];
             addressId = targetAddress._id;
-            console.log(`✅ Cliente salvo, novo endereço ID: ${addressId}`);
+            safeLog(`✅ Cliente salvo, novo endereço ID: ${addressId}`);
           } else {
             // Find existing address by matching some fields
             const targetAddress = addresses.find((addr: any) => 
@@ -644,7 +775,7 @@ export default function ClientsPage() {
             );
             if (targetAddress) {
               addressId = targetAddress._id;
-              console.log(`✅ Cliente salvo, endereço atualizado ID: ${addressId}`);
+              safeLog(`✅ Cliente salvo, endereço atualizado ID: ${addressId}`);
             }
           }
         }
@@ -659,7 +790,7 @@ export default function ClientsPage() {
         setNewAddressForm(emptyAddress);
         
       } catch (error) {
-        console.error("Erro ao salvar cliente:", error);
+        safeErrorLog("Erro ao salvar cliente", error);
         Swal.fire("Erro", "Falha ao salvar o cliente. Tente novamente.", "error");
         return;
       }
@@ -749,7 +880,7 @@ export default function ClientsPage() {
       });
     } catch (error: any) {
       Swal.close();
-      console.error("Erro ao gerar link:", error);
+      safeErrorLog("Erro ao gerar link", error);
       Swal.fire("Erro", error?.message || "Erro ao gerar link. Tente novamente.", "error");
     }
   };
@@ -791,7 +922,7 @@ export default function ClientsPage() {
           });
         }
       } catch (error) {
-        console.error("Erro ao verificar status:", error);
+        safeErrorLog("Erro ao verificar status", error);
       }
 
       // Parar após máximo de tentativas
@@ -894,7 +1025,7 @@ export default function ClientsPage() {
         showCloseButton: true
       });
     } catch (error) {
-      console.error("Error generating location link:", error);
+      safeErrorLog("Error generating location link", error);
       Swal.fire("Erro", "Falha ao gerar link de captura", "error");
     }
   };
@@ -939,7 +1070,7 @@ export default function ClientsPage() {
       setSelectedClient(null);
       setEditing(false);
     } catch (err) {
-      console.error(err);
+      safeErrorLog("Error loading clients", err);
       Swal.fire("Erro", "Falha ao excluir cliente.", "error");
     }
   };

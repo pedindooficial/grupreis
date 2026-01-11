@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
+import { validateEmail, sanitizeString } from "@/utils/validation";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,7 +19,21 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const success = await login(email, password);
+    // Validate inputs
+    const sanitizedEmail = sanitizeString(email);
+    if (!sanitizedEmail || !validateEmail(sanitizedEmail)) {
+      setError("Por favor, insira um e-mail válido.");
+      setLoading(false);
+      return;
+    }
+
+    if (!password || password.length < 1) {
+      setError("Por favor, insira sua senha.");
+      setLoading(false);
+      return;
+    }
+
+    const success = await login(sanitizedEmail, password);
 
     setLoading(false);
 
@@ -60,10 +75,14 @@ export default function LoginPage() {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  const sanitized = sanitizeString(e.target.value);
+                  setEmail(sanitized);
+                }}
                 className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
                 placeholder="admin@reis.com"
                 required
+                autoComplete="email"
               />
             </div>
             <div className="space-y-2">

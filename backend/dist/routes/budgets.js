@@ -13,6 +13,7 @@ const db_1 = require("../db");
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const Settings_1 = __importDefault(require("../models/Settings"));
 const mongoose_1 = __importDefault(require("mongoose"));
+const crypto_1 = __importDefault(require("crypto"));
 const router = express_1.default.Router();
 // Labels for display
 const SOIL_TYPE_LABELS = {
@@ -251,10 +252,33 @@ router.post("/:id/convert", async (req, res) => {
         if (!budget) {
             return res.status(404).json({ error: "Orçamento não encontrado" });
         }
-        if (budget.status === "convertido") {
-            return res.status(400).json({
-                error: "Este orçamento já foi convertido em OS"
-            });
+        // Check if budget was already converted
+        if (budget.jobId) {
+            // Fetch the job to check when it was created
+            const existingJob = await Job_1.default.findById(budget.jobId).lean();
+            if (existingJob) {
+                // Check if budget was modified after the job was created
+                const budgetUpdatedAt = budget.updatedAt ? new Date(budget.updatedAt) : new Date(0);
+                const jobCreatedAt = existingJob.createdAt ? new Date(existingJob.createdAt) : new Date(0);
+                // If budget was NOT modified after job creation, prevent conversion
+                if (budgetUpdatedAt <= jobCreatedAt) {
+                    return res.status(400).json({
+                        error: "Este orçamento já foi convertido em OS e não pode ser convertido novamente",
+                        detail: `Orçamento convertido em ${jobCreatedAt.toLocaleString("pt-BR")}. Para converter novamente, o orçamento precisa ser modificado após a conversão.`
+                    });
+                }
+                // If budget was modified after job creation, allow conversion (will create a new job)
+            }
+            else {
+                // Job not found, but budget has jobId - allow conversion to create new job
+                // This handles edge cases where job was deleted
+            }
+        }
+        // Legacy check for status (kept for backward compatibility)
+        if (budget.status === "convertido" && !budget.jobId) {
+            // Status is "convertido" but no jobId - allow conversion
+            budget.status = "pendente";
+            await budget.save();
         }
         // Resolve teamId and team name
         let teamId = parsed.data.teamId;
@@ -502,25 +526,77 @@ router.get("/:id/pdf", async (req, res) => {
             currentY = doc.y + 20;
         }
         // Signature section
-        if (currentY > 600) {
+        if (currentY > 500) {
             doc.addPage();
             currentY = 50;
         }
         else {
             currentY += 40;
         }
-        // Company signature
-        const signatureBoxY = currentY;
+        // Approval status
+        if (budget.approved) {
+            doc.fontSize(10).fillColor("#0a0").font("Helvetica-Bold");
+            doc.text("✅ ORÇAMENTO APROVADO", 50, currentY);
+            if (budget.approvedAt) {
+                doc.fontSize(9).fillColor("#333").font("Helvetica");
+                doc.text(`Aprovado em: ${new Date(budget.approvedAt).toLocaleString("pt-BR")}`, 50, currentY + 15);
+            }
+            currentY += 40;
+        }
+        else if (budget.rejected) {
+            doc.fontSize(10).fillColor("#a00").font("Helvetica-Bold");
+            doc.text("❌ ORÇAMENTO REJEITADO", 50, currentY);
+            if (budget.rejectedAt) {
+                doc.fontSize(9).fillColor("#333").font("Helvetica");
+                doc.text(`Rejeitado em: ${new Date(budget.rejectedAt).toLocaleString("pt-BR")}`, 50, currentY + 15);
+            }
+            if (budget.rejectionReason) {
+                doc.fontSize(8).fillColor("#666");
+                doc.text(`Motivo: ${budget.rejectionReason}`, 50, currentY + 30, {
+                    width: 500
+                });
+            }
+            currentY += 60;
+        }
+        // Signatures section - side by side if both exist, otherwise full width
+        const hasClientSignature = budget.approved && budget.clientSignature;
+        const hasCompanySignature = settings?.companySignature;
         const signatureBoxHeight = 100;
-        doc
-            .rect(50, signatureBoxY, 230, signatureBoxHeight)
-            .stroke();
-        // Company signature image if exists
-        if (settings?.companySignature) {
+        const signatureBoxY = currentY;
+        if (hasClientSignature && hasCompanySignature) {
+            // Two signatures side by side
+            // Client signature (left)
+            doc.rect(50, signatureBoxY, 230, signatureBoxHeight).stroke();
             try {
-                const base64Data = settings.companySignature.replace(/^data:image\/\w+;base64,/, "");
-                const imgBuffer = Buffer.from(base64Data, "base64");
-                doc.image(imgBuffer, 55, signatureBoxY + 5, {
+                if (!budget.clientSignature)
+                    throw new Error("Client signature not found");
+                const clientBase64Data = budget.clientSignature.replace(/^data:image\/\w+;base64,/, "");
+                const clientImgBuffer = Buffer.from(clientBase64Data, "base64");
+                doc.image(clientImgBuffer, 55, signatureBoxY + 5, {
+                    fit: [220, 70],
+                    align: "center",
+                    valign: "center"
+                });
+            }
+            catch (err) {
+                console.error("Error adding client signature:", err);
+            }
+            doc
+                .fontSize(9)
+                .fillColor("#000")
+                .text("Assinatura do Cliente", 50, signatureBoxY + signatureBoxHeight + 5, { width: 230, align: "center" });
+            if (budget.clientSignedAt) {
+                doc.fontSize(8).fillColor("#666");
+                doc.text(new Date(budget.clientSignedAt).toLocaleDateString("pt-BR"), 50, signatureBoxY + signatureBoxHeight + 18, { width: 230, align: "center" });
+            }
+            // Company signature (right)
+            doc.rect(320, signatureBoxY, 230, signatureBoxHeight).stroke();
+            try {
+                if (!settings.companySignature)
+                    throw new Error("Company signature not found");
+                const companyBase64Data = settings.companySignature.replace(/^data:image\/\w+;base64,/, "");
+                const companyImgBuffer = Buffer.from(companyBase64Data, "base64");
+                doc.image(companyImgBuffer, 325, signatureBoxY + 5, {
                     fit: [220, 70],
                     align: "center",
                     valign: "center"
@@ -529,17 +605,233 @@ router.get("/:id/pdf", async (req, res) => {
             catch (err) {
                 console.error("Error adding company signature:", err);
             }
+            doc
+                .fontSize(9)
+                .fillColor("#000")
+                .text("Assinatura da Empresa", 320, signatureBoxY + signatureBoxHeight + 5, { width: 230, align: "center" });
         }
-        doc
-            .fontSize(9)
-            .fillColor("#000")
-            .text("Assinatura da Empresa", 50, signatureBoxY + signatureBoxHeight + 5, { width: 230, align: "center" });
+        else if (hasClientSignature) {
+            // Only client signature (centered)
+            doc.rect(50, signatureBoxY, 500, signatureBoxHeight).stroke();
+            try {
+                if (!budget.clientSignature)
+                    throw new Error("Client signature not found");
+                const clientBase64Data = budget.clientSignature.replace(/^data:image\/\w+;base64,/, "");
+                const clientImgBuffer = Buffer.from(clientBase64Data, "base64");
+                doc.image(clientImgBuffer, 55, signatureBoxY + 5, {
+                    fit: [490, 70],
+                    align: "center",
+                    valign: "center"
+                });
+            }
+            catch (err) {
+                console.error("Error adding client signature:", err);
+            }
+            doc
+                .fontSize(9)
+                .fillColor("#000")
+                .text("Assinatura do Cliente", 50, signatureBoxY + signatureBoxHeight + 5, { width: 500, align: "center" });
+            if (budget.clientSignedAt) {
+                doc.fontSize(8).fillColor("#666");
+                doc.text(new Date(budget.clientSignedAt).toLocaleDateString("pt-BR"), 50, signatureBoxY + signatureBoxHeight + 18, { width: 500, align: "center" });
+            }
+        }
+        else if (hasCompanySignature) {
+            // Only company signature (centered)
+            doc.rect(50, signatureBoxY, 500, signatureBoxHeight).stroke();
+            try {
+                if (!settings.companySignature)
+                    throw new Error("Company signature not found");
+                const companyBase64Data = settings.companySignature.replace(/^data:image\/\w+;base64,/, "");
+                const companyImgBuffer = Buffer.from(companyBase64Data, "base64");
+                doc.image(companyImgBuffer, 55, signatureBoxY + 5, {
+                    fit: [490, 70],
+                    align: "center",
+                    valign: "center"
+                });
+            }
+            catch (err) {
+                console.error("Error adding company signature:", err);
+            }
+            doc
+                .fontSize(9)
+                .fillColor("#000")
+                .text("Assinatura da Empresa", 50, signatureBoxY + signatureBoxHeight + 5, { width: 500, align: "center" });
+        }
+        else {
+            // No signatures - just show signature boxes
+            doc.rect(50, signatureBoxY, 230, signatureBoxHeight).stroke();
+            doc
+                .fontSize(9)
+                .fillColor("#000")
+                .text("Assinatura do Cliente", 50, signatureBoxY + signatureBoxHeight + 5, { width: 230, align: "center" });
+            doc.rect(320, signatureBoxY, 230, signatureBoxHeight).stroke();
+            doc
+                .fontSize(9)
+                .fillColor("#000")
+                .text("Assinatura da Empresa", 320, signatureBoxY + signatureBoxHeight + 5, { width: 230, align: "center" });
+        }
         doc.end();
     }
     catch (error) {
         console.error("GET /api/budgets/:id/pdf error", error);
         res.status(500).json({
             error: "Falha ao gerar PDF",
+            detail: error?.message || "Erro interno"
+        });
+    }
+});
+// POST generate public link for budget
+router.post("/:id/generate-link", async (req, res) => {
+    try {
+        await (0, db_1.connectDB)();
+        const budget = await Budget_1.default.findById(req.params.id);
+        if (!budget) {
+            return res.status(404).json({ error: "Orçamento não encontrado" });
+        }
+        // Generate unique token if not exists
+        if (!budget.publicToken) {
+            budget.publicToken = crypto_1.default.randomBytes(32).toString("hex");
+            await budget.save();
+        }
+        // Use request origin if available (for dev mode), otherwise use FRONTEND_ORIGIN or default
+        const requestOrigin = req.headers.origin;
+        let frontendOrigin = requestOrigin;
+        if (!frontendOrigin) {
+            // Fallback to FRONTEND_ORIGIN env var (first one if multiple)
+            frontendOrigin = process.env.FRONTEND_ORIGIN?.split(",")[0]?.trim();
+        }
+        // Final fallback to localhost:3000 (common dev port) or localhost:5173 (Vite default)
+        if (!frontendOrigin) {
+            frontendOrigin = "http://localhost:3000";
+        }
+        const publicLink = `${frontendOrigin}/budget/${budget.publicToken}`;
+        res.json({
+            data: {
+                publicToken: budget.publicToken,
+                publicLink
+            }
+        });
+    }
+    catch (error) {
+        console.error("POST /api/budgets/:id/generate-link error", error);
+        res.status(500).json({
+            error: "Falha ao gerar link público",
+            detail: error?.message || "Erro interno"
+        });
+    }
+});
+// GET public budget by token (no auth required)
+router.get("/public/:token", async (req, res) => {
+    try {
+        await (0, db_1.connectDB)();
+        const budget = await Budget_1.default.findOne({ publicToken: req.params.token }).lean();
+        if (!budget) {
+            return res.status(404).json({ error: "Orçamento não encontrado" });
+        }
+        res.json({ data: budget });
+    }
+    catch (error) {
+        console.error("GET /api/budgets/public/:token error", error);
+        res.status(500).json({
+            error: "Falha ao buscar orçamento",
+            detail: error?.message || "Erro interno"
+        });
+    }
+});
+// POST approve budget with signature (public endpoint)
+const approveSchema = zod_1.z.object({
+    signature: zod_1.z.string().min(1, "Assinatura é obrigatória")
+});
+router.post("/public/:token/approve", async (req, res) => {
+    try {
+        const parsed = approveSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res.status(400).json({
+                error: "Dados inválidos",
+                issues: parsed.error.flatten()
+            });
+        }
+        await (0, db_1.connectDB)();
+        const budget = await Budget_1.default.findOne({ publicToken: req.params.token });
+        if (!budget) {
+            return res.status(404).json({ error: "Orçamento não encontrado" });
+        }
+        // Check if already approved (but allow approving after rejection)
+        if (budget.approved) {
+            return res.status(400).json({
+                error: "Este orçamento já foi aprovado"
+            });
+        }
+        // Update budget with approval (even if previously rejected)
+        budget.approved = true;
+        budget.approvedAt = new Date();
+        budget.clientSignature = parsed.data.signature;
+        budget.clientSignedAt = new Date();
+        budget.status = "aprovado";
+        // Clear rejection status if it was previously rejected
+        if (budget.rejected) {
+            budget.rejected = false;
+            budget.rejectedAt = undefined;
+            budget.rejectionReason = undefined;
+        }
+        await budget.save();
+        res.json({
+            data: {
+                message: "Orçamento aprovado com sucesso",
+                budget
+            }
+        });
+    }
+    catch (error) {
+        console.error("POST /api/budgets/public/:token/approve error", error);
+        res.status(500).json({
+            error: "Falha ao aprovar orçamento",
+            detail: error?.message || "Erro interno"
+        });
+    }
+});
+// POST reject budget with reason (public endpoint)
+const rejectSchema = zod_1.z.object({
+    rejectionReason: zod_1.z.string().min(1, "Motivo da rejeição é obrigatório")
+});
+router.post("/public/:token/reject", async (req, res) => {
+    try {
+        const parsed = rejectSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res.status(400).json({
+                error: "Dados inválidos",
+                issues: parsed.error.flatten()
+            });
+        }
+        await (0, db_1.connectDB)();
+        const budget = await Budget_1.default.findOne({ publicToken: req.params.token });
+        if (!budget) {
+            return res.status(404).json({ error: "Orçamento não encontrado" });
+        }
+        // Check if already approved or rejected
+        if (budget.approved || budget.rejected) {
+            return res.status(400).json({
+                error: "Este orçamento já foi processado"
+            });
+        }
+        // Update budget with rejection
+        budget.rejected = true;
+        budget.rejectedAt = new Date();
+        budget.rejectionReason = parsed.data.rejectionReason;
+        budget.status = "rejeitado";
+        await budget.save();
+        res.json({
+            data: {
+                message: "Orçamento rejeitado",
+                budget
+            }
+        });
+    }
+    catch (error) {
+        console.error("POST /api/budgets/public/:token/reject error", error);
+        res.status(500).json({
+            error: "Falha ao rejeitar orçamento",
             detail: error?.message || "Erro interno"
         });
     }

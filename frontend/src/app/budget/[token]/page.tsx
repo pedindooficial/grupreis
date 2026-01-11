@@ -7,6 +7,8 @@ import Swal from "sweetalert2";
 import SignatureCanvas from "@/components/SignatureCanvas";
 import { apiFetch } from "@/lib/api-client";
 import type { Budget } from "@/models/Budget";
+import { safeErrorLog } from "@/utils/security";
+import { validateRequired, sanitizeString } from "@/utils/validation";
 
 export default function PublicBudgetPage() {
   const { token } = useParams<{ token: string }>();
@@ -35,7 +37,7 @@ export default function PublicBudgetPage() {
         Swal.fire("Erro", "Orçamento não encontrado", "error");
       }
     } catch (err) {
-      console.error("Error loading budget:", err);
+      safeErrorLog("Error loading budget", err);
       Swal.fire("Erro", "Falha ao carregar orçamento", "error");
     } finally {
       setLoading(false);
@@ -43,7 +45,7 @@ export default function PublicBudgetPage() {
   };
 
   const handleApprove = async () => {
-    if (!budget || !signature) {
+    if (!budget || !signature || !validateRequired(signature)) {
       Swal.fire("Atenção", "Por favor, assine o orçamento", "warning");
       return;
     }
@@ -65,7 +67,7 @@ export default function PublicBudgetPage() {
         Swal.fire("Erro", data?.error || "Falha ao aprovar orçamento", "error");
       }
     } catch (err) {
-      console.error("Error approving budget:", err);
+      safeErrorLog("Error approving budget", err);
       Swal.fire("Erro", "Falha ao aprovar orçamento", "error");
     } finally {
       setSubmitting(false);
@@ -73,7 +75,8 @@ export default function PublicBudgetPage() {
   };
 
   const handleReject = async () => {
-    if (!budget || !rejectionReason.trim()) {
+    const sanitizedReason = sanitizeString(rejectionReason);
+    if (!budget || !sanitizedReason || !validateRequired(sanitizedReason)) {
       Swal.fire("Atenção", "Por favor, informe o motivo da rejeição", "warning");
       return;
     }
@@ -82,7 +85,7 @@ export default function PublicBudgetPage() {
       setSubmitting(true);
       const res = await apiFetch(`/budgets/public/${token}/reject`, {
         method: "POST",
-        body: JSON.stringify({ rejectionReason: rejectionReason.trim() })
+        body: JSON.stringify({ rejectionReason: sanitizedReason })
       });
 
       const data = await res.json().catch(() => null);
@@ -95,7 +98,7 @@ export default function PublicBudgetPage() {
         Swal.fire("Erro", data?.error || "Falha ao rejeitar orçamento", "error");
       }
     } catch (err) {
-      console.error("Error rejecting budget:", err);
+      safeErrorLog("Error rejecting budget", err);
       Swal.fire("Erro", "Falha ao rejeitar orçamento", "error");
     } finally {
       setSubmitting(false);
@@ -349,10 +352,14 @@ export default function PublicBudgetPage() {
                 <h3 className="font-semibold text-white">Motivo da Rejeição</h3>
                 <textarea
                   value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
+                  onChange={(e) => {
+                    const sanitized = sanitizeString(e.target.value);
+                    setRejectionReason(sanitized);
+                  }}
                   placeholder="Informe o motivo da rejeição do orçamento..."
                   className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-4 py-3 text-white placeholder-slate-400 outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/40"
                   rows={4}
+                  maxLength={1000}
                 />
                 <div className="flex gap-4">
                   <button

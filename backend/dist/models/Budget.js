@@ -40,11 +40,21 @@ const BudgetSchema = new mongoose_1.Schema({
     selectedAddress: { type: String, trim: true }, // Address used for distance calculation
     travelDistanceKm: { type: Number, min: 0 },
     travelPrice: { type: Number, min: 0 },
-    travelDescription: { type: String, trim: true }
+    travelDescription: { type: String, trim: true },
+    // Approval and signature fields
+    approved: { type: Boolean, default: false },
+    approvedAt: { type: Date },
+    rejected: { type: Boolean, default: false },
+    rejectedAt: { type: Date },
+    rejectionReason: { type: String, trim: true },
+    clientSignature: { type: String }, // Base64 encoded signature image
+    clientSignedAt: { type: Date },
+    publicToken: { type: String, unique: true, sparse: true } // Unique token for public access
 }, { timestamps: true });
 BudgetSchema.index({ seq: 1 });
 BudgetSchema.index({ clientId: 1 });
 BudgetSchema.index({ status: 1 });
 BudgetSchema.index({ createdAt: -1 });
+BudgetSchema.index({ publicToken: 1 });
 const BudgetModel = mongoose_1.models.Budget || (0, mongoose_1.model)("Budget", BudgetSchema);
 exports.default = BudgetModel;

@@ -1,4 +1,5 @@
 import { Model, Schema, model, models } from "mongoose";
+import bcrypt from "bcryptjs";
 
 // Tipos para endereço de cliente
 export interface ClientAddress {
@@ -23,6 +24,9 @@ export interface Client {
   contact?: string;
   phone?: string;
   email?: string;
+  password?: string; // Password for client login
+  passwordResetToken?: string; // Token for password reset
+  passwordResetExpires?: Date; // Expiration date for password reset token
   // Campos legados para compatibilidade
   address?: string;
   addressStreet?: string;
@@ -61,6 +65,9 @@ const ClientSchema = new Schema<Client>(
     contact: { type: String, trim: true },
     phone: { type: String, trim: true },
     email: { type: String, trim: true, lowercase: true },
+    password: { type: String, select: false }, // Don't include password in queries by default
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
     // Manter campos legados para compatibilidade durante migração
     address: { type: String, trim: true },
     addressStreet: { type: String, trim: true },
@@ -75,11 +82,28 @@ const ClientSchema = new Schema<Client>(
   { timestamps: true }
 );
 
+// Hash password before saving
+ClientSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  if (!this.password) return next();
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password as string, salt);
+  next();
+});
+
+// Method to compare password
+ClientSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
+  if (!this.password) return false;
+  return bcrypt.compare(candidatePassword, this.password as string);
+};
+
 ClientSchema.index({ docNumber: 1 }, { unique: false, sparse: true });
 ClientSchema.index(
   { personType: 1, docNumber: 1 },
   { unique: true, sparse: true }
 );
+ClientSchema.index({ email: 1 }, { unique: false, sparse: true });
+ClientSchema.index({ passwordResetToken: 1 });
 
 const ClientModel =
   (models.Client as Model<Client>) || model<Client>("Client", ClientSchema);

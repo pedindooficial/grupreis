@@ -40,6 +40,9 @@ export interface OrcamentoRequest {
   jobId?: Schema.Types.ObjectId | string | null; // If converted to job
   // Source tracking
   source?: string; // 'website', 'whatsapp', 'email'
+  // Archive
+  archived?: boolean; // If true, request is archived and hidden by default
+  archivedAt?: Date; // When the request was archived
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -88,7 +91,10 @@ const OrcamentoRequestSchema = new Schema<OrcamentoRequest>(
     budgetId: { type: Schema.Types.ObjectId, ref: "Budget", default: null },
     jobId: { type: Schema.Types.ObjectId, ref: "Job", default: null },
     // Source tracking
-    source: { type: String, trim: true, default: "website" }
+    source: { type: String, trim: true, default: "website" },
+    // Archive
+    archived: { type: Boolean, default: false },
+    archivedAt: { type: Date }
   },
   { timestamps: true }
 );
@@ -98,6 +104,7 @@ OrcamentoRequestSchema.index({ status: 1 });
 OrcamentoRequestSchema.index({ createdAt: -1 });
 OrcamentoRequestSchema.index({ phone: 1 });
 OrcamentoRequestSchema.index({ email: 1 });
+OrcamentoRequestSchema.index({ archived: 1 });
 // Geospatial index for location queries (2dsphere index for lat/lng)
 OrcamentoRequestSchema.index({ longitude: 1, latitude: 1 });
 

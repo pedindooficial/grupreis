@@ -10,7 +10,8 @@ const Settings_1 = __importDefault(require("../models/Settings"));
 const TravelPricing_1 = __importDefault(require("../models/TravelPricing"));
 const router = (0, express_1.Router)();
 const calculateDistanceSchema = zod_1.z.object({
-    clientAddress: zod_1.z.string().min(1, "Endereço do cliente é obrigatório")
+    clientAddress: zod_1.z.string().min(1, "Endereço do cliente é obrigatório"),
+    startAddress: zod_1.z.string().optional() // Optional: if not provided, uses headquartersAddress from settings
 });
 // Helper to normalize address format for Google Maps
 function normalizeAddress(address) {
@@ -34,20 +35,28 @@ router.post("/calculate", async (req, res) => {
             return res.status(400).json({ error: "Dados inválidos", issues: parsed.error.flatten() });
         }
         await (0, db_1.connectDB)();
-        // Get company address from settings
-        const settings = await Settings_1.default.findOne().lean();
-        console.log("Settings encontrado:", settings ? "Sim" : "Não");
-        if (!settings || !settings.headquartersAddress) {
-            return res.status(400).json({
-                error: "Endereço da empresa não configurado. Configure em Configurações."
-            });
+        // Determine start address: use provided startAddress, or fallback to headquartersAddress from settings
+        let startAddress;
+        if (parsed.data.startAddress && parsed.data.startAddress.trim()) {
+            // Use provided start address (could be team location or custom address)
+            startAddress = normalizeAddress(parsed.data.startAddress);
+        }
+        else {
+            // Fallback to headquarters address from settings
+            const settings = await Settings_1.default.findOne().lean();
+            console.log("Settings encontrado:", settings ? "Sim" : "Não");
+            if (!settings || !settings.headquartersAddress) {
+                return res.status(400).json({
+                    error: "Endereço da empresa não configurado. Configure em Configurações."
+                });
+            }
+            startAddress = normalizeAddress(settings.headquartersAddress);
         }
         // Normalize addresses for better Google Maps compatibility
-        const companyAddress = normalizeAddress(settings.headquartersAddress);
         const clientAddress = normalizeAddress(parsed.data.clientAddress);
-        console.log("Endereço da empresa (normalizado):", companyAddress);
+        console.log("Endereço de origem (normalizado):", startAddress);
         console.log("Endereço do cliente (normalizado):", clientAddress);
-        console.log("Endereço empresa:", companyAddress);
+        console.log("Endereço origem:", startAddress);
         console.log("Endereço cliente:", clientAddress);
         // Use Google Maps Distance Matrix API
         const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -56,7 +65,7 @@ router.post("/calculate", async (req, res) => {
                 error: "Google Maps API Key não configurada no servidor"
             });
         }
-        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(companyAddress)}&destinations=${encodeURIComponent(clientAddress)}&mode=driving&language=pt-BR&key=${apiKey}`;
+        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(startAddress)}&destinations=${encodeURIComponent(clientAddress)}&mode=driving&language=pt-BR&key=${apiKey}`;
         console.log("URL Google Maps:", url);
         const response = await fetch(url);
         const data = await response.json();
@@ -84,7 +93,7 @@ router.post("/calculate", async (req, res) => {
             if (element?.status === "NOT_FOUND") {
                 errorMessage = "Endereço não encontrado";
                 errorDetail = `O Google Maps não conseguiu localizar um dos endereços:\n\n` +
-                    `📍 Empresa: ${companyAddress}\n\n` +
+                    `📍 Origem: ${startAddress}\n\n` +
                     `📍 Cliente: ${clientAddress}\n\n` +
                     `Verifique se os endereços estão completos e corretos.`;
             }
@@ -95,7 +104,7 @@ router.post("/calculate", async (req, res) => {
             return res.status(400).json({
                 error: errorMessage,
                 detail: errorDetail,
-                companyAddress,
+                startAddress,
                 clientAddress
             });
         }
@@ -170,7 +179,7 @@ router.post("/calculate", async (req, res) => {
                 durationText,
                 travelPrice,
                 travelDescription,
-                companyAddress,
+                startAddress,
                 clientAddress
             }
         });

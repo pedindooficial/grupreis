@@ -2,6 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { connectDB } from "../db";
 import ClientModel from "../models/Client";
+import BudgetModel from "../models/Budget";
+import JobModel from "../models/Job";
+import { authenticate } from "../middleware/auth";
 
 const router = Router();
 
@@ -82,6 +85,158 @@ router.get("/", async (_req, res) => {
     res
       .status(500)
       .json({ error: "Falha ao carregar clientes", detail: error?.message });
+  }
+});
+
+// GET - Watch for real-time updates (must be before /:id route to avoid conflict)
+// Note: No authentication required as EventSource doesn't support custom headers
+// This route is only accessible from authenticated dashboard pages
+router.get("/watch", async (req, res) => {
+  try {
+    await connectDB();
+
+    // Set up SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // Disable nginx buffering
+
+    // Send initial connection message
+    res.write(`: connected\n\n`);
+
+    // Watch for changes in Clients collection
+    // Note: Simplified pipeline - MongoDB Change Streams don't support complex $or in $match
+    const clientChangeStream = ClientModel.watch(
+      [],
+      { fullDocument: "updateLookup" }
+    );
+
+    // Watch for changes in Budgets collection (especially approvals/rejections)
+    const budgetChangeStream = BudgetModel.watch(
+      [],
+      { fullDocument: "updateLookup" }
+    );
+
+    // Watch for changes in Jobs collection
+    const jobChangeStream = JobModel.watch(
+      [],
+      { fullDocument: "updateLookup" }
+    );
+
+    // Handle Client changes
+    clientChangeStream.on("change", async (change) => {
+      try {
+        // Filter operation types in code
+        if (!["insert", "update", "delete"].includes(change.operationType)) {
+          return;
+        }
+
+        if (change.operationType === "insert") {
+          const client = change.fullDocument;
+          if (client) {
+            res.write(
+              `data: ${JSON.stringify({ type: "client", operation: "insert", client })}\n\n`
+            );
+          }
+        } else if (change.operationType === "update") {
+          const clientId = change.documentKey?._id?.toString();
+          if (change.fullDocument) {
+            res.write(
+              `data: ${JSON.stringify({ type: "client", operation: "update", client: change.fullDocument, clientId })}\n\n`
+            );
+          } else if (clientId) {
+            const client = await ClientModel.findById(clientId).lean();
+            if (client) {
+              res.write(
+                `data: ${JSON.stringify({ type: "client", operation: "update", client, clientId })}\n\n`
+              );
+            }
+          }
+        } else if (change.operationType === "delete") {
+          const clientId = change.documentKey?._id?.toString();
+          if (clientId) {
+            res.write(
+              `data: ${JSON.stringify({ type: "client", operation: "delete", clientId })}\n\n`
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error processing client change:", error);
+      }
+    });
+
+    // Handle Budget changes
+    budgetChangeStream.on("change", async (change) => {
+      try {
+        // Only process updates that affect relevant fields
+        if (change.operationType === "update" && change.fullDocument) {
+          const budget = change.fullDocument;
+          const clientId = budget.clientId?.toString();
+          
+          // Check if relevant fields were updated
+          const updatedFields = change.updateDescription?.updatedFields || {};
+          const hasRelevantUpdate = 
+            updatedFields.approved !== undefined ||
+            updatedFields.rejected !== undefined ||
+            updatedFields.status !== undefined ||
+            updatedFields.clientSignature !== undefined;
+          
+          if (clientId && hasRelevantUpdate) {
+            res.write(
+              `data: ${JSON.stringify({ type: "budget", budget, clientId })}\n\n`
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error processing budget change:", error);
+      }
+    });
+
+    // Handle Job changes
+    jobChangeStream.on("change", async (change) => {
+      try {
+        // Only process updates that affect relevant fields
+        if (change.operationType === "update" && change.fullDocument) {
+          const job = change.fullDocument;
+          const clientId = job.clientId?.toString();
+          
+          // Check if relevant fields were updated
+          const updatedFields = change.updateDescription?.updatedFields || {};
+          const hasRelevantUpdate = 
+            updatedFields.status !== undefined ||
+            updatedFields.clientId !== undefined;
+          
+          if (clientId && hasRelevantUpdate) {
+            res.write(
+              `data: ${JSON.stringify({ type: "job", job, clientId })}\n\n`
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error processing job change:", error);
+      }
+    });
+
+    // Keep connection alive
+    const keepAliveInterval = setInterval(() => {
+      res.write(`: keepalive\n\n`);
+    }, 30000);
+
+    // Handle client disconnect
+    req.on("close", () => {
+      clearInterval(keepAliveInterval);
+      clientChangeStream.close();
+      budgetChangeStream.close();
+      jobChangeStream.close();
+    });
+  } catch (error: any) {
+    console.error("GET /clients/watch error", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: "Falha ao estabelecer conexão SSE",
+        detail: error?.message || "Erro interno"
+      });
+    }
   }
 });
 

@@ -28,6 +28,8 @@ import maintenanceRouter from "./routes/maintenance";
 import orcamentoRequestsRouter from "./routes/orcamento-requests";
 import socialMediaRouter from "./routes/social-media";
 import reportsRouter from "./routes/reports";
+import clientAuthRouter from "./routes/client-auth";
+import clientProtectedRouter from "./routes/client-protected";
 import { connectDB } from "./db";
 import mongoose from "mongoose";
 
@@ -72,7 +74,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Accept", "x-user-id", "x-user-email"]
+    allowedHeaders: ["Content-Type", "Authorization", "Accept", "x-user-id", "x-user-email", "x-client-id"]
   })
 );
 
@@ -148,6 +150,8 @@ app.use("/api/maintenance", maintenanceRouter);
 app.use("/api/orcamento-requests", orcamentoRequestsRouter);
 app.use("/api/social-media", socialMediaRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/client-auth", clientAuthRouter);
+app.use("/api/client-protected", clientProtectedRouter);
 
 // Use HTTPS with self-signed certs only in development
 // Production should use HTTP behind reverse proxy (Nginx) with proper SSL

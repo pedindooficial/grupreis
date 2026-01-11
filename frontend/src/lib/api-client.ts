@@ -1,3 +1,6 @@
+import { secureFetch } from "@/utils/requestHelpers";
+import { safeErrorLog } from "@/utils/security";
+
 const API_BASE =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV
@@ -13,10 +16,11 @@ export function apiUrl(path: string) {
 
 export async function apiFetch(
   path: string,
-  options?: RequestInit
+  options?: RequestInit & { timeout?: number }
 ): Promise<Response> {
   const url = apiUrl(path);
   const headers: Record<string, string> = {};
+  const timeout = options?.timeout;
   
   // Copy existing headers
   if (options?.headers) {
@@ -50,11 +54,20 @@ export async function apiFetch(
     } catch (err) {
       // User not available, continue without auth headers
       // This is expected in some cases (e.g., public routes)
+      safeErrorLog("Failed to parse user from localStorage", err);
     }
   }
   
-  return fetch(url, {
-    ...options,
-    headers
-  });
+  // Remove timeout from options before passing to secureFetch
+  const { timeout: _, ...fetchOptions } = options || {};
+  
+  try {
+    return await secureFetch(url, {
+      ...fetchOptions,
+      headers
+    }, timeout);
+  } catch (error: any) {
+    safeErrorLog("API fetch error", error);
+    throw error;
+  }
 }
