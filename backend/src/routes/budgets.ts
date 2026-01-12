@@ -387,6 +387,48 @@ router.post("/:id/convert", async (req, res) => {
       }
     }
 
+    // Normalize services to ensure soilType and access are in the correct format for job
+    // The frontend expects display labels like "Terra comum", "Argiloso", etc.
+    const normalizedServices = budget.services.map((service: any) => {
+      const normalized: any = { ...service };
+      
+      // Normalize soilType: convert catalog format to display format
+      if (service.soilType) {
+        const soilTypeLower = service.soilType.toLowerCase().trim();
+        const soilTypeMapping: Record<string, string> = {
+          "misturado": "Terra comum",
+          "terra comum": "Terra comum",
+          "terra_comum": "Terra comum",
+          "argiloso": "Argiloso",
+          "arenoso": "Arenoso",
+          "rochoso": "Rochoso",
+          "outro": "Não sei informar",
+          "não sei informar": "Não sei informar",
+          "nao sei informar": "Não sei informar"
+        };
+        normalized.soilType = soilTypeMapping[soilTypeLower] || service.soilType;
+      }
+      
+      // Normalize access: convert catalog/request format to display format
+      if (service.access) {
+        const accessLower = service.access.toLowerCase().trim();
+        const accessMapping: Record<string, string> = {
+          "livre": "Acesso livre e desimpedido",
+          "facil": "Acesso livre e desimpedido",
+          "limitado": "Algumas limitações",
+          "medio": "Algumas limitações",
+          "restrito": "Acesso restrito ou complicado",
+          "dificil": "Acesso restrito ou complicado"
+        };
+        // Only map if it's in catalog/request format, otherwise keep as is (already in display format)
+        if (accessMapping[accessLower]) {
+          normalized.access = accessMapping[accessLower];
+        }
+      }
+      
+      return normalized;
+    });
+
     // Create job from budget
     const job = await JobModel.create({
       seq: jobSeq,
@@ -400,7 +442,7 @@ router.post("/:id/convert", async (req, res) => {
       teamId: teamId ? new mongoose.Types.ObjectId(teamId) : undefined,
       status: "pendente",
       plannedDate: parsed.data.plannedDate,
-      services: budget.services,
+      services: normalizedServices,
       value: budget.value,
       discountPercent: budget.discountPercent,
       discountValue: budget.discountValue,

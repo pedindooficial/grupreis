@@ -24,17 +24,55 @@ export default function JobCard({
   updating,
   hasTransaction
 }: JobCardProps) {
+  const isJobDelayed = (): boolean => {
+    if (!job.plannedDate || job.status === "concluida" || job.status === "cancelada") {
+      return false;
+    }
+    try {
+      const plannedDate = new Date(job.plannedDate);
+      const now = new Date();
+      return plannedDate < now;
+    } catch {
+      return false;
+    }
+  };
+
+  const delayed = isJobDelayed();
+
   return (
-    <div className="flex flex-col gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl border border-white/10 bg-white/5 p-2.5 sm:p-3 shadow-inner shadow-black/30">
+    <div className={`flex flex-col gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl border p-2.5 sm:p-3 shadow-inner shadow-black/30 ${
+      delayed
+        ? "border-red-400/50 bg-red-500/10"
+        : "border-white/10 bg-white/5"
+    }`}>
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-0.5 flex-1 min-w-0">
-          <div className="text-[9px] sm:text-[10px] uppercase tracking-wide text-emerald-200">
-            {statusLabel(job.status as Status)}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="text-[9px] sm:text-[10px] uppercase tracking-wide text-emerald-200">
+              {statusLabel(job.status as Status)}
+            </div>
+            {delayed && (
+              <div className="rounded-full border border-red-400/50 bg-red-500/20 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-semibold text-red-200 flex items-center gap-0.5">
+                <span>⚠️</span>
+                <span>Atrasado</span>
+              </div>
+            )}
           </div>
           <div className="text-sm sm:text-base font-semibold text-white leading-tight break-words">{job.title}</div>
           <div className="text-[10px] sm:text-[11px] text-slate-300 break-words">
             {job.plannedDate || "sem data"} · {job.site || "Endereço não informado"}
           </div>
+          {delayed && job.plannedDate && (
+            <div className="text-[9px] sm:text-[10px] text-red-300 mt-0.5 font-medium break-words">
+              ⏰ Planejado: {new Date(job.plannedDate).toLocaleString("pt-BR", { 
+                day: "2-digit", 
+                month: "2-digit", 
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+              })}
+            </div>
+          )}
           <div className="text-[9px] sm:text-[10px] text-slate-400 break-words">
             Cliente: {job.clientName || "—"}
           </div>

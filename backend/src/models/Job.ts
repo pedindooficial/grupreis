@@ -51,8 +51,12 @@ export interface Job {
   receivedAt?: Date;
   receipt?: string;
   receiptFileKey?: string;
+  nfeFileKey?: string; // S3 key for NFE (Nota Fiscal Eletrônica) file
   clientSignature?: string;
   clientSignedAt?: Date;
+  clientRating?: number; // Client feedback rating (0-5 stars)
+  clientFeedback?: string; // Client feedback text (suggestions, congratulations, etc.)
+  clientFeedbackSubmittedAt?: Date; // When the client submitted feedback
   services: JobService[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -116,8 +120,12 @@ const JobSchema = new Schema<Job>(
     receivedAt: { type: Date },
     receipt: { type: String, trim: true },
     receiptFileKey: { type: String, trim: true },
+    nfeFileKey: { type: String, trim: true }, // S3 key for NFE file
     clientSignature: { type: String }, // Base64 encoded signature image
     clientSignedAt: { type: Date },
+    clientRating: { type: Number, min: 0, max: 5 }, // Client feedback rating (0-5 stars)
+    clientFeedback: { type: String, trim: true }, // Client feedback text
+    clientFeedbackSubmittedAt: { type: Date }, // When feedback was submitted
     services: { type: [JobServiceSchema], required: true }
   },
   { timestamps: true }

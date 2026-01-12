@@ -442,5 +442,104 @@ router.get("/jobs/:id", async (req: ClientAuthRequest, res) => {
   }
 });
 
+// Get NFE download URL for a job
+router.get("/jobs/:id/nfe", async (req: ClientAuthRequest, res) => {
+  try {
+    if (!req.client) {
+      return res.status(401).json({ error: "Não autenticado" });
+    }
+
+    await connectDB();
+
+    const job = await JobModel.findOne({
+      _id: req.params.id,
+      clientId: req.client.id
+    }).lean();
+
+    if (!job) {
+      return res.status(404).json({ error: "Ordem de serviço não encontrada" });
+    }
+
+    if (!job.nfeFileKey) {
+      return res.status(404).json({ error: "NFE não disponível para esta ordem de serviço" });
+    }
+
+    // Generate presigned URL for download (valid for 1 hour)
+    const { getPresignedUrl } = await import("../services/s3");
+    const downloadUrl = await getPresignedUrl(job.nfeFileKey, 3600);
+
+    res.json({ 
+      data: { 
+        downloadUrl,
+        expiresIn: 3600 
+      } 
+    });
+  } catch (error: any) {
+    console.error("GET /api/client-protected/jobs/:id/nfe error", error);
+    res.status(500).json({
+      error: "Falha ao gerar URL de download da NFE",
+      detail: error?.message || "Erro interno"
+    });
+  }
+});
+
+// Submit feedback for a job
+const submitFeedbackSchema = z.object({
+  rating: z.number().min(0).max(5, "Avaliação deve ser entre 0 e 5 estrelas"),
+  feedback: z.string().optional() // Optional feedback text
+});
+
+router.post("/jobs/:id/feedback", async (req: ClientAuthRequest, res) => {
+  try {
+    if (!req.client) {
+      return res.status(401).json({ error: "Não autenticado" });
+    }
+
+    const parsed = submitFeedbackSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: "Dados inválidos", issues: parsed.error.flatten() });
+    }
+
+    await connectDB();
+
+    const job = await JobModel.findOne({
+      _id: req.params.id,
+      clientId: req.client.id
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: "Ordem de serviço não encontrada" });
+    }
+
+    // Check if job is completed (only completed jobs can receive feedback)
+    if (job.status !== "concluida") {
+      return res.status(400).json({ 
+        error: "Apenas ordens de serviço concluídas podem receber feedback" 
+      });
+    }
+
+    // Update job with feedback
+    job.clientRating = parsed.data.rating;
+    job.clientFeedback = parsed.data.feedback?.trim() || "";
+    job.clientFeedbackSubmittedAt = new Date();
+    await job.save();
+
+    res.json({ 
+      data: { 
+        message: "Feedback enviado com sucesso",
+        job 
+      } 
+    });
+  } catch (error: any) {
+    console.error("POST /api/client-protected/jobs/:id/feedback error", error);
+    res.status(500).json({
+      error: "Falha ao enviar feedback",
+      detail: error?.message || "Erro interno"
+    });
+  }
+});
+
 export default router;
 

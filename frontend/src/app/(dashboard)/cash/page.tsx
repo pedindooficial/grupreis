@@ -45,6 +45,7 @@ export default function CashPage() {
   const [currentCashier, setCurrentCashier] = useState<any | null>(null);
   const [cashierLoading, setCashierLoading] = useState(false);
   const [cashiers, setCashiers] = useState<any[]>([]);
+  const [includeAllCaixas, setIncludeAllCaixas] = useState(false);
 
   const [form, setForm] = useState({
     type: "entrada" as TransactionType,
@@ -216,6 +217,16 @@ export default function CashPage() {
   const filtered = useMemo(() => {
     let filtered = transactions;
 
+    // Filter by caixa (cashier) - only show current caixa transactions unless checkbox is checked
+    if (!includeAllCaixas && currentCashier?._id) {
+      filtered = filtered.filter((t) => {
+        // Match by cashierId (can be string or ObjectId)
+        const tCashierId = t.cashierId?._id || t.cashierId;
+        const currentCashierId = currentCashier._id?.toString() || currentCashier._id;
+        return tCashierId?.toString() === currentCashierId?.toString();
+      });
+    }
+
     // Filter by date range
     if (getDateRange) {
       filtered = filtered.filter((t) => isDateInRange(t.date, getDateRange));
@@ -237,7 +248,7 @@ export default function CashPage() {
     }
 
     return filtered;
-  }, [transactions, getDateRange, typeFilter, search]);
+  }, [transactions, includeAllCaixas, currentCashier, getDateRange, typeFilter, search]);
 
   // Serviços realizados com sucesso (OS concluídas) - filtered by date
   const completedJobs = useMemo(() => {
@@ -262,6 +273,80 @@ export default function CashPage() {
   const totalServicesValue = useMemo(() => {
     return completedJobs.reduce((sum, job) => sum + (job.finalValue || job.value || 0), 0);
   }, [completedJobs]);
+
+  // Additional statistics for Serviços Realizados section
+  const servicesStats = useMemo(() => {
+    const avgServiceValue = completedJobs.length > 0 ? totalServicesValue / completedJobs.length : 0;
+    
+    // Group by team
+    const byTeam = completedJobs.reduce((acc, job) => {
+      const team = job.team || "Sem equipe";
+      if (!acc[team]) {
+        acc[team] = { count: 0, total: 0 };
+      }
+      acc[team].count += 1;
+      acc[team].total += job.finalValue || job.value || 0;
+      return acc;
+    }, {} as Record<string, { count: number; total: number }>);
+
+    // Top clients
+    const byClient = completedJobs.reduce((acc, job) => {
+      const client = job.clientName || "Sem cliente";
+      if (!acc[client]) {
+        acc[client] = { count: 0, total: 0 };
+      }
+      acc[client].count += 1;
+      acc[client].total += job.finalValue || job.value || 0;
+      return acc;
+    }, {} as Record<string, { count: number; total: number }>);
+
+    const topClients = Object.entries(byClient)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    // Average rating
+    const jobsWithRating = completedJobs.filter((j) => j.clientRating !== undefined && j.clientRating !== null);
+    const avgRating = jobsWithRating.length > 0
+      ? jobsWithRating.reduce((sum, j) => sum + (j.clientRating || 0), 0) / jobsWithRating.length
+      : null;
+
+    // Total service items
+    const totalServiceItems = completedJobs.reduce((sum, job) => sum + (job.services?.length || 0), 0);
+
+    // Services this month vs last month
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const thisMonthJobs = completedJobs.filter((j) => {
+      const finishedDate = j.finishedAt ? parseDate(j.finishedAt) : null;
+      return finishedDate && finishedDate >= thisMonthStart;
+    });
+
+    const lastMonthJobs = completedJobs.filter((j) => {
+      const finishedDate = j.finishedAt ? parseDate(j.finishedAt) : null;
+      return finishedDate && finishedDate >= lastMonthStart && finishedDate <= lastMonthEnd;
+    });
+
+    const thisMonthValue = thisMonthJobs.reduce((sum, job) => sum + (job.finalValue || job.value || 0), 0);
+    const lastMonthValue = lastMonthJobs.reduce((sum, job) => sum + (job.finalValue || job.value || 0), 0);
+    const monthGrowth = lastMonthValue > 0 ? ((thisMonthValue - lastMonthValue) / lastMonthValue) * 100 : 0;
+
+    return {
+      avgServiceValue,
+      byTeam,
+      topClients,
+      avgRating,
+      totalServiceItems,
+      thisMonthValue,
+      lastMonthValue,
+      monthGrowth,
+      thisMonthCount: thisMonthJobs.length,
+      lastMonthCount: lastMonthJobs.length
+    };
+  }, [completedJobs, totalServicesValue]);
 
   // Valores pendentes (OS pendentes ou em execução) - filtered by date
   const pendingJobs = useMemo(() => {
@@ -324,8 +409,19 @@ export default function CashPage() {
 
   const today = new Date().toISOString().split("T")[0];
   const todayTransactions = useMemo(() => {
-    return transactions.filter((t) => t.date === today);
-  }, [transactions, today]);
+    let filtered = transactions;
+    
+    // Filter by caixa for today's transactions too
+    if (!includeAllCaixas && currentCashier?._id) {
+      filtered = filtered.filter((t) => {
+        const tCashierId = t.cashierId?._id || t.cashierId;
+        const currentCashierId = currentCashier._id?.toString() || currentCashier._id;
+        return tCashierId?.toString() === currentCashierId?.toString();
+      });
+    }
+    
+    return filtered.filter((t) => t.date === today);
+  }, [transactions, today, includeAllCaixas, currentCashier]);
 
   const stats = useMemo(() => {
     const todayEntradas = todayTransactions
@@ -344,15 +440,59 @@ export default function CashPage() {
       .reduce((sum, t) => sum + (t.amount || 0), 0);
     const totalSaldo = totalEntradas - totalSaidas;
 
+    // Conversion rate: Percentage of completed jobs that have been paid (have transactions)
+    // Get all job IDs from transactions (entries that are linked to jobs)
+    const jobIdsFromTransactions = new Set(
+      filtered
+        .filter((t) => t.type === "entrada" && t.jobId)
+        .map((t) => {
+          const jobId = t.jobId?._id || t.jobId;
+          return jobId?.toString();
+        })
+        .filter(Boolean)
+    );
+    
+    // Count completed jobs that have transactions
+    const completedJobsWithTransactions = completedJobs.filter((job) => {
+      const jobId = job._id?.toString() || job._id;
+      return jobIdsFromTransactions.has(jobId);
+    }).length;
+    
+    // Conversion rate: (Jobs with transactions / Total completed jobs) * 100
+    const conversionRate = completedJobs.length > 0
+      ? (completedJobsWithTransactions / completedJobs.length) * 100
+      : 0;
+    
+    const conversionRateDetail = {
+      paid: completedJobsWithTransactions,
+      total: completedJobs.length
+    };
+
+    // Profit margin: (Total entries - Total exits) / Total entries
+    const profitMargin = totalEntradas > 0 ? ((totalEntradas - totalSaidas) / totalEntradas) * 100 : 0;
+
+    // Average transaction value
+    const avgTransactionValue = filtered.length > 0 
+      ? (totalEntradas + totalSaidas) / filtered.length 
+      : 0;
+
+    // Entry/Exit ratio
+    const entryExitRatio = totalSaidas > 0 ? totalEntradas / totalSaidas : totalEntradas > 0 ? Infinity : 0;
+
     return {
       todayEntradas,
       todaySaidas,
       todaySaldo,
       totalEntradas,
       totalSaidas,
-      totalSaldo
+      totalSaldo,
+      conversionRate,
+      conversionRateDetail,
+      profitMargin,
+      avgTransactionValue,
+      entryExitRatio
     };
-  }, [todayTransactions, filtered]);
+  }, [todayTransactions, filtered, completedJobs]);
 
   const resetForm = () => {
     setForm({
@@ -751,6 +891,28 @@ export default function CashPage() {
       {/* Filtros - Moved to top */}
       {mode === "list" && (
         <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-3 sm:px-4 py-3">
+          {/* Caixa Filter Checkbox */}
+          {currentCashier && (
+            <div className="flex items-center gap-2 pb-2 border-b border-white/10">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeAllCaixas}
+                  onChange={(e) => setIncludeAllCaixas(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-slate-900/60 text-emerald-500 focus:ring-2 focus:ring-emerald-400/60 focus:ring-offset-2 focus:ring-offset-slate-900 cursor-pointer"
+                />
+                <span className="text-xs sm:text-sm text-slate-200">
+                  Incluir todos os caixas (atual + anteriores)
+                </span>
+              </label>
+              {!includeAllCaixas && (
+                <span className="text-[10px] sm:text-xs text-emerald-300 font-medium">
+                  (Mostrando apenas caixa atual)
+                </span>
+              )}
+            </div>
+          )}
+          
           {/* Search and Type Filter */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
             <input
@@ -880,6 +1042,151 @@ export default function CashPage() {
                 />
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* KPIs Section - Above Caixa */}
+      {mode === "list" && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
+          <div className="mb-4">
+            <div className="text-sm sm:text-base font-semibold text-white">Indicadores Principais (KPIs)</div>
+            <div className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
+              Métricas financeiras essenciais em tempo real
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Total de Entradas */}
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-blue-200">
+                Total de Entradas
+              </div>
+              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-blue-100">
+                {formatCurrency(stats.totalEntradas)}
+              </div>
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-blue-200/70">
+                {filtered.filter((t) => t.type === "entrada").length} transação(ões)
+              </div>
+            </div>
+
+            {/* Total de Saídas */}
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-red-500/20 to-red-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-red-200">
+                Total de Saídas
+              </div>
+              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-red-100">
+                {formatCurrency(stats.totalSaidas)}
+              </div>
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-red-200/70">
+                {filtered.filter((t) => t.type === "saida").length} transação(ões)
+              </div>
+            </div>
+
+            {/* Saldo Total */}
+            <div
+              className={`rounded-xl sm:rounded-2xl border border-white/10 p-3 sm:p-4 shadow-lg shadow-black/30 ${
+                stats.totalSaldo >= 0
+                  ? "bg-gradient-to-br from-emerald-500/20 to-emerald-600/10"
+                  : "bg-gradient-to-br from-orange-500/20 to-orange-600/10"
+              }`}
+            >
+              <div
+                className={`text-[10px] sm:text-[11px] uppercase tracking-wide ${
+                  stats.totalSaldo >= 0 ? "text-emerald-200" : "text-orange-200"
+                }`}
+              >
+                Saldo Total
+              </div>
+              <div
+                className={`mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold ${
+                  stats.totalSaldo >= 0 ? "text-emerald-100" : "text-orange-100"
+                }`}
+              >
+                {formatCurrency(stats.totalSaldo)}
+              </div>
+              <div
+                className={`mt-0.5 sm:mt-1 text-[10px] sm:text-xs ${
+                  stats.totalSaldo >= 0 ? "text-emerald-200/70" : "text-orange-200/70"
+                }`}
+              >
+                {filtered.length} transação(ões) no período
+              </div>
+            </div>
+
+            {/* Taxa de Conversão */}
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-purple-200">
+                Taxa de Conversão
+              </div>
+              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-purple-100">
+                {stats.conversionRate.toFixed(1)}%
+              </div>
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-purple-200/70">
+                {stats.conversionRateDetail.paid} OS pagas de {stats.conversionRateDetail.total} concluídas
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary KPIs Row */}
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mt-3 sm:mt-4">
+            {/* Margem de Lucro */}
+            <div className="rounded-xl border border-white/10 bg-slate-900/50 p-3 sm:p-4">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
+                Margem de Lucro
+              </div>
+              <div className={`mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold ${
+                stats.profitMargin >= 0 ? "text-emerald-300" : "text-red-300"
+              }`}>
+                {stats.profitMargin.toFixed(1)}%
+              </div>
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-400">
+                (Entradas - Saídas) / Entradas
+              </div>
+            </div>
+
+            {/* Valor Médio por Transação */}
+            <div className="rounded-xl border border-white/10 bg-slate-900/50 p-3 sm:p-4">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
+                Valor Médio/Transação
+              </div>
+              <div className="mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold text-blue-300">
+                {formatCurrency(stats.avgTransactionValue)}
+              </div>
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-400">
+                Média geral
+              </div>
+            </div>
+
+            {/* Razão Entrada/Saída */}
+            <div className="rounded-xl border border-white/10 bg-slate-900/50 p-3 sm:p-4">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
+                Razão Entrada/Saída
+              </div>
+              <div className="mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold text-emerald-300">
+                {stats.entryExitRatio === Infinity ? "∞" : stats.entryExitRatio.toFixed(2)}:1
+              </div>
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-400">
+                Proporção de entradas
+              </div>
+            </div>
+
+            {/* Saldo do Dia (Hoje) */}
+            <div className="rounded-xl border border-white/10 bg-slate-900/50 p-3 sm:p-4">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
+                Saldo do Dia (Hoje)
+              </div>
+              <div
+                className={`mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold ${
+                  stats.todaySaldo >= 0 ? "text-emerald-300" : "text-red-300"
+                }`}
+              >
+                {formatCurrency(stats.todaySaldo)}
+              </div>
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-400">
+                {todayTransactions.length} transação(ões) hoje
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1072,74 +1379,164 @@ export default function CashPage() {
 
       {mode === "list" && (
         <>
-          {/* Resumo Geral */}
-          <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-emerald-200">
-                Serviços Realizados
-              </div>
-              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-emerald-100">
-                {formatCurrency(totalServicesValue)}
-              </div>
-              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-emerald-200/70">
-                {completedJobs.length} OS concluída(s)
+          {/* Serviços Realizados - Separate Section */}
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-sm sm:text-base font-semibold text-white">Serviços Realizados</div>
+                <div className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
+                  Análise completa dos serviços concluídos
+                </div>
               </div>
             </div>
 
-            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-blue-200">
-                Total de Entradas
+            {/* Main Stats Grid */}
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+              {/* Total Value */}
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+                <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-emerald-200">
+                  Total de Serviços
+                </div>
+                <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-emerald-100">
+                  {formatCurrency(totalServicesValue)}
+                </div>
+                <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-emerald-200/70">
+                  {completedJobs.length} OS concluída(s)
+                </div>
               </div>
-              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-blue-100">
-                {formatCurrency(stats.totalEntradas)}
+
+              {/* Average Value */}
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+                <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-blue-200">
+                  Valor Médio
+                </div>
+                <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-blue-100">
+                  {formatCurrency(servicesStats.avgServiceValue)}
+                </div>
+                <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-blue-200/70">
+                  Por ordem de serviço
+                </div>
               </div>
-              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-blue-200/70">
-                {filtered.filter((t) => t.type === "entrada").length} transação(ões)
+
+              {/* Total Service Items */}
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+                <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-purple-200">
+                  Itens de Serviço
+                </div>
+                <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-purple-100">
+                  {servicesStats.totalServiceItems}
+                </div>
+                <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-purple-200/70">
+                  Total de serviços executados
+                </div>
+              </div>
+
+              {/* Average Rating */}
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
+                <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-yellow-200">
+                  Avaliação Média
+                </div>
+                <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-yellow-100">
+                  {servicesStats.avgRating !== null ? servicesStats.avgRating.toFixed(1) : "—"}
+                  {servicesStats.avgRating !== null && (
+                    <span className="text-lg ml-1">⭐</span>
+                  )}
+                </div>
+                <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-yellow-200/70">
+                  {completedJobs.filter((j) => j.clientRating !== undefined && j.clientRating !== null).length} avaliação(ões)
+                </div>
               </div>
             </div>
 
-            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-red-500/20 to-red-600/10 p-3 sm:p-4 shadow-lg shadow-black/30">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-red-200">
-                Total de Saídas
+            {/* Secondary Stats Grid */}
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              {/* This Month vs Last Month */}
+              <div className="rounded-xl border border-white/10 bg-slate-900/50 p-3 sm:p-4">
+                <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400 mb-3">
+                  Este Mês vs Mês Anterior
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-300">Este mês:</span>
+                    <span className="text-sm font-semibold text-emerald-300">
+                      {formatCurrency(servicesStats.thisMonthValue)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-300">Mês anterior:</span>
+                    <span className="text-sm font-semibold text-slate-300">
+                      {formatCurrency(servicesStats.lastMonthValue)}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-white/10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-400">Crescimento:</span>
+                      <span className={`text-sm font-semibold ${
+                        servicesStats.monthGrowth >= 0 ? "text-emerald-300" : "text-red-300"
+                      }`}>
+                        {servicesStats.monthGrowth >= 0 ? "+" : ""}
+                        {servicesStats.monthGrowth.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">
+                      {servicesStats.thisMonthCount} OS este mês • {servicesStats.lastMonthCount} OS mês anterior
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold text-red-100">
-                {formatCurrency(stats.totalSaidas)}
-              </div>
-              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-red-200/70">
-                {filtered.filter((t) => t.type === "saida").length} transação(ões)
-              </div>
-            </div>
 
-            <div
-              className={`rounded-xl sm:rounded-2xl border border-white/10 p-3 sm:p-4 shadow-lg shadow-black/30 ${
-                stats.totalSaldo >= 0
-                  ? "bg-gradient-to-br from-purple-500/20 to-purple-600/10"
-                  : "bg-gradient-to-br from-orange-500/20 to-orange-600/10"
-              }`}
-            >
-              <div
-                className={`text-[10px] sm:text-[11px] uppercase tracking-wide ${
-                  stats.totalSaldo >= 0 ? "text-purple-200" : "text-orange-200"
-                }`}
-              >
-                Saldo Total
+              {/* Top Clients */}
+              <div className="rounded-xl border border-white/10 bg-slate-900/50 p-3 sm:p-4">
+                <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400 mb-3">
+                  Top Clientes
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {servicesStats.topClients.length > 0 ? (
+                    servicesStats.topClients.map((client, idx) => (
+                      <div key={idx} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-white truncate">{client.name}</div>
+                          <div className="text-[10px] text-slate-400">{client.count} OS</div>
+                        </div>
+                        <div className="text-xs font-semibold text-emerald-300 ml-2">
+                          {formatCurrency(client.total)}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-400 py-2">Nenhum cliente encontrado</div>
+                  )}
+                </div>
               </div>
-              <div
-                className={`mt-1 sm:mt-2 text-xl sm:text-3xl font-semibold ${
-                  stats.totalSaldo >= 0 ? "text-purple-100" : "text-orange-100"
-                }`}
-              >
-                {formatCurrency(stats.totalSaldo)}
-              </div>
-              <div
-                className={`mt-0.5 sm:mt-1 text-[10px] sm:text-xs ${
-                  stats.totalSaldo >= 0 ? "text-purple-200/70" : "text-orange-200/70"
-                }`}
-              >
-                {filtered.length} transação(ões) no período
+
+              {/* Services by Team */}
+              <div className="rounded-xl border border-white/10 bg-slate-900/50 p-3 sm:p-4">
+                <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400 mb-3">
+                  Por Equipe
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {Object.keys(servicesStats.byTeam).length > 0 ? (
+                    Object.entries(servicesStats.byTeam)
+                      .sort(([, a], [, b]) => b.total - a.total)
+                      .map(([team, data]) => (
+                        <div key={team} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-white truncate">{team}</div>
+                            <div className="text-[10px] text-slate-400">{data.count} OS</div>
+                          </div>
+                          <div className="text-xs font-semibold text-blue-300 ml-2">
+                            {formatCurrency(data.total)}
+                          </div>
+                        </div>
+                      ))
+                  ) : (
+                    <div className="text-xs text-slate-400 py-2">Nenhuma equipe encontrada</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
+
 
           {/* Estatísticas de Salários e Valores Pendentes */}
           <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
@@ -1179,21 +1576,6 @@ export default function CashPage() {
               </div>
             </div>
 
-            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 shadow-inner shadow-black/20">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-slate-400">
-                Saldo do Dia (Hoje)
-              </div>
-              <div
-                className={`mt-1 sm:mt-2 text-lg sm:text-2xl font-semibold ${
-                  stats.todaySaldo >= 0 ? "text-emerald-300" : "text-red-300"
-                }`}
-              >
-                {formatCurrency(stats.todaySaldo)}
-              </div>
-              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-slate-300">
-                {todayTransactions.length} transação(ões) hoje
-              </div>
-            </div>
           </div>
 
           {/* Estatísticas de Pagamento por Método */}

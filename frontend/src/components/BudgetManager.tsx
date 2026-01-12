@@ -133,6 +133,19 @@ export default function BudgetManager({ clientId, clientName, onClose, initialBu
     loadData();
   }, [clientId]);
 
+  // Auto-select budget when initialBudgetId changes (even after data is loaded)
+  useEffect(() => {
+    if (initialBudgetId && budgets.length > 0 && !loading) {
+      const budgetToSelect = budgets.find((b: any) => b._id === initialBudgetId);
+      if (budgetToSelect) {
+        // Always select if initialBudgetId is provided, even if already selected
+        // This ensures it works when coming from external navigation
+        setSelected(budgetToSelect);
+        setMode("detail");
+      }
+    }
+  }, [initialBudgetId, budgets, loading]);
+
   // Real-time updates: Poll for budget updates when viewing a budget detail
   useEffect(() => {
     if (mode === "detail" && selected?._id) {

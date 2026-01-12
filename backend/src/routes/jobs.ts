@@ -53,7 +53,9 @@ const jobSchema = z.object({
   selectedAddress: z.string().optional(),
   travelDistanceKm: z.number().min(0).optional(),
   travelPrice: z.number().min(0).optional(),
-  travelDescription: z.string().optional()
+  travelDescription: z.string().optional(),
+  // NFE file
+  nfeFileKey: z.string().optional()
 });
 
 // Roadmap endpoint - MUST be before router.get("/") to avoid route conflicts
@@ -502,6 +504,9 @@ router.get("/", async (_req, res) => {
           finishedAt: 1,
           clientSignature: 1,
           clientSignedAt: 1,
+          clientRating: 1,
+          clientFeedback: 1,
+          clientFeedbackSubmittedAt: 1,
           createdAt: 1,
           updatedAt: 1,
           notes: 1,
@@ -1566,6 +1571,111 @@ router.get("/:id/pdf", async (req, res) => {
         detail: error?.message || "Erro interno"
       });
     }
+  }
+});
+
+// GET public feedback endpoint (for website display)
+// This endpoint is public and doesn't require authentication
+router.get("/feedback/public", async (req, res) => {
+  try {
+    await connectDB();
+
+    const { limit = "10", minRating = "0" } = req.query;
+    const limitNum = parseInt(limit as string, 10);
+    const minRatingNum = parseInt(minRating as string, 10);
+
+    // Get jobs with feedback, sorted by most recent
+    const jobs = await JobModel.find({
+      status: "concluida",
+      clientRating: { $exists: true, $ne: null, $gte: minRatingNum },
+      clientFeedbackSubmittedAt: { $exists: true, $ne: null }
+    })
+      .select("title clientName clientRating clientFeedback clientFeedbackSubmittedAt createdAt")
+      .sort({ clientFeedbackSubmittedAt: -1 })
+      .limit(limitNum)
+      .lean();
+
+    // Format feedback for public display
+    const feedback = jobs.map((job: any) => ({
+      id: job._id,
+      jobTitle: job.title,
+      clientName: job.clientName || "Cliente",
+      rating: job.clientRating,
+      feedback: job.clientFeedback || "",
+      submittedAt: job.clientFeedbackSubmittedAt,
+      createdAt: job.createdAt
+    }));
+
+    res.json({
+      data: feedback,
+      count: feedback.length
+    });
+  } catch (error: any) {
+    console.error("GET /api/jobs/feedback/public error", error);
+    res.status(500).json({
+      error: "Falha ao carregar feedback",
+      detail: error?.message || "Erro interno"
+    });
+  }
+});
+
+// PUT update/edit feedback (admin only - requires authentication via middleware)
+const updateFeedbackSchema = z.object({
+  rating: z.number().min(0).max(5).optional(),
+  feedback: z.string().optional(),
+  // Allow clearing feedback by setting to null
+  clearFeedback: z.boolean().optional()
+});
+
+router.put("/:id/feedback", async (req, res) => {
+  try {
+    await connectDB();
+
+    const job = await JobModel.findById(req.params.id);
+    if (!job) {
+      return res.status(404).json({ error: "Ordem de serviço não encontrada" });
+    }
+
+    const parsed = updateFeedbackSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: "Dados inválidos", issues: parsed.error.flatten() });
+    }
+
+    // If clearFeedback is true, remove all feedback
+    if (parsed.data.clearFeedback) {
+      job.clientRating = undefined;
+      job.clientFeedback = undefined;
+      job.clientFeedbackSubmittedAt = undefined;
+    } else {
+      // Update feedback fields if provided
+      if (parsed.data.rating !== undefined) {
+        job.clientRating = parsed.data.rating;
+      }
+      if (parsed.data.feedback !== undefined) {
+        job.clientFeedback = parsed.data.feedback.trim() || "";
+      }
+      // Update submitted date if feedback is being modified
+      if (parsed.data.rating !== undefined || parsed.data.feedback !== undefined) {
+        job.clientFeedbackSubmittedAt = new Date();
+      }
+    }
+
+    await job.save();
+
+    res.json({
+      data: {
+        message: "Feedback atualizado com sucesso",
+        job
+      }
+    });
+  } catch (error: any) {
+    console.error("PUT /api/jobs/:id/feedback error", error);
+    res.status(500).json({
+      error: "Falha ao atualizar feedback",
+      detail: error?.message || "Erro interno"
+    });
   }
 });
 

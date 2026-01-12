@@ -98,7 +98,6 @@ export default function ClientsPage() {
 
   const [budgetMode, setBudgetMode] = useState<"list" | "form" | null>(null);
   const [budgets, setBudgets] = useState<any[]>([]);
-  const [selectedBudget, setSelectedBudget] = useState<any | null>(null);
   const [pendingBudgetId, setPendingBudgetId] = useState<string | null>(null);
   const [clientJobs, setClientJobs] = useState<any[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -177,6 +176,45 @@ export default function ClientsPage() {
   useEffect(() => {
     loadClients();
   }, [loadClients]);
+
+  // Handle URL parameters when navigating from other pages
+  useEffect(() => {
+    // Only process URL parameters if we have clients loaded and no client is currently selected
+    // or if the URL has parameters that don't match the current selection
+    const params = new URLSearchParams(window.location.search);
+    const urlClientId = params.get("clientId");
+    const urlBudgetId = params.get("budgetId");
+    
+    // Skip if no URL parameters
+    if (!urlClientId) return;
+    
+    // Skip if we don't have clients loaded yet
+    if (clients.length === 0) return;
+    
+    // Skip if the client is already selected and matches the URL
+    if (selectedClient && selectedClient._id === urlClientId) {
+      // But still check if we need to open budget manager
+      if (urlBudgetId && !budgetMode) {
+        setPendingBudgetId(urlBudgetId);
+        setBudgetMode("list");
+        window.history.replaceState({}, "", "/clients");
+      }
+      return;
+    }
+    
+    // Find and select the client from URL
+    const client = clients.find((c: any) => c._id === urlClientId);
+    if (client) {
+      setSelectedClient(client);
+      // If budgetId is also provided, open budget manager
+      if (urlBudgetId) {
+        setPendingBudgetId(urlBudgetId);
+        setBudgetMode("list");
+      }
+      // Clean up URL parameters
+      window.history.replaceState({}, "", "/clients");
+    }
+  }, [clients, selectedClient, budgetMode]);
 
   const loadClientBudgets = useCallback(async (clientId: string) => {
     try {
@@ -2074,7 +2112,7 @@ export default function ClientsPage() {
                             key={budget._id}
                             className="p-3 rounded-lg border border-white/5 bg-slate-900/50 hover:bg-slate-900/70 transition cursor-pointer"
                             onClick={() => {
-                              setSelectedBudget(budget);
+                              setPendingBudgetId(budget._id);
                               setBudgetMode("list");
                             }}
                           >
@@ -2133,7 +2171,7 @@ export default function ClientsPage() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedBudget(budget);
+                                    setPendingBudgetId(budget._id);
                                     setBudgetMode("list");
                                   }}
                                   className="text-xs text-blue-400 hover:text-blue-300 font-semibold"

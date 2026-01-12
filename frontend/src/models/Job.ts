@@ -51,8 +51,12 @@ export interface Job {
   receivedAt?: Date;
   receipt?: string;
   receiptFileKey?: string;
+  nfeFileKey?: string; // S3 key for NFE (Nota Fiscal Eletrônica) file
   clientSignature?: string; // Base64 encoded signature image
   clientSignedAt?: Date;
+  clientRating?: number; // Client feedback rating (0-5 stars)
+  clientFeedback?: string; // Client feedback text (suggestions, congratulations, etc.)
+  clientFeedbackSubmittedAt?: Date; // When the client submitted feedback
   services: JobService[];
   createdAt?: Date;
   updatedAt?: Date;

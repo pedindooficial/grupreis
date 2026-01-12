@@ -4,429 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { apiFetch } from "@/lib/api-client";
 import JobsMap from "./_components/JobsMap";
-
-type Status = "pendente" | "em_execucao" | "concluida" | "cancelada";
-
-const STATUS_LABEL: Record<Status, string> = {
-  pendente: "Pendente",
-  em_execucao: "Em execução",
-  concluida: "Concluída",
-  cancelada: "Cancelada"
-};
-
-const STATUS_COLORS: Record<Status, string> = {
-  pendente: "bg-yellow-500/20 text-yellow-300 border-yellow-500/50",
-  em_execucao: "bg-blue-500/20 text-blue-300 border-blue-500/50",
-  concluida: "bg-emerald-500/20 text-emerald-300 border-emerald-500/50",
-  cancelada: "bg-red-500/20 text-red-300 border-red-500/50"
-};
-
-const SERVICES = [
-  { group: "1. Construção civil e fundações", value: "1.1", label: "Perfuração de Estacas para Fundações Residenciais e Comerciais" },
-  { group: "1. Construção civil e fundações", value: "1.3", label: "Abertura de Furos para Sapatas, Brocas e Pilares" },
-  { group: "1. Construção civil e fundações", value: "1.4", label: "Perfuração para Estacas Profundas" },
-  { group: "2. Saneamento e drenagem", value: "2.1", label: "Perfuração de Fossas Sépticas" },
-  { group: "2. Saneamento e drenagem", value: "2.2", label: "Abertura de Sumidouros" },
-  { group: "2. Saneamento e drenagem", value: "2.3", label: "Poços de Infiltração" },
-  { group: "2. Saneamento e drenagem", value: "2.4", label: "Perfuração para Drenagem de Águas Pluviais" },
-  { group: "2. Saneamento e drenagem", value: "2.5", label: "Ampliação e Recuperação de Sistemas Antigos" },
-  { group: "3. Construção e estruturas", value: "3.1", label: "Abertura de Furos para Alambrados e Postes" },
-  { group: "3. Construção e estruturas", value: "3.2", label: "Perfuração para Bases de Torres, Placas e Estruturas Metálicas" },
-  { group: "3. Construção e estruturas", value: "3.3", label: "Abertura de Furos para Contenções, Ancoragens e Reforço Estrutural" },
-  { group: "4. Serviços rurais e agro", value: "4.1", label: "Abertura de Buracos para Mourões e Cercas" },
-  { group: "4. Serviços rurais e agro", value: "4.2", label: "Perfuração para Irrigação" },
-  { group: "4. Serviços rurais e agro", value: "4.3", label: "Sondagem Leve do Solo (Avaliação Inicial)" }
-];
-
-const LOCAL_TYPES = ["Residencial", "Comercial", "Industrial", "Rural"];
-const SOIL_TYPES = ["Terra comum", "Argiloso", "Arenoso", "Rochoso", "Não sei informar"];
-
-// Map jobs soil types to catalog soil types
-const mapSoilTypeToCatalog = (soilType: string): "argiloso" | "arenoso" | "rochoso" | "misturado" | "outro" => {
-  const mapping: Record<string, "argiloso" | "arenoso" | "rochoso" | "misturado" | "outro"> = {
-    "Argiloso": "argiloso",
-    "Arenoso": "arenoso",
-    "Rochoso": "rochoso",
-    "Terra comum": "misturado",
-    "Não sei informar": "outro"
-  };
-  return mapping[soilType] || "outro";
-};
-
-// Map jobs access types to catalog access types
-const mapAccessToCatalog = (access: string): "livre" | "limitado" | "restrito" => {
-  const mapping: Record<string, "livre" | "limitado" | "restrito"> = {
-    "Acesso livre e desimpedido": "livre",
-    "Algumas limitações": "limitado",
-    "Acesso restrito ou complicado": "restrito"
-  };
-  return mapping[access] || "livre";
-};
-
-// Map stored values to display values (reverse mapping)
-const normalizeLocalType = (value: string): string => {
-  if (!value) return "";
-  const trimmed = value.trim();
-  // First check if it's already in the correct format (case-insensitive)
-  const exactMatch = LOCAL_TYPES.find(opt => opt.toLowerCase() === trimmed.toLowerCase());
-  if (exactMatch) return exactMatch;
-  
-  // Then try mapping from stored format
-  const normalized = trimmed.toLowerCase();
-  const mapping: Record<string, string> = {
-    "residencial": "Residencial",
-    "comercial": "Comercial",
-    "industrial": "Industrial",
-    "rural": "Rural"
-  };
-  return mapping[normalized] || "";
-};
-
-const normalizeSoilType = (value: string): string => {
-  if (!value) return "";
-  const trimmed = value.trim();
-  // First check if it's already in the correct format (case-insensitive)
-  const exactMatch = SOIL_TYPES.find(opt => opt.toLowerCase() === trimmed.toLowerCase());
-  if (exactMatch) return exactMatch;
-  
-  // Then try mapping from stored format
-  const normalized = trimmed.toLowerCase();
-  const mapping: Record<string, string> = {
-    "terra_comum": "Terra comum",
-    "terra comum": "Terra comum",
-    "argiloso": "Argiloso",
-    "arenoso": "Arenoso",
-    "rochoso": "Rochoso",
-    "não sei informar": "Não sei informar",
-    "nao sei informar": "Não sei informar"
-  };
-  return mapping[normalized] || "";
-};
-
-const normalizeAccess = (value: string): string => {
-  if (!value) return "";
-  const trimmed = value.trim();
-  // First check if it's already in the correct format (case-insensitive)
-  const exactMatch = ACCESS_TYPES.find(opt => opt.toLowerCase() === trimmed.toLowerCase());
-  if (exactMatch) return exactMatch;
-  
-  // Then try mapping from stored format
-  const normalized = trimmed.toLowerCase();
-  const mapping: Record<string, string> = {
-    "facil": "Acesso livre e desimpedido",
-    "fácil": "Acesso livre e desimpedido",
-    "livre": "Acesso livre e desimpedido",
-    "acesso livre e desimpedido": "Acesso livre e desimpedido",
-    "medio": "Algumas limitações",
-    "médio": "Algumas limitações",
-    "limitado": "Algumas limitações",
-    "algumas limitações": "Algumas limitações",
-    "dificil": "Acesso restrito ou complicado",
-    "difícil": "Acesso restrito ou complicado",
-    "restrito": "Acesso restrito ou complicado",
-    "acesso restrito ou complicado": "Acesso restrito ou complicado"
-  };
-  return mapping[normalized] || "";
-};
-
-// Normalize diameter value: "25cm" -> "25", "25 cm" -> "25", "25" -> "25" (supports 25-120cm)
-const normalizeDiameter = (value: string): string => {
-  if (!value) return "";
-  const trimmed = value.trim();
-  // Extract numeric value (remove "cm", spaces, etc.)
-  const match = trimmed.match(/^(\d+)/);
-  if (match) {
-    const num = match[1];
-    // Check if it's a valid catalog diameter
-    if (CATALOG_DIAMETERS.includes(parseInt(num, 10))) {
-      return num;
-    }
-  }
-  // If it's already just a number string, return it if valid
-  if (/^\d+$/.test(trimmed) && CATALOG_DIAMETERS.includes(parseInt(trimmed, 10))) {
-    return trimmed;
-  }
-  return "";
-};
-
-// Helper function to format datetime for display
-const formatDateTime = (dateTimeString: string | null | undefined): string => {
-  if (!dateTimeString) return "-";
-  try {
-    // Parse date string directly to avoid timezone conversion
-    // Format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DDTHH:mm:ssZ
-    const dateStr = dateTimeString.trim();
-    const dateTimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-    
-    if (dateTimeMatch) {
-      const [, year, month, day, hours, minutes] = dateTimeMatch;
-      // Format as DD/MM/YYYY HH:mm (preserving the exact time stored)
-      return `${day}/${month}/${year} ${hours}:${minutes}`;
-    } else {
-      // Fallback to Date object if format is unexpected
-      const date = new Date(dateTimeString);
-      if (isNaN(date.getTime())) return dateTimeString;
-      
-      const day = date.getDate().toString().padStart(2, "0");
-      const month = (date.getMonth() + 1).toString().padStart(2, "0");
-      const year = date.getFullYear();
-      const hours = date.getHours().toString().padStart(2, "0");
-      const minutes = date.getMinutes().toString().padStart(2, "0");
-      
-      return `${day}/${month}/${year} ${hours}:${minutes}`;
-    }
-  } catch {
-    return dateTimeString;
-  }
-};
-
-// Helper function to convert datetime-local format to ISO string for backend
-// Preserves the local time without timezone conversion
-const convertToISO = (dateTimeLocal: string): string => {
-  if (!dateTimeLocal || dateTimeLocal.trim() === "") return "";
-  try {
-    // datetime-local format is YYYY-MM-DDTHH:mm
-    // Parse the components directly to avoid timezone conversion
-    const [datePart, timePart] = dateTimeLocal.split("T");
-    if (!datePart || !timePart) return "";
-    
-    const [year, month, day] = datePart.split("-").map(Number);
-    const [hours, minutes] = timePart.split(":").map(Number);
-    
-    if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
-      return "";
-    }
-    
-    // Create ISO string WITHOUT timezone (no Z suffix)
-    // This preserves the exact time the user selected as local time
-    // The backend will parse it as local time when using new Date()
-    return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}T${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:00`;
-  } catch {
-    return "";
-  }
-};
-
-// Helper function to convert ISO string to datetime-local format for input
-// Extracts the time components directly from the ISO string to avoid timezone conversion
-const convertFromISO = (isoString: string | null | undefined): string => {
-  if (!isoString) return "";
-  try {
-    // Parse ISO string directly: YYYY-MM-DDTHH:mm:ss.sssZ
-    // Extract the date and time components before the 'Z' or timezone offset
-    const isoDate = isoString.split("T")[0]; // YYYY-MM-DD
-    const timePart = isoString.split("T")[1]; // HH:mm:ss.sssZ or HH:mm:ss.sss+HH:mm
-    
-    if (!isoDate || !timePart) {
-      // Fallback to Date object if format is unexpected
-      const date = new Date(isoString);
-      if (isNaN(date.getTime())) return "";
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, "0");
-      const day = date.getDate().toString().padStart(2, "0");
-      const hours = date.getHours().toString().padStart(2, "0");
-      const minutes = date.getMinutes().toString().padStart(2, "0");
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
-    }
-    
-    // Extract hours and minutes from time part (before seconds or timezone)
-    const timeMatch = timePart.match(/^(\d{2}):(\d{2})/);
-    if (timeMatch) {
-      const [, hours, minutes] = timeMatch;
-      return `${isoDate}T${hours}:${minutes}`;
-    }
-    
-    return "";
-  } catch {
-    return "";
-  }
-};
-
-// Helper function to calculate service price based on catalog variation
-// Formula: (quantity * profundidade) * base_price
-const calculateServicePrice = (
-  catalogItem: any,
-  diameter: string,
-  soilType: string,
-  access: string,
-  quantidade: string,
-  profundidade: string
-): { value: string; executionTime?: number } => {
-  if (!catalogItem || !diameter || !soilType || !access) {
-    return { value: "" };
-  }
-
-  const catalogSoilType = mapSoilTypeToCatalog(soilType);
-  const catalogAccess = mapAccessToCatalog(access);
-  const diameterNum = parseInt(diameter, 10);
-
-  const priceVariation = catalogItem.priceVariations?.find(
-    (pv: any) =>
-      pv.diameter === diameterNum &&
-      pv.soilType === catalogSoilType &&
-      pv.access === catalogAccess
-  );
-
-  if (!priceVariation) {
-    return { value: "" };
-  }
-
-  const quantity = parseFloat(quantidade) || 0;
-  const depth = parseFloat(profundidade) || 0;
-  const basePrice = priceVariation.price || 0;
-  const executionTime = priceVariation.executionTime; // Get execution time from variation
-
-  // Formula: (quantity * profundidade) * base_price
-  const calculatedValue = (quantity * depth) * basePrice;
-
-  return {
-    value: calculatedValue > 0 ? calculatedValue.toFixed(2) : "",
-    executionTime: executionTime
-  };
-};
-
-const CATALOG_DIAMETERS = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120];
-const ACCESS_TYPES = [
-  "Acesso livre e desimpedido",
-  "Algumas limitações",
-  "Acesso restrito ou complicado"
-];
-const CATEGORIES = [
-  "Estacas para fundação",
-  "Fossa séptica",
-  "Sumidouro / Poço",
-  "Drenagem pluvial",
-  "Postes / Cercas / Alambrados",
-  "Outro (especifique)"
-];
-
-const PAYMENT_METHODS: { value: string; label: string }[] = [
-  { value: "dinheiro", label: "Dinheiro" },
-  { value: "pix", label: "PIX" },
-  { value: "transferencia", label: "Transferência" },
-  { value: "cartao", label: "Cartão" },
-  { value: "cheque", label: "Cheque" },
-  { value: "outro", label: "Outro" }
-];
-
-const SERVICE_DEFAULT_CATS: Record<string, string[]> = {
-  "1.1": ["Estacas para fundação"],
-  "1.3": ["Estacas para fundação"],
-  "1.4": ["Estacas para fundação"],
-  "2.1": ["Fossa séptica"],
-  "2.2": ["Sumidouro / Poço"],
-  "2.3": ["Drenagem pluvial"],
-  "2.4": ["Drenagem pluvial"],
-  "2.5": ["Drenagem pluvial"],
-  "3.1": ["Postes / Cercas / Alambrados"],
-  "3.2": ["Estacas para fundação"],
-  "3.3": ["Estacas para fundação"],
-  "4.1": ["Postes / Cercas / Alambrados"],
-  "4.2": ["Outro (especifique)"],
-  "4.3": ["Outro (especifique)"]
-};
-
-// Helper function to get date range for date filter
-const getDateRange = (filterType: string): { start: Date; end: Date } | null => {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
-  switch (filterType) {
-    case "ontem": {
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const start = new Date(yesterday);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(yesterday);
-      end.setHours(23, 59, 59, 999);
-      return { start, end };
-    }
-    case "hoje": {
-      const start = new Date(today);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(today);
-      end.setHours(23, 59, 59, 999);
-      return { start, end };
-    }
-    case "amanha": {
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const start = new Date(tomorrow);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(tomorrow);
-      end.setHours(23, 59, 59, 999);
-      return { start, end };
-    }
-    case "esse_mes": {
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      firstDay.setHours(0, 0, 0, 0);
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      lastDay.setHours(23, 59, 59, 999);
-      return { start: firstDay, end: lastDay };
-    }
-    case "esse_ano": {
-      const firstDay = new Date(now.getFullYear(), 0, 1);
-      firstDay.setHours(0, 0, 0, 0);
-      const lastDay = new Date(now.getFullYear(), 11, 31);
-      lastDay.setHours(23, 59, 59, 999);
-      return { start: firstDay, end: lastDay };
-    }
-    default:
-      return null;
-  }
-};
-
-// Helper function to extract date part from ISO string (YYYY-MM-DD)
-const extractDatePart = (dateString: string): string | null => {
-  if (!dateString) return null;
-  // Handle ISO format: YYYY-MM-DDTHH:mm:ss or YYYY-MM-DD
-  const match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
-  return match ? match[1] : null;
-};
-
-// Helper function to normalize date to YYYY-MM-DD format for comparison
-const normalizeDate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-// Helper function to check if a job's plannedDate matches the date filter
-const matchesDateFilter = (
-  jobPlannedDate: string | null | undefined,
-  filterType: string,
-  customStart?: string,
-  customEnd?: string
-): boolean => {
-  if (filterType === "all") return true;
-  
-  // If job has no plannedDate, exclude it from date-specific filters
-  if (!jobPlannedDate || !jobPlannedDate.trim()) return false;
-  
-  try {
-    // Extract date part to normalize comparison (ignore time component)
-    const jobDatePart = extractDatePart(jobPlannedDate);
-    if (!jobDatePart) return false;
-    
-    if (filterType === "custom") {
-      if (!customStart || !customEnd) return true; // If custom dates not set, show all
-      // Compare date strings directly (YYYY-MM-DD format)
-      return jobDatePart >= customStart && jobDatePart <= customEnd;
-    }
-    
-    const range = getDateRange(filterType);
-    if (!range) return true;
-    
-    // Normalize range dates to YYYY-MM-DD format for comparison
-    const rangeStartStr = normalizeDate(range.start);
-    const rangeEndStr = normalizeDate(range.end);
-    
-    // Compare date strings directly
-    return jobDatePart >= rangeStartStr && jobDatePart <= rangeEndStr;
-  } catch {
-    return false;
-  }
-};
+import JobsFilters from "./_components/JobsFilters";
+import JobsList from "./_components/JobsList";
+import JobForm from "./_components/JobForm";
+import JobDetail from "./_components/JobDetail";
+import JobFeedback from "./_components/JobFeedback";
+import { Status, STATUS_LABEL, STATUS_COLORS, SERVICES, LOCAL_TYPES, SOIL_TYPES, CATALOG_DIAMETERS, ACCESS_TYPES, CATEGORIES, PAYMENT_METHODS, SERVICE_DEFAULT_CATS } from "./constants";
+import { mapSoilTypeToCatalog, mapAccessToCatalog, normalizeLocalType, normalizeSoilType, normalizeAccess, normalizeDiameter, formatDateTime, convertToISO, convertFromISO, calculateServicePrice, matchesDateFilter } from "./utils";
 
 export default function JobsPage() {
   const [mode, setMode] = useState<"list" | "form" | "detail" | "edit">("list");
@@ -436,6 +20,7 @@ export default function JobsPage() {
   const [teams, setTeams] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
+  const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
   
   // Set default dates to today and tomorrow
   const getTodayDate = () => {
@@ -489,6 +74,8 @@ export default function JobsPage() {
     travelDistanceKm: 0,
     travelPrice: 0,
     travelDescription: "",
+    nfeFileKey: "", // S3 key for NFE file
+    nfeFile: null as File | null, // Temporary file before upload
     services: [] as Array<{
       id: string;
       catalogId?: string;
@@ -762,6 +349,8 @@ export default function JobsPage() {
       travelDistanceKm: 0,
       travelPrice: 0,
       travelDescription: "",
+      nfeFileKey: "",
+      nfeFile: null,
       services: [] as Array<{
         id: string;
         catalogId?: string;
@@ -828,6 +417,8 @@ export default function JobsPage() {
       travelDistanceKm: job.travelDistanceKm || 0,
       travelPrice: job.travelPrice || 0,
       travelDescription: job.travelDescription || "",
+      nfeFileKey: job.nfeFileKey || "",
+      nfeFile: null, // Don't load file when editing, only the key
       services: (job.services || []).map((srv: any, index: number) => {
         // Convert catalogId to string
         let catalogIdString: string | undefined = undefined;
@@ -868,6 +459,9 @@ export default function JobsPage() {
     };
     
     setForm(newForm);
+    // Expand all services when editing
+    const serviceIds = newForm.services.map((s) => s.id);
+    setExpandedServices(new Set(serviceIds));
   };
 
   const startNew = () => {
@@ -1079,6 +673,70 @@ export default function JobsPage() {
 
     try {
       setSaving(true);
+      
+      // Upload NFE file if a new file was selected
+      let nfeFileKey = form.nfeFileKey; // Keep existing key if no new file
+      if (form.nfeFile) {
+        try {
+          const formData = new FormData();
+          formData.append("file", form.nfeFile);
+          formData.append("category", "nfe");
+          // Only append id if it exists and is not empty
+          if (isEditing && selected && selected._id) {
+            formData.append("id", String(selected._id));
+          }
+
+          const uploadRes = await apiFetch("/files/upload", {
+            method: "POST",
+            body: formData as any
+          });
+
+          const uploadData = await uploadRes.json().catch(() => null);
+
+          if (!uploadRes.ok) {
+            const errorMessage = uploadData?.error || uploadData?.detail || "Falha ao fazer upload do arquivo NFE";
+            throw new Error(errorMessage);
+          }
+
+          if (!uploadData?.data?.key) {
+            throw new Error("Resposta do servidor inválida: chave do arquivo não encontrada");
+          }
+
+          nfeFileKey = uploadData.data.key;
+          
+          // If we uploaded a new file and there was an old one, delete the old file from S3
+          if (isEditing && selected?.nfeFileKey && selected.nfeFileKey !== nfeFileKey) {
+            try {
+              const encodedKey = encodeURIComponent(selected.nfeFileKey);
+              await apiFetch(`/files/${encodedKey}`, {
+                method: "DELETE"
+              });
+            } catch (err) {
+              console.error("Error deleting old NFE file from S3:", err);
+              // Don't block the save if deletion fails
+            }
+          }
+        } catch (err: any) {
+          console.error("NFE upload error:", err);
+          const errorMessage = err?.message || "Falha ao fazer upload do arquivo NFE. Tente novamente.";
+          Swal.fire("Erro", errorMessage, "error");
+          setSaving(false);
+          return;
+        }
+      } else if (isEditing && selected?.nfeFileKey && (!form.nfeFileKey || form.nfeFileKey.trim() === "")) {
+        // If editing and NFE was removed (empty key), delete the old file from S3
+        try {
+          const encodedKey = encodeURIComponent(selected.nfeFileKey);
+          await apiFetch(`/files/${encodedKey}`, {
+            method: "DELETE"
+          });
+          nfeFileKey = ""; // Ensure it's empty
+        } catch (err) {
+          console.error("Error deleting NFE file from S3:", err);
+          // Don't block the save if deletion fails
+        }
+      }
+      
       // Remover campos vazios do form antes de enviar
       const { value: formValue, discountPercent: formDiscount, ...restForm } = form;
       
@@ -1156,6 +814,14 @@ export default function JobsPage() {
         payload.travelDistanceKm = form.travelDistanceKm;
         payload.travelPrice = form.travelPrice;
         payload.travelDescription = form.travelDescription;
+      }
+      
+      // Include NFE file key - if empty and editing, set to null to clear it in DB
+      if (nfeFileKey && nfeFileKey.trim() !== "") {
+        payload.nfeFileKey = nfeFileKey;
+      } else if (isEditing && selected?.nfeFileKey) {
+        // If editing and NFE was removed, explicitly set to null to clear it
+        payload.nfeFileKey = null;
       }
       
       // Only include plannedDate if it has a value (not empty string)
@@ -1238,7 +904,7 @@ export default function JobsPage() {
       resetForm();
       setSelected(null);
       setMode("list");
-      Swal.fire("Sucesso", `OS ${isEditing ? "atualizada" : "salva"} com sucesso.`, "success");
+      Swal.fire("Sucesso", `OS ${isEditing ? "atualizada" : "salva"} com sucesso.${form.nfeFile ? " Arquivo NFE enviado." : ""}`, "success");
     } catch (err) {
       console.error(err);
       Swal.fire("Erro", "Falha ao salvar OS.", "error");
@@ -1568,95 +1234,22 @@ export default function JobsPage() {
 
       {mode === "list" && (
         <>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 sm:px-4 py-3">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por título, cliente ou obra"
-              className="w-full sm:w-64 bg-transparent text-sm text-white outline-none placeholder:text-slate-400 px-2 py-3 sm:px-0 touch-manipulation"
-            />
-            <div className="flex items-center gap-2 text-xs text-slate-200">
-              <span className="hidden sm:inline">Status:</span>
-              <div className="relative flex-1 sm:flex-initial">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="w-full sm:w-auto appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-3 pr-7 text-xs font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
-                >
-                  <option value="all">Todos</option>
-                  <option value="pendente">Pendente</option>
-                  <option value="em_execucao">Em execução</option>
-                  <option value="concluida">Concluída</option>
-                  <option value="cancelada">Cancelada</option>
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-300">
-                  ▼
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-200">
-              <span className="hidden sm:inline">Data:</span>
-              <div className="relative flex-1 sm:flex-initial">
-                <select
-                  value={dateFilter}
-                  onChange={(e) => {
-                    setDateFilter(e.target.value as any);
-                    if (e.target.value !== "custom") {
-                      setCustomDateStart("");
-                      setCustomDateEnd("");
-                      setTempCustomDateStart("");
-                      setTempCustomDateEnd("");
-                    } else {
-                      // Initialize temp dates with current applied dates when switching to custom
-                      setTempCustomDateStart(customDateStart);
-                      setTempCustomDateEnd(customDateEnd);
-                    }
-                  }}
-                  className="w-full sm:w-auto appearance-none rounded-md border border-white/10 bg-slate-900 px-3 py-3 pr-7 text-xs font-semibold text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
-                >
-                  <option value="all">Todas</option>
-                  <option value="ontem">Ontem</option>
-                  <option value="hoje">Hoje</option>
-                  <option value="amanha">Amanhã</option>
-                  <option value="esse_mes">Esse Mês</option>
-                  <option value="esse_ano">Esse ano</option>
-                  <option value="custom">Período personalizado</option>
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-300">
-                  ▼
-                </span>
-              </div>
-            </div>
-            {dateFilter === "custom" && (
-              <div className="flex items-center gap-2 text-xs text-slate-200">
-                <input
-                  type="date"
-                  value={tempCustomDateStart}
-                  onChange={(e) => setTempCustomDateStart(e.target.value)}
-                  className="w-full sm:w-auto rounded-md border border-white/10 bg-slate-900 px-3 py-3 text-xs text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
-                  placeholder="Data inicial"
-                />
-                <span className="text-slate-400">até</span>
-                <input
-                  type="date"
-                  value={tempCustomDateEnd}
-                  onChange={(e) => setTempCustomDateEnd(e.target.value)}
-                  className="w-full sm:w-auto rounded-md border border-white/10 bg-slate-900 px-3 py-3 text-xs text-white outline-none transition hover:border-emerald-300/50 focus:border-emerald-400 touch-manipulation"
-                  placeholder="Data final"
-                />
-                <button
-                  onClick={() => {
-                    setCustomDateStart(tempCustomDateStart);
-                    setCustomDateEnd(tempCustomDateEnd);
-                  }}
-                  disabled={!tempCustomDateStart || !tempCustomDateEnd}
-                  className="rounded-md border border-emerald-400/50 bg-emerald-500/20 px-4 py-3 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation active:scale-95"
-                >
-                  Buscar
-                </button>
-              </div>
-            )}
-          </div>
+          <JobsFilters
+            search={search}
+            setSearch={setSearch}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            dateFilter={dateFilter}
+            setDateFilter={setDateFilter}
+            tempCustomDateStart={tempCustomDateStart}
+            setTempCustomDateStart={setTempCustomDateStart}
+            tempCustomDateEnd={tempCustomDateEnd}
+            setTempCustomDateEnd={setTempCustomDateEnd}
+            customDateStart={customDateStart}
+            customDateEnd={customDateEnd}
+            setCustomDateStart={setCustomDateStart}
+            setCustomDateEnd={setCustomDateEnd}
+          />
 
           <JobsMap jobs={filtered} />
 
@@ -1667,1276 +1260,53 @@ export default function JobsPage() {
                 {loading ? "Carregando..." : `${filtered.length} registro(s)`}
               </span>
             </div>
-            {loading ? (
-              <div className="px-3 sm:px-6 py-6 text-center text-slate-300 text-sm">
-                <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-400" />
-                <p>Carregando ordens de serviço...</p>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="px-3 sm:px-6 py-4 text-slate-300 text-sm">
-                Nenhuma ordem de serviço encontrada.
-              </div>
-            ) : (
-              <>
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-white/5 text-xs uppercase text-slate-300">
-                      <tr>
-                        <th className="px-4 py-3">Título</th>
-                        <th className="px-4 py-3">Serviços</th>
-                        <th className="px-4 py-3">Cliente</th>
-                        <th className="px-4 py-3">Obra</th>
-                        <th className="px-4 py-3">Equipe</th>
-                        <th className="px-4 py-3">Data</th>
-                        <th className="px-4 py-3">Valor</th>
-                        <th className="px-4 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((job) => (
-                        <tr
-                          key={job._id}
-                          className="border-t border-white/5 hover:bg-white/5 cursor-pointer"
-                          onClick={() => {
-                            setSelected(job);
-                            setMode("detail");
-                          }}
-                        >
-                          <td className="px-4 py-3 text-white">{job.title}</td>
-                          <td className="px-4 py-3 text-slate-200">
-                            {job.services?.length
-                              ? job.services.map((s: any) => s.service).filter(Boolean).join(", ")
-                              : "-"}
-                          </td>
-                          <td className="px-4 py-3 text-slate-200">
-                            {job.clientName || job.client || "-"}
-                          </td>
-                          <td className="px-4 py-3 text-slate-200">{job.site || "-"}</td>
-                          <td className="px-4 py-3 text-slate-200">{job.team || "-"}</td>
-                          <td className="px-4 py-3 text-slate-200">
-                            {formatDateTime(job.plannedDate)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-200">
-                            {job.finalValue !== undefined && job.finalValue !== null
-                              ? new Intl.NumberFormat("pt-BR", {
-                                  style: "currency",
-                                  currency: "BRL"
-                                }).format(job.finalValue)
-                              : job.value !== undefined && job.value !== null
-                              ? new Intl.NumberFormat("pt-BR", {
-                                  style: "currency",
-                                  currency: "BRL"
-                                }).format(job.value)
-                              : "-"}
-                            {job.discountPercent && job.discountPercent > 0 && (
-                              <div className="text-xs text-emerald-300">
-                                -{job.discountPercent}%
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className={`rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap text-center ${
-                                STATUS_COLORS[job.status as Status] || "bg-white/5 text-white border-white/10"
-                              }`}>
-                                {STATUS_LABEL[job.status as Status] || "-"}
-                              </span>
-                              {job.status === "concluida" && !hasTransactionForJob(job._id) && job.finalValue && job.finalValue > 0 && (
-                                <button
-                                  onClick={(e) => markAsReceived(job, e)}
-                                  className="rounded-full border border-emerald-400/50 bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300 whitespace-nowrap hover:bg-emerald-500/30 transition"
-                                >
-                                  Receber
-                                </button>
-                              )}
-                              {hasTransactionForJob(job._id) && (
-                                <span className="rounded-full border border-emerald-400/50 bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300 whitespace-nowrap">
-                                  ✓ Recebido
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Card View */}
-                <div className="md:hidden space-y-3 p-3">
-                  {filtered.map((job) => (
-                    <div
-                      key={job._id}
-                      onClick={() => {
-                        setSelected(job);
-                        setMode("detail");
-                      }}
-                      className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3 cursor-pointer active:bg-white/10 transition"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold text-white truncate">{job.title}</div>
-                          <div className="text-xs text-slate-400 mt-1">
-                            {formatDateTime(job.plannedDate) || "Sem data"}
-                          </div>
-                        </div>
-                        <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold whitespace-nowrap shrink-0 ${
-                          STATUS_COLORS[job.status as Status] || "bg-white/5 text-white border-white/10"
-                        }`}>
-                          {STATUS_LABEL[job.status as Status] || "-"}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-2 text-xs">
-                        <div className="flex items-start gap-2">
-                          <span className="text-slate-400 shrink-0">Cliente:</span>
-                          <span className="text-slate-200 flex-1">{job.clientName || job.client || "-"}</span>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <span className="text-slate-400 shrink-0">Obra:</span>
-                          <span className="text-slate-200 flex-1 line-clamp-2">{job.site || "-"}</span>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <span className="text-slate-400 shrink-0">Equipe:</span>
-                          <span className="text-slate-200 flex-1">{job.team || "-"}</span>
-                        </div>
-                        {job.services?.length > 0 && (
-                          <div className="flex items-start gap-2">
-                            <span className="text-slate-400 shrink-0">Serviços:</span>
-                            <span className="text-slate-200 flex-1 line-clamp-2">
-                              {job.services.map((s: any) => s.service).filter(Boolean).slice(0, 2).join(", ")}
-                              {job.services.length > 2 && ` +${job.services.length - 2} mais`}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                          <span className="text-slate-400">Valor:</span>
-                          <div className="text-right">
-                            <div className="text-emerald-300 font-semibold">
-                              {job.finalValue !== undefined && job.finalValue !== null
-                                ? new Intl.NumberFormat("pt-BR", {
-                                    style: "currency",
-                                    currency: "BRL"
-                                  }).format(job.finalValue)
-                                : job.value !== undefined && job.value !== null
-                                ? new Intl.NumberFormat("pt-BR", {
-                                    style: "currency",
-                                    currency: "BRL"
-                                  }).format(job.value)
-                                : "-"}
-                            </div>
-                            {job.discountPercent && job.discountPercent > 0 && (
-                              <div className="text-[10px] text-emerald-300">
-                                -{job.discountPercent}%
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        {job.status === "concluida" && (
-                          <div className="pt-2 border-t border-white/10">
-                            {!hasTransactionForJob(job._id) && job.finalValue && job.finalValue > 0 ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAsReceived(job);
-                                }}
-                                className="w-full rounded-lg border border-emerald-400/50 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition"
-                              >
-                                Receber
-                              </button>
-                            ) : hasTransactionForJob(job._id) ? (
-                              <div className="text-center text-xs text-emerald-300 font-semibold">
-                                ✓ Recebido
-                              </div>
-                            ) : null}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+            <JobsList
+              jobs={filtered}
+              loading={loading}
+              onJobClick={(job) => {
+                setSelected(job);
+                setMode("detail");
+              }}
+              hasTransactionForJob={hasTransactionForJob}
+              markAsReceived={markAsReceived}
+            />
           </div>
         </>
       )}
 
       {(mode === "form" || mode === "edit") && (
-        <div className="space-y-4 sm:space-y-5 rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 shadow-inner shadow-black/30">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="text-base sm:text-lg font-semibold text-white">
-                {mode === "edit" ? "Editar OS" : "Nova OS"}
-              </div>
-              <p className="text-xs text-slate-300 mt-1">
-                {mode === "edit" 
-                  ? "Atualize os dados e salve as alterações." 
-                  : "Preencha os dados. A OS será salva e listada abaixo."}
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setMode("list");
-                resetForm();
-                setSelected(null);
-              }}
-              className="w-full sm:w-auto rounded-lg border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-100 transition hover:border-emerald-300/40 hover:text-white touch-manipulation active:scale-95"
-            >
-              Cancelar
-            </button>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1 text-sm">
-              <label className="text-slate-200">Cliente</label>
-              <select
-                value={form.clientId}
-                onChange={(e) => {
-                  const client = clients.find((c) => c._id === e.target.value);
-                  // Resetar endereço selecionado quando cliente muda
-                  setForm((f) => ({
-                    ...f,
-                    clientId: e.target.value,
-                    site: "" // Limpar endereço para permitir seleção
-                  }));
-                }}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
-              >
-                <option value="">Selecione um cliente</option>
-                {clients.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <div className="text-[11px] text-slate-400">
-                Vincule a OS a um cliente/empresa existente.
-              </div>
-            </div>
-            <div className="space-y-1 text-sm">
-              <label className="text-slate-200">Endereço da Obra</label>
-              {form.clientId ? (() => {
-                const selectedClient = clients.find((c) => c._id === form.clientId);
-                const addresses = selectedClient?.addresses && Array.isArray(selectedClient.addresses) && selectedClient.addresses.length > 0
-                  ? selectedClient.addresses
-                  : (selectedClient?.addressStreet || selectedClient?.address
-                    ? [{
-                        label: "Endereço Principal",
-                        address: selectedClient.address || `${selectedClient.addressStreet || ""} ${selectedClient.addressNumber || ""}`.trim(),
-                        addressStreet: selectedClient.addressStreet || "",
-                        addressNumber: selectedClient.addressNumber || "",
-                        addressNeighborhood: selectedClient.addressNeighborhood || "",
-                        addressCity: selectedClient.addressCity || "",
-                        addressState: selectedClient.addressState || "",
-                        addressZip: selectedClient.addressZip || ""
-                      }]
-                    : []);
-                
-                return addresses.length > 0 ? (
-                  <select
-                    value={form.site}
-                    onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
-                  >
-                    <option value="">Selecione um endereço</option>
-                    {addresses.map((addr: any, index: number) => {
-                      const addrLabel = addr.label || `Endereço ${index + 1}`;
-                      const addrFull = addr.address || [
-                        [addr.addressStreet, addr.addressNumber].filter(Boolean).join(", "),
-                        addr.addressNeighborhood,
-                        [addr.addressCity, addr.addressState].filter(Boolean).join(" - "),
-                        addr.addressZip
-                      ].filter((v) => v && v.trim().length > 0).join(", ");
-                      return (
-                        <option key={index} value={addrFull}>
-                          {addrLabel} - {addrFull}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <input
-                    value={form.site}
-                    onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
-                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                    placeholder="Digite o endereço da obra"
-                  />
-                );
-              })() : (
-                <input
-                  value={form.site}
-                  onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                  placeholder="Selecione um cliente primeiro"
-                  disabled
-                />
-              )}
-              <div className="text-[11px] text-slate-400">
-                {form.clientId 
-                  ? "Selecione um endereço do cliente ou digite um novo endereço."
-                  : "Selecione um cliente para ver os endereços disponíveis."}
-              </div>
-            </div>
-            <div className="space-y-1 text-sm">
-              <label className="text-slate-200">Equipe</label>
-              <select
-                key={`team-select-${form.teamId || 'empty'}`}
-                value={form.teamId || ""}
-                onChange={(e) => {
-                  const selectedTeam = teams.find((t) => t._id === e.target.value);
-                  setForm((f) => ({
-                    ...f,
-                    teamId: e.target.value,
-                    team: selectedTeam?.name || ""
-                  }));
-                }}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
-              >
-                <option value="">Selecione uma equipe</option>
-                {teams.map((t) => {
-                  const teamIdStr = typeof t._id === 'string' ? t._id : (t._id?.toString?.() || String(t._id));
-                  return (
-                    <option key={teamIdStr} value={teamIdStr}>
-                      {t.name}
-                    </option>
-                  );
-                })}
-              </select>
-              <div className="text-[11px] text-slate-400">
-                Equipes cadastradas em /teams.
-              </div>
-              {checkingAvailability && (
-                <div className="text-xs text-blue-300 flex items-center gap-1">
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-300"></div>
-                  Verificando disponibilidade...
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <div className="text-sm font-semibold text-white">
-                Serviços (múltiplos) — selecione e detalhe
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setForm((f) => ({
-                    ...f,
-                    services: [
-                      ...f.services,
-                      {
-                        id: crypto.randomUUID(),
-                        service: "",
-                        catalogId: undefined,
-                        localType: "",
-                        soilType: "",
-                        sptInfo: "",
-                        access: "",
-                        categories: [],
-                        diametro: "",
-                        profundidade: "",
-                        quantidade: "",
-                        observacoes: "",
-                        sptFileName: "",
-                        value: "",
-                        discountPercent: "",
-                        executionTime: 0
-                      }
-                    ]
-                  }))
-                }
-                className="w-full sm:w-auto rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 touch-manipulation active:scale-95"
-              >
-                + Adicionar serviço
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {form.services.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-white/20 bg-slate-900/40 px-3 py-3 text-xs text-slate-300">
-                  Nenhum serviço adicionado. Clique em “+ Adicionar serviço” para inserir
-                  o primeiro tipo.
-                </div>
-              ) : null}
-
-              {form.services.map((srv, idx) => (
-                <div
-                  key={srv.id}
-                  className="rounded-xl border border-white/10 bg-slate-900/50 p-3 sm:p-4 space-y-3"
-                >
-                  <div className="flex items-center justify-between text-sm text-slate-200">
-                    <span className="text-xs sm:text-sm">Serviço #{idx + 1}</span>
-                    {form.services.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            services: f.services.filter((s) => s.id !== srv.id)
-                          }))
-                        }
-                        className="rounded-md border border-white/10 px-2 py-1 text-[10px] sm:text-xs font-semibold text-red-100 hover:border-red-400/50 hover:text-red-100"
-                      >
-                        Remover
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1 text-sm sm:col-span-2">
-                      <label className="text-slate-200">Tipo de serviço</label>
-                      <select
-                        value={(srv as any).catalogId || srv.service}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          const catalogItem = catalogItems.find((item) => item._id === value);
-                          
-                          setForm((f) => {
-                            if (catalogItem) {
-                              // Using catalog item
-                              return {
-                                ...f,
-                                services: f.services.map((s: any) =>
-                                  s.id === srv.id
-                                    ? {
-                                        ...s,
-                                        catalogId: catalogItem._id,
-                                        service: catalogItem.name,
-                                        categories: catalogItem.category ? [catalogItem.category] : [],
-                                        value: "", // Will be calculated based on diameter/soil
-                                        discountPercent: "",
-                                        diametro: "",
-                                        soilType: "",
-                                        executionTime: 0 // Initialize execution time
-                                      }
-                                    : s
-                                )
-                              };
-                            } else {
-                              // Using legacy service
-                              const code = value.split(" ")[0];
-                              return {
-                                ...f,
-                                services: f.services.map((s: any) =>
-                                  s.id === srv.id
-                                    ? {
-                                        ...s,
-                                        catalogId: undefined,
-                                        service: value,
-                                        categories: SERVICE_DEFAULT_CATS[code] || [],
-                                        executionTime: 0 // Initialize execution time for legacy services
-                                      }
-                                    : s
-                                )
-                              };
-                            }
-                          });
-                        }}
-                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                      >
-                        <option value="">Selecione um serviço</option>
-                        {catalogItems.length > 0 && (() => {
-                          // Group catalog items by category
-                          const groupedByCategory = catalogItems.reduce((acc: Record<string, typeof catalogItems>, item: any) => {
-                            const category = item.category || "Sem categoria";
-                            if (!acc[category]) {
-                              acc[category] = [];
-                            }
-                            acc[category].push(item);
-                            return acc;
-                          }, {});
-                          
-                          // Sort categories alphabetically
-                          const sortedCategories = Object.keys(groupedByCategory).sort();
-                          
-                          return (
-                            <optgroup label="Catálogo">
-                              {sortedCategories.flatMap((category) =>
-                                groupedByCategory[category].map((item: any) => (
-                                  <option key={item._id} value={item._id}>
-                                    {category} — {item.name}
-                                  </option>
-                                ))
-                              )}
-                            </optgroup>
-                          );
-                        })()}
-                        <optgroup label="Serviços Legados">
-                          {SERVICES.map((s) => (
-                            <option key={s.value} value={`${s.value} - ${s.label}`}>
-                              {s.group} — {s.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1 text-sm">
-                      <label className="text-slate-200">Tipo de local</label>
-                      <select
-                        key={`localType-${srv.id}-${srv.localType || 'empty'}`}
-                        value={srv.localType || ""}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            services: f.services.map((s) =>
-                              s.id === srv.id ? { ...s, localType: e.target.value } : s
-                            )
-                          }))
-                        }
-                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                      >
-                        <option value="">Selecione</option>
-                        {LOCAL_TYPES.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1 text-sm">
-                      <label className="text-slate-200">Tipo de solo</label>
-                      <select
-                        key={`soilType-${srv.id}-${srv.soilType || 'empty'}`}
-                        value={srv.soilType || ""}
-                        onChange={(e) => {
-                          const newSoilType = e.target.value;
-                          setForm((f) => {
-                            const updatedServices = f.services.map((s: any) => {
-                              if (s.id === srv.id) {
-                                const catalogItem = catalogItems.find((item) => item._id === s.catalogId);
-                                const priceData = calculateServicePrice(
-                                  catalogItem,
-                                  s.diametro,
-                                  newSoilType,
-                                  s.access,
-                                  s.quantidade,
-                                  s.profundidade
-                                );
-                                return { ...s, soilType: newSoilType, value: priceData.value, executionTime: priceData.executionTime };
-                              }
-                              return s;
-                            });
-                            return { ...f, services: updatedServices };
-                          });
-                        }}
-                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                      >
-                        <option value="">Selecione</option>
-                        {SOIL_TYPES.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1 text-sm">
-                      <label className="text-slate-200">Acesso para máquina</label>
-                      <select
-                        key={`access-${srv.id}-${srv.access || 'empty'}`}
-                        value={srv.access || ""}
-                        onChange={(e) => {
-                          const newAccess = e.target.value;
-                          setForm((f) => {
-                            const updatedServices = f.services.map((s: any) => {
-                              if (s.id === srv.id) {
-                                const catalogItem = catalogItems.find((item) => item._id === s.catalogId);
-                                const priceData = calculateServicePrice(
-                                  catalogItem,
-                                  s.diametro,
-                                  s.soilType,
-                                  newAccess,
-                                  s.quantidade,
-                                  s.profundidade
-                                );
-                                return { ...s, access: newAccess, value: priceData.value, executionTime: priceData.executionTime };
-                              }
-                              return s;
-                            });
-                            return { ...f, services: updatedServices };
-                          });
-                        }}
-                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                      >
-                        <option value="">Selecione</option>
-                        {ACCESS_TYPES.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1 text-sm sm:col-span-2">
-                      <label className="text-slate-200">Categorias</label>
-                      <div className="flex flex-wrap gap-2">
-                        {(srv.categories && srv.categories.length > 0 ? srv.categories : ["—"]).map(
-                          (cat) => (
-                            <span
-                              key={cat}
-                              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100"
-                            >
-                              {cat}
-                            </span>
-                          )
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 sm:col-span-2">
-                      <div className="space-y-1 text-sm">
-                        <label className="text-slate-200 text-xs sm:text-sm">Diâmetro (25–120 cm)</label>
-                        {(srv as any).catalogId ? (
-                          <select
-                            key={`diametro-${srv.id}-${srv.diametro || 'empty'}`}
-                            value={srv.diametro || ""}
-                            onChange={(e) => {
-                              const newDiameter = e.target.value;
-                              setForm((f) => {
-                                const updatedServices = f.services.map((s: any) => {
-                                  if (s.id === srv.id) {
-                                    const catalogItem = catalogItems.find((item) => item._id === s.catalogId);
-                                    const priceData = calculateServicePrice(
-                                      catalogItem,
-                                      newDiameter,
-                                      s.soilType,
-                                      s.access,
-                                      s.quantidade,
-                                      s.profundidade
-                                    );
-                                    return { ...s, diametro: newDiameter, value: priceData.value, executionTime: priceData.executionTime };
-                                  }
-                                  return s;
-                                });
-                                return { ...f, services: updatedServices };
-                              });
-                            }}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                          >
-                            <option value="">Selecione</option>
-                            {CATALOG_DIAMETERS.map((d) => (
-                              <option key={d} value={d}>
-                                {d} cm
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            type="number"
-                            min={25}
-                            max={120}
-                            value={srv.diametro}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                services: f.services.map((s) =>
-                                  s.id === srv.id ? { ...s, diametro: e.target.value } : s
-                                )
-                              }))
-                            }
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                            placeholder="cm"
-                          />
-                        )}
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        <label className="text-slate-200 text-xs sm:text-sm">Profundidade (1–18 m)</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={18}
-                          value={srv.profundidade}
-                          onChange={(e) => {
-                            const newProfundidade = e.target.value;
-                            setForm((f) => {
-                              const updatedServices = f.services.map((s: any) => {
-                                if (s.id === srv.id) {
-                                  const catalogItem = catalogItems.find((item) => item._id === s.catalogId);
-                                  const priceData = calculateServicePrice(
-                                    catalogItem,
-                                    s.diametro,
-                                    s.soilType,
-                                    s.access,
-                                    s.quantidade,
-                                    newProfundidade
-                                  );
-                                  return { ...s, profundidade: newProfundidade, value: priceData.value, executionTime: priceData.executionTime };
-                                }
-                                return s;
-                              });
-                              return { ...f, services: updatedServices };
-                            });
-                          }}
-                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                          placeholder="m"
-                        />
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        <label className="text-slate-200 text-xs sm:text-sm">Quantidade</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={srv.quantidade}
-                          onChange={(e) => {
-                            const newQuantity = e.target.value;
-                            setForm((f) => {
-                              const updatedServices = f.services.map((s: any) => {
-                                if (s.id === srv.id) {
-                                  const catalogItem = catalogItems.find((item) => item._id === s.catalogId);
-                                  const priceData = calculateServicePrice(
-                                    catalogItem,
-                                    s.diametro,
-                                    s.soilType,
-                                    s.access,
-                                    newQuantity,
-                                    s.profundidade
-                                  );
-                                  return { ...s, quantidade: newQuantity, value: priceData.value, executionTime: priceData.executionTime };
-                                }
-                                return s;
-                              });
-                              return { ...f, services: updatedServices };
-                            });
-                          }}
-                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                          placeholder="Qtd"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-sm sm:col-span-2">
-                      <label className="text-slate-200">
-                        SPT / Diagnóstico do Solo (resumo ou link)
-                      </label>
-                      <textarea
-                        value={srv.sptInfo}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            services: f.services.map((s) =>
-                              s.id === srv.id ? { ...s, sptInfo: e.target.value } : s
-                            )
-                          }))
-                        }
-                        rows={2}
-                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                        placeholder="Cole o laudo SPT, link ou resumo"
-                      />
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                        <label className="rounded-md border border-white/10 bg-white/5 px-3 py-2 font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 cursor-pointer">
-                          <input
-                            type="file"
-                            accept=".pdf,.doc,.docx"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setForm((f) => ({
-                                ...f,
-                                services: f.services.map((s) =>
-                                  s.id === srv.id ? { ...s, sptFileName: file.name } : s
-                                )
-                              }));
-                            }}
-                          />
-                          Anexar SPT (pdf/word)
-                        </label>
-                        <span className="text-slate-200">
-                          {srv.sptFileName ? `Arquivo: ${srv.sptFileName}` : "Nenhum arquivo selecionado"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-sm sm:col-span-2">
-                      <label className="text-slate-200">Observações do serviço</label>
-                      <textarea
-                        value={srv.observacoes}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            services: f.services.map((s) =>
-                              s.id === srv.id ? { ...s, observacoes: e.target.value } : s
-                            )
-                          }))
-                        }
-                        rows={2}
-                        className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                        placeholder="Detalhes específicos deste serviço"
-                      />
-                    </div>
-
-                    {/* Valores do Serviço Individual */}
-                    <div className="sm:col-span-2 rounded-xl border border-emerald-400/30 bg-emerald-500/5 p-3 sm:p-4 space-y-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-xs sm:text-sm font-semibold text-emerald-200">Valores deste Serviço</div>
-                        {(() => {
-                          // Show formula if we have all required values
-                          const catalogItem = catalogItems.find((item) => item._id === (srv as any).catalogId);
-                          const hasCatalogItem = !!catalogItem;
-                          const hasDiameter = !!srv.diametro;
-                          const hasSoilType = !!srv.soilType;
-                          const hasAccess = !!srv.access;
-                          const hasQuantity = !!srv.quantidade && parseFloat(srv.quantidade) > 0;
-                          const hasProfundidade = !!srv.profundidade && parseFloat(srv.profundidade) > 0;
-                          const hasBasePrice = (() => {
-                            if (!hasCatalogItem || !hasDiameter || !hasSoilType || !hasAccess) return false;
-                            const catalogSoilType = mapSoilTypeToCatalog(srv.soilType);
-                            const catalogAccess = mapAccessToCatalog(srv.access);
-                            const diameterNum = parseInt(srv.diametro, 10);
-                            const priceVariation = catalogItem.priceVariations?.find(
-                              (pv: any) =>
-                                pv.diameter === diameterNum &&
-                                pv.soilType === catalogSoilType &&
-                                pv.access === catalogAccess
-                            );
-                            return !!priceVariation;
-                          })();
-                          
-                          if (hasCatalogItem && hasBasePrice && hasQuantity && hasProfundidade) {
-                            const catalogSoilType = mapSoilTypeToCatalog(srv.soilType);
-                            const catalogAccess = mapAccessToCatalog(srv.access);
-                            const diameterNum = parseInt(srv.diametro, 10);
-                            const priceVariation = catalogItem.priceVariations?.find(
-                              (pv: any) =>
-                                pv.diameter === diameterNum &&
-                                pv.soilType === catalogSoilType &&
-                                pv.access === catalogAccess
-                            );
-                            
-                            if (priceVariation) {
-                              const quantity = parseFloat(srv.quantidade) || 0;
-                              const depth = parseFloat(srv.profundidade) || 0;
-                              const basePrice = priceVariation.price || 0;
-                              const calculatedValue = (quantity * depth) * basePrice;
-                              
-                              return (
-                                <div className="text-[10px] sm:text-xs text-slate-300 font-mono bg-slate-800/50 px-2 py-1 rounded border border-slate-600/50">
-                                  ({quantity} × {depth}) × {basePrice.toFixed(2)} = {calculatedValue.toFixed(2)}
-                                </div>
-                              );
-                            }
-                          }
-                          return null;
-                        })()}
-                      </div>
-                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-4">
-                        {(() => {
-                          // Get base price per meter and execution time from catalog variation
-                          const catalogItem = catalogItems.find((item) => item._id === (srv as any).catalogId);
-                          let basePricePerMeter = null;
-                          let executionTimePerMeter = null;
-                          
-                          if (catalogItem && srv.diametro && srv.soilType && srv.access) {
-                            const catalogSoilType = mapSoilTypeToCatalog(srv.soilType);
-                            const catalogAccess = mapAccessToCatalog(srv.access);
-                            const diameterNum = parseInt(srv.diametro, 10);
-                            
-                            const priceVariation = catalogItem.priceVariations?.find(
-                              (pv: any) =>
-                                pv.diameter === diameterNum &&
-                                pv.soilType === catalogSoilType &&
-                                pv.access === catalogAccess
-                            );
-                            
-                            if (priceVariation) {
-                              basePricePerMeter = priceVariation.price;
-                              executionTimePerMeter = priceVariation.executionTime;
-                            }
-                          }
-                          
-                          // Calculate total execution time for this service
-                          const quantity = parseFloat(srv.quantidade) || 0;
-                          const depth = parseFloat(srv.profundidade) || 0;
-                          const totalExecutionMinutes = executionTimePerMeter && quantity > 0 && depth > 0
-                            ? executionTimePerMeter * quantity * depth
-                            : null;
-                          
-                          const formatTime = (minutes: number) => {
-                            const hours = Math.floor(minutes / 60);
-                            const mins = Math.round(minutes % 60);
-                            if (hours > 0) {
-                              return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
-                            }
-                            return `${mins}min`;
-                          };
-                          
-                          return (
-                            <>
-                              <div className="space-y-1 text-sm">
-                                <label className="text-slate-200">Preço Base/m (R$)</label>
-                                <div className="w-full rounded-lg border border-blue-400/50 bg-blue-500/10 px-3 py-2 text-sm font-semibold text-blue-100">
-                                  {basePricePerMeter !== null
-                                    ? new Intl.NumberFormat("pt-BR", {
-                                        style: "currency",
-                                        currency: "BRL"
-                                      }).format(basePricePerMeter)
-                                    : "—"}
-                                </div>
-                              </div>
-                              
-                              <div className="space-y-1 text-sm">
-                                <label className="text-slate-200 flex items-center gap-1">
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  Tempo/m
-                                </label>
-                                <div className="w-full rounded-lg border border-purple-400/50 bg-purple-500/10 px-3 py-2 text-sm font-semibold text-purple-100">
-                                  {executionTimePerMeter !== null && executionTimePerMeter !== undefined
-                                    ? `${executionTimePerMeter} min/m`
-                                    : "—"}
-                                </div>
-                              </div>
-                              
-                              <div className="space-y-1 text-sm sm:col-span-2">
-                                <label className="text-slate-200 flex items-center gap-1">
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  Tempo Total Estimado (este serviço)
-                                </label>
-                                <div className="w-full rounded-lg border border-orange-400/50 bg-orange-500/10 px-3 py-2 text-sm font-semibold text-orange-100">
-                                  {totalExecutionMinutes !== null
-                                    ? formatTime(totalExecutionMinutes)
-                                    : "—"}
-                                </div>
-                                <div className="text-[10px] text-slate-400">
-                                  {totalExecutionMinutes !== null && executionTimePerMeter
-                                    ? `${quantity} × ${depth}m × ${executionTimePerMeter} min/m = ${totalExecutionMinutes.toFixed(0)} min`
-                                    : "Preencha todos os campos para calcular"}
-                                </div>
-                              </div>
-                            </>
-                          );
-                        })()}
-                        <div className="space-y-1 text-sm">
-                          <label className="text-slate-200">Valor (R$)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={srv.value || ""}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              setForm((f) => ({
-                                ...f,
-                                services: f.services.map((s) =>
-                                  s.id === srv.id ? { ...s, value } : s
-                                )
-                              }));
-                            }}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <label className="text-slate-200">Desconto (%)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            value={srv.discountPercent || ""}
-                            onChange={(e) => {
-                              const discountPercent = e.target.value;
-                              setForm((f) => ({
-                                ...f,
-                                services: f.services.map((s) =>
-                                  s.id === srv.id ? { ...s, discountPercent } : s
-                                )
-                              }));
-                            }}
-                            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <label className="text-slate-200">Valor Final (R$)</label>
-                          <div className="w-full rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100">
-                            {(() => {
-                              const value = srv.value ? parseFloat(srv.value) : 0;
-                              const discountPercent = srv.discountPercent ? parseFloat(srv.discountPercent) : 0;
-                              const discountValue = discountPercent > 0 ? (value * discountPercent) / 100 : 0;
-                              const finalValue = value - discountValue;
-                              return new Intl.NumberFormat("pt-BR", {
-                                style: "currency",
-                                currency: "BRL"
-                              }).format(finalValue);
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Seção de Valores Financeiros */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <div className="text-sm font-semibold text-white">Valores do Serviço</div>
-              {(() => {
-                // Calculate total execution time for all services
-                let totalMinutes = 0;
-                let hasAnyTime = false;
-                
-                form.services.forEach((srv: any) => {
-                  const catalogItem = catalogItems.find((item) => item._id === srv.catalogId);
-                  if (catalogItem && srv.diametro && srv.soilType && srv.access && srv.quantidade && srv.profundidade) {
-                    const catalogSoilType = mapSoilTypeToCatalog(srv.soilType);
-                    const catalogAccess = mapAccessToCatalog(srv.access);
-                    const diameterNum = parseInt(srv.diametro, 10);
-                    
-                    const priceVariation = catalogItem.priceVariations?.find(
-                      (pv: any) =>
-                        pv.diameter === diameterNum &&
-                        pv.soilType === catalogSoilType &&
-                        pv.access === catalogAccess
-                    );
-                    
-                    if (priceVariation?.executionTime) {
-                      const quantity = parseFloat(srv.quantidade) || 0;
-                      const depth = parseFloat(srv.profundidade) || 0;
-                      totalMinutes += priceVariation.executionTime * quantity * depth;
-                      hasAnyTime = true;
-                    }
-                  }
-                });
-                
-                if (hasAnyTime && totalMinutes > 0) {
-                  const hours = Math.floor(totalMinutes / 60);
-                  const mins = Math.round(totalMinutes % 60);
-                  const timeText = hours > 0 
-                    ? (mins > 0 ? `${hours}h ${mins}min` : `${hours}h`)
-                    : `${mins}min`;
-                  
-                  return (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-500/20 border border-orange-400/50">
-                      <svg className="w-4 h-4 text-orange-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-xs font-semibold text-orange-200">
-                        Tempo Total: {timeText}
-                      </span>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-
-            {/* Travel/Displacement Section */}
-            <div className="rounded-xl border border-blue-400/30 bg-blue-500/5 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-blue-200">🚗 Deslocamento</h4>
-                {form.clientId && (
-                  <button
-                    type="button"
-                    onClick={calculateTravelPrice}
-                    disabled={calculatingDistance}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {calculatingDistance ? "Calculando..." : "📍 Calcular"}
-                  </button>
-                )}
-              </div>
-              
-              {!form.clientId && (
-                <div className="text-xs text-slate-400">
-                  Selecione um cliente para calcular o deslocamento automaticamente.
-                </div>
-              )}
-              
-              {form.travelDistanceKm > 0 && (
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Distância:</span>
-                    <span className="text-white font-semibold">{form.travelDistanceKm} km</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Preço:</span>
-                    <span className="text-emerald-300 font-semibold">
-                      R$ {form.travelPrice.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-400 pt-1 border-t border-blue-400/20">
-                    {form.travelDescription}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mb-2 text-xs text-slate-400">
-              O valor total é calculado automaticamente a partir dos valores dos serviços individuais{form.travelPrice > 0 ? " + deslocamento" : ""}.
-            </div>
-            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
-              <div className="space-y-1 text-sm">
-                <label className="text-slate-200">Valor Total (R$) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.value}
-                  onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                  placeholder="0.00"
-                  readOnly={form.services.some((s) => s.value && s.value.trim() !== "")}
-                />
-                {form.services.some((s) => s.value && s.value.trim() !== "") && (
-                  <div className="text-[10px] text-emerald-300 mt-1">
-                    Calculado automaticamente
-                  </div>
-                )}
-              </div>
-              <div className="space-y-1 text-sm">
-                <label className="text-slate-200">Desconto (%)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  value={form.discountPercent}
-                  onChange={(e) => setForm((f) => ({ ...f, discountPercent: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                  placeholder="0.00"
-                  readOnly={form.services.some((s) => s.value && s.value.trim() !== "")}
-                />
-                {form.services.some((s) => s.value && s.value.trim() !== "") && (
-                  <div className="text-[10px] text-emerald-300 mt-1">
-                    Calculado automaticamente
-                  </div>
-                )}
-              </div>
-              <div className="space-y-1 text-sm">
-                <label className="text-slate-200">Valor Final (R$)</label>
-                <div className="w-full rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100">
-                  {(() => {
-                    const value = form.value ? parseFloat(form.value) : 0;
-                    const discountPercent = form.discountPercent ? parseFloat(form.discountPercent) : 0;
-                    const discountValue = discountPercent > 0 ? (value * discountPercent) / 100 : 0;
-                    const finalValue = value - discountValue;
-                    return new Intl.NumberFormat("pt-BR", {
-                      style: "currency",
-                      currency: "BRL"
-                    }).format(finalValue);
-                  })()}
-                </div>
-                {(() => {
-                  const value = form.value ? parseFloat(form.value) : 0;
-                  const discountPercent = form.discountPercent ? parseFloat(form.discountPercent) : 0;
-                  const discountValue = discountPercent > 0 ? (value * discountPercent) / 100 : 0;
-                  return discountValue > 0 ? (
-                    <div className="text-xs text-slate-400">
-                      Desconto: {new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency: "BRL"
-                      }).format(discountValue)}
-                    </div>
-                  ) : null;
-                })()}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1 text-sm">
-              <label className="text-slate-200">Data e hora agendada</label>
-              <input
-                type="datetime-local"
-                value={convertFromISO(form.plannedDate)}
-                onChange={(e) => {
-                  const isoValue = convertToISO(e.target.value);
-                  setForm((f) => ({ ...f, plannedDate: isoValue }));
-                }}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-              />
-              {form.team && form.plannedDate && availability && (
-                <div className="mt-2 space-y-2">
-                  {availability.durationText && (
-                    <div className="text-xs text-blue-300 bg-blue-500/10 border border-blue-400/30 rounded p-2">
-                      ⏱️ Duração estimada: <strong>{availability.durationText}</strong>
-                    </div>
-                  )}
-                  {availability.available.length > 0 ? (
-                    <div>
-                      <div className="text-xs text-emerald-300 mb-1">Horários disponíveis neste dia:</div>
-                      <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                        {availability.available.map((time) => (
-                          <span
-                            key={time}
-                            className="px-2 py-1 bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 rounded text-xs cursor-pointer hover:bg-emerald-500/30"
-                            onClick={() => {
-                              // Set the time when clicking on available slot
-                              const datePart = form.plannedDate.split("T")[0];
-                              const [hours, minutes] = time.split(":");
-                              const newDateTime = `${datePart}T${hours}:${minutes}`;
-                              const isoValue = convertToISO(newDateTime);
-                              setForm((f) => ({ ...f, plannedDate: isoValue }));
-                            }}
-                          >
-                            {time}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-red-300 bg-red-500/10 border border-red-400/30 rounded p-2">
-                      ⚠️ Nenhum horário disponível para esta equipe neste dia.
-                    </div>
-                  )}
-                  {availability.booked.length > 0 && (
-                    <details className="text-xs text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded p-2">
-                      <summary className="cursor-pointer font-semibold">
-                        ⚠️ {availability.booked.length} horário(s) ocupado(s) - Ver detalhes
-                      </summary>
-                      <div className="mt-2 flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-                        {availability.booked.map((time) => (
-                          <span
-                            key={time}
-                            className="px-2 py-1 bg-amber-500/20 border border-amber-400/30 text-amber-200 rounded text-xs"
-                          >
-                            {time}
-                          </span>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-amber-200/70 mt-2">
-                        Estes horários têm conflito com outras OSs já agendadas para esta equipe.
-                      </p>
-                    </details>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="space-y-1 text-sm sm:col-span-2">
-              <label className="text-slate-200">Observações gerais da OS</label>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40"
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <button
-              onClick={saveJob}
-              disabled={saving}
-              className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:from-blue-600 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation active:scale-95"
-            >
-              {saving 
-                ? (mode === "edit" ? "Atualizando..." : "Salvando...") 
-                : (mode === "edit" ? "Atualizar OS" : "Salvar OS")}
-            </button>
-          </div>
-        </div>
+        <JobForm
+          mode={mode}
+          form={form}
+          setForm={setForm}
+          clients={clients}
+          teams={teams}
+          catalogItems={catalogItems}
+          expandedServices={expandedServices}
+          setExpandedServices={setExpandedServices}
+          availability={availability}
+          checkingAvailability={checkingAvailability}
+          calculatingDistance={calculatingDistance}
+          onCancel={() => {
+            setMode("list");
+            resetForm();
+            setSelected(null);
+          }}
+          onSave={saveJob}
+          onCalculateTravelPrice={calculateTravelPrice}
+          saving={saving}
+          selectedJob={mode === "edit" ? selected : undefined}
+          onFeedbackUpdated={(updatedJob) => {
+            // Update selected job
+            setSelected(updatedJob);
+            // Update jobs list
+            setJobs((prev) =>
+              prev.map((job) =>
+                job._id === updatedJob._id ? updatedJob : job
+              )
+            );
+          }}
+        />
       )}
 
       {mode === "detail" && selected && (
@@ -3607,6 +1977,26 @@ export default function JobsPage() {
               </div>
             )}
           </div>
+
+          {/* Client Feedback Section - Show if job is completed OR has feedback */}
+          {(selected.status === "concluida" || selected.clientRating !== undefined) && (
+            <div className="mt-4 sm:mt-5">
+              <JobFeedback
+                job={selected}
+                isClientView={false}
+                onFeedbackSubmitted={(updatedJob) => {
+                  // Update selected job
+                  setSelected(updatedJob);
+                  // Update jobs list
+                  setJobs((prev) =>
+                    prev.map((job) =>
+                      job._id === updatedJob._id ? updatedJob : job
+                    )
+                  );
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

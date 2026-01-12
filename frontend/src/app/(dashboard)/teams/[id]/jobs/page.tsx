@@ -91,6 +91,19 @@ export default function TeamJobsPage() {
     return "Cancelada";
   };
 
+  const isJobDelayed = (job: any): boolean => {
+    if (!job.plannedDate || job.status === "concluida" || job.status === "cancelada") {
+      return false;
+    }
+    try {
+      const plannedDate = new Date(job.plannedDate);
+      const now = new Date();
+      return plannedDate < now;
+    } catch {
+      return false;
+    }
+  };
+
   if (loading) {
     return <div className="text-slate-200">Carregando...</div>;
   }
@@ -168,17 +181,34 @@ export default function TeamJobsPage() {
           {filteredJobs.map((job) => (
             <div
               key={job._id}
-              className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/30"
+              className={`flex flex-col gap-3 rounded-2xl border p-4 shadow-inner shadow-black/30 ${
+                isJobDelayed(job)
+                  ? "border-red-400/50 bg-red-500/10"
+                  : "border-white/10 bg-white/5"
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-sm uppercase tracking-wide text-emerald-200">
-                    {statusLabel(job.status)}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="text-sm uppercase tracking-wide text-emerald-200">
+                      {statusLabel(job.status)}
+                    </div>
+                    {isJobDelayed(job) && (
+                      <div className="rounded-full border border-red-400/50 bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-200 flex items-center gap-1">
+                        <span>⚠️</span>
+                        <span>Atrasado</span>
+                      </div>
+                    )}
                   </div>
                   <div className="text-lg font-semibold text-white">{job.title}</div>
                   <div className="text-xs text-slate-300">
                     {job.plannedDate || "sem data"} · {job.site || "Endereço não informado"}
                   </div>
+                  {isJobDelayed(job) && job.plannedDate && (
+                    <div className="text-xs text-red-300 mt-1 font-medium">
+                      ⏰ Planejado para: {new Date(job.plannedDate).toLocaleString("pt-BR")}
+                    </div>
+                  )}
                   <div className="text-xs text-slate-400 mt-1">
                     Cliente: {job.clientName || "—"}
                   </div>
@@ -260,9 +290,17 @@ export default function TeamJobsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
           <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-emerald-200">
-                  {statusLabel(selectedJob.status)}
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <div className="text-xs uppercase tracking-wide text-emerald-200">
+                    {statusLabel(selectedJob.status)}
+                  </div>
+                  {isJobDelayed(selectedJob) && (
+                    <div className="rounded-full border border-red-400/50 bg-red-500/20 px-2 py-1 text-[10px] font-semibold text-red-200 flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>Atrasado</span>
+                    </div>
+                  )}
                 </div>
                 <div className="text-xl font-semibold text-white">{selectedJob.title}</div>
                 <div className="text-sm text-slate-300">
@@ -272,6 +310,11 @@ export default function TeamJobsPage() {
                 <div className="text-xs text-slate-400 mt-1">
                   Data agendada: {selectedJob.plannedDate || "—"}
                 </div>
+                {isJobDelayed(selectedJob) && selectedJob.plannedDate && (
+                  <div className="text-xs text-red-300 mt-1 font-medium">
+                    ⏰ Planejado para: {new Date(selectedJob.plannedDate).toLocaleString("pt-BR")}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setSelectedJob(null)}

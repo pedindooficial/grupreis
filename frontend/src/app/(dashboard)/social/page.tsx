@@ -10,6 +10,10 @@ interface SocialMediaItem {
   description?: string;
   order: number;
   active: boolean;
+  clientUpload?: boolean;
+  approved?: boolean;
+  clientName?: string;
+  clientEmail?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -29,6 +33,8 @@ export default function SocialPage() {
   const [uploadMode, setUploadMode] = useState<"upload" | "url">("upload");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [pendingUploads, setPendingUploads] = useState<SocialMediaItem[]>([]);
+  const [loadingPending, setLoadingPending] = useState(false);
 
   const [form, setForm] = useState({
     type: "image" as "image" | "video",
@@ -41,6 +47,7 @@ export default function SocialPage() {
 
   useEffect(() => {
     loadData();
+    loadPendingUploads();
   }, []);
 
   const loadData = async () => {
@@ -59,8 +66,120 @@ export default function SocialPage() {
     }
   };
 
+  const loadPendingUploads = async () => {
+    try {
+      setLoadingPending(true);
+      const res = await apiFetch("/social-media/pending", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.data) {
+        setPendingUploads(Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (err) {
+      console.error("Error loading pending uploads:", err);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      const res = await apiFetch(`/social-media/${id}/approve`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        Swal.fire("Sucesso", "Upload aprovado com sucesso!", "success");
+        loadData();
+        loadPendingUploads();
+      } else {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error || "Falha ao aprovar");
+      }
+    } catch (err: any) {
+      Swal.fire("Erro", err.message || "Falha ao aprovar upload", "error");
+    }
+  };
+
+  const handleReject = async (id: string, title: string) => {
+    const result = await Swal.fire({
+      title: "Rejeitar Upload?",
+      html: `
+        <div class="text-left">
+          <p class="mb-4 text-slate-300">Tem certeza que deseja rejeitar este upload?</p>
+          <p class="text-sm text-slate-400 mb-2"><strong>Título:</strong> ${title}</p>
+          <p class="text-sm text-red-300">⚠️ O arquivo será removido do S3 e o registro será deletado permanentemente.</p>
+        </div>
+      `,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Sim, rejeitar",
+      cancelButtonText: "Cancelar",
+      customClass: {
+        popup: "bg-slate-800 border border-slate-700",
+        title: "text-white",
+        htmlContainer: "text-slate-300",
+        confirmButton: "bg-red-500 hover:bg-red-600",
+        cancelButton: "bg-slate-600 hover:bg-slate-700"
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const res = await apiFetch(`/social-media/${id}/reject`, {
+          method: "POST"
+        });
+        if (res.ok) {
+          Swal.fire("Sucesso", "Upload rejeitado e removido", "success");
+          loadPendingUploads();
+        } else {
+          const errorData = await res.json().catch(() => null);
+          throw new Error(errorData?.error || "Falha ao rejeitar");
+        }
+      } catch (err: any) {
+        Swal.fire("Erro", err.message || "Falha ao rejeitar upload", "error");
+      }
+    }
+  };
+
+  // Get pending uploads from items list (in case they're not loaded separately)
+  const pendingFromItems = useMemo(() => {
+    return items.filter((item) => item.clientUpload && !item.approved);
+  }, [items]);
+
+  // Combine pending uploads from both sources
+  const allPendingUploads = useMemo(() => {
+    const pendingIds = new Set(pendingUploads.map((p) => p._id));
+    const combined = [...pendingUploads];
+    
+    // Add any pending items from main list that aren't already in pending list
+    pendingFromItems.forEach((item) => {
+      if (item._id && !pendingIds.has(item._id)) {
+        combined.push(item);
+      }
+    });
+    
+    return combined;
+  }, [pendingUploads, pendingFromItems]);
+
+  // Get sorted items for reordering logic
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      // If same order, use createdAt as tiebreaker
+      const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bDate - aDate; // Newer first
+    });
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
+      // Exclude pending client uploads from main list (they appear in pending section)
+      if (item.clientUpload && !item.approved) {
+        return false;
+      }
+      
       const matchesSearch =
         !search ||
         item.title?.toLowerCase().includes(search.toLowerCase()) ||
@@ -74,6 +193,19 @@ export default function SocialPage() {
       return matchesSearch && matchesType && matchesActive;
     });
   }, [items, search, typeFilter, activeFilter]);
+
+  // Helper to check if item can move up/down
+  const canMoveUp = (itemId: string | undefined) => {
+    if (!itemId) return false;
+    const currentIndex = sortedItems.findIndex((item) => item._id === itemId);
+    return currentIndex > 0;
+  };
+
+  const canMoveDown = (itemId: string | undefined) => {
+    if (!itemId) return false;
+    const currentIndex = sortedItems.findIndex((item) => item._id === itemId);
+    return currentIndex >= 0 && currentIndex < sortedItems.length - 1;
+  };
 
   const resetForm = () => {
     setForm({
@@ -284,30 +416,71 @@ export default function SocialPage() {
 
   const handleToggleActive = async (item: SocialMediaItem) => {
     try {
+      // If it's a client upload and we're activating it, also approve it
+      const updateData: any = { active: !item.active };
+      if (item.clientUpload && !item.active && !item.approved) {
+        // Activating a pending client upload - approve it automatically
+        updateData.approved = true;
+      }
+      
       const res = await apiFetch(`/social-media/${item._id}`, {
         method: "PUT",
-        body: JSON.stringify({ active: !item.active })
+        body: JSON.stringify(updateData)
       });
       if (res.ok) {
         loadData();
+        loadPendingUploads(); // Refresh pending list if it was a client upload
       }
     } catch (err) {
       Swal.fire("Erro", "Falha ao atualizar status", "error");
     }
   };
 
-  const handleReorder = async (itemId: string, newOrder: number) => {
+  const handleReorder = async (itemId: string, direction: "up" | "down") => {
     try {
-      // Update the item's order
-      const res = await apiFetch(`/social-media/${itemId}`, {
-        method: "PUT",
-        body: JSON.stringify({ order: newOrder })
+      const currentItem = items.find((item) => item._id === itemId);
+      if (!currentItem) return;
+
+      const currentIndex = sortedItems.findIndex((item) => item._id === itemId);
+      if (currentIndex === -1) return;
+
+      // Find adjacent item
+      let targetIndex: number;
+      if (direction === "up") {
+        targetIndex = currentIndex - 1;
+        if (targetIndex < 0) return; // Already at top
+      } else {
+        targetIndex = currentIndex + 1;
+        if (targetIndex >= sortedItems.length) return; // Already at bottom
+      }
+
+      const targetItem = sortedItems[targetIndex];
+      if (!targetItem._id) return;
+
+      // Swap orders
+      const tempOrder = currentItem.order;
+      const newCurrentOrder = targetItem.order;
+      const newTargetOrder = tempOrder;
+
+      // Update both items using bulk reorder endpoint
+      const reorderItems = [
+        { _id: itemId, order: newCurrentOrder },
+        { _id: targetItem._id, order: newTargetOrder }
+      ];
+
+      const res = await apiFetch("/social-media/reorder", {
+        method: "POST",
+        body: JSON.stringify({ items: reorderItems })
       });
+
       if (res.ok) {
         loadData();
+      } else {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error || "Falha ao reordenar");
       }
-    } catch (err) {
-      Swal.fire("Erro", "Falha ao reordenar", "error");
+    } catch (err: any) {
+      Swal.fire("Erro", err.message || "Falha ao reordenar", "error");
     }
   };
 
@@ -617,6 +790,113 @@ export default function SocialPage() {
         </button>
       </div>
 
+      {/* Pending Client Uploads Section */}
+      {allPendingUploads.length > 0 && (
+        <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg sm:text-xl font-semibold text-white flex items-center gap-2">
+                <span>⏳</span>
+                <span>Uploads Pendentes de Aprovação</span>
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                {allPendingUploads.length} {allPendingUploads.length === 1 ? "upload aguardando" : "uploads aguardando"} revisão
+              </p>
+            </div>
+            <button
+              onClick={loadPendingUploads}
+              disabled={loadingPending}
+              className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-white text-sm font-semibold hover:bg-white/10 transition disabled:opacity-50"
+            >
+              {loadingPending ? "Atualizando..." : "🔄 Atualizar"}
+            </button>
+          </div>
+
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {allPendingUploads.map((item) => (
+              <div
+                key={item._id}
+                className="rounded-xl border border-orange-500/30 bg-slate-900/50 p-4 space-y-3"
+              >
+                <div className="relative">
+                  {item.type === "image" ? (
+                    <img
+                      src={getDisplayUrl(item)}
+                      alt={item.title}
+                      className="w-full h-48 object-cover rounded-lg border border-white/10"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23334155' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2394a3b8' font-size='14'%3EImagem não encontrada%3C/text%3E%3C/svg%3E";
+                      }}
+                    />
+                  ) : (
+                    <video
+                      src={getDisplayUrl(item)}
+                      className="w-full h-48 object-cover rounded-lg border border-white/10"
+                      controls
+                      onError={(e) => {
+                        (e.target as HTMLVideoElement).style.display = "none";
+                      }}
+                    />
+                  )}
+                  <div className="absolute top-2 right-2">
+                    <span className="px-2 py-1 rounded text-xs font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/50">
+                      Pendente
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold text-white break-words">
+                    {item.title}
+                  </h3>
+                  {item.description && (
+                    <p className="text-xs text-slate-300 line-clamp-2">
+                      {item.description}
+                    </p>
+                  )}
+                  {(item.clientName || item.clientEmail) && (
+                    <div className="text-xs text-slate-400 space-y-1">
+                      {item.clientName && (
+                        <p><strong>Cliente:</strong> {item.clientName}</p>
+                      )}
+                      {item.clientEmail && (
+                        <p><strong>Email:</strong> {item.clientEmail}</p>
+                      )}
+                    </div>
+                  )}
+                  {item.createdAt && (
+                    <p className="text-xs text-slate-500">
+                      Enviado em: {new Date(item.createdAt).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-white/10">
+                  <button
+                    onClick={() => item._id && handleApprove(item._id)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-sm font-semibold hover:bg-emerald-500/30 transition"
+                  >
+                    ✓ Aprovar
+                  </button>
+                  <button
+                    onClick={() => item._id && handleReject(item._id, item.title)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300 text-sm font-semibold hover:bg-red-500/30 transition"
+                  >
+                    ✗ Rejeitar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4">
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
           <div className="flex-1">
@@ -762,15 +1042,18 @@ export default function SocialPage() {
 
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <button
-                  onClick={() => item._id && handleReorder(item._id, item.order - 1)}
-                  className="px-2 py-1 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition"
-                  disabled={item.order <= 0}
+                  onClick={() => item._id && handleReorder(item._id, "up")}
+                  className="px-2 py-1 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!canMoveUp(item._id)}
+                  title="Mover para cima"
                 >
                   ↑
                 </button>
                 <button
-                  onClick={() => item._id && handleReorder(item._id, item.order + 1)}
-                  className="px-2 py-1 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition"
+                  onClick={() => item._id && handleReorder(item._id, "down")}
+                  className="px-2 py-1 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!canMoveDown(item._id)}
+                  title="Mover para baixo"
                 >
                   ↓
                 </button>
