@@ -13,6 +13,7 @@ export interface Maintenance {
   nextMaintenanceDate?: string; // When next maintenance is due
   nextMaintenanceType?: string; // Type of next maintenance
   notes?: string; // Additional notes
+  isDone?: boolean; // Whether the maintenance is completed
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -30,7 +31,8 @@ const MaintenanceSchema = new Schema<Maintenance>(
     performedBy: { type: String, trim: true },
     nextMaintenanceDate: { type: String, trim: true },
     nextMaintenanceType: { type: String, trim: true },
-    notes: { type: String, trim: true }
+    notes: { type: String, trim: true },
+    isDone: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

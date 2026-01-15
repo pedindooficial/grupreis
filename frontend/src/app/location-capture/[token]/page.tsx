@@ -74,6 +74,14 @@ export default function LocationCapturePage() {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
+  // Cache for geocoding results to avoid duplicate API calls
+  const geocodeCacheRef = useRef<Map<string, any>>(new Map());
+  // Track if geocoding is in progress to prevent duplicate calls
+  const geocodingInProgressRef = useRef<Set<string>>(new Set());
+  // Track last geocoded location to avoid unnecessary calls
+  const lastGeocodedLocationRef = useRef<string | null>(null);
+  // Debounce timer for geocoding
+  const geocodeDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load Google Maps Script (only if not already loaded)
   useEffect(() => {
@@ -293,19 +301,84 @@ export default function LocationCapturePage() {
     // Center map on marker
     googleMapRef.current.panTo({ lat, lng });
 
-    // Get address via backend reverse geocoding
-    const addressData = await reverseGeocode(lat, lng);
+    // Round coordinates for cache key check (4 decimal places = ~11 meters precision)
+    const roundedLat = Math.round(lat * 10000) / 10000;
+    const roundedLng = Math.round(lng * 10000) / 10000;
+    const cacheKey = `${roundedLat},${roundedLng}`;
 
-    setLocation({
-      lat,
-      lng,
-      ...addressData,
-    });
+    // Skip geocoding if this is the same location we just geocoded
+    if (lastGeocodedLocationRef.current === cacheKey) {
+      return;
+    }
+
+    // Check if we already have this location cached
+    const cached = geocodeCacheRef.current.get(cacheKey);
+    
+    if (cached) {
+      // Use cached data immediately
+      lastGeocodedLocationRef.current = cacheKey;
+      setLocation({
+        lat,
+        lng,
+        ...cached,
+      });
+      return;
+    }
+
+    // Debounce geocoding calls - only geocode after user stops moving/clicking
+    if (geocodeDebounceTimerRef.current) {
+      clearTimeout(geocodeDebounceTimerRef.current);
+    }
+
+    geocodeDebounceTimerRef.current = setTimeout(async () => {
+      // Check again if already in progress
+      if (geocodingInProgressRef.current.has(cacheKey)) {
+        return;
+      }
+
+      // Skip if this is still the same location
+      if (lastGeocodedLocationRef.current === cacheKey) {
+        return;
+      }
+
+      geocodingInProgressRef.current.add(cacheKey);
+      
+      try {
+        // Get address via backend reverse geocoding
+        const addressData = await reverseGeocode(lat, lng);
+        
+        lastGeocodedLocationRef.current = cacheKey;
+        
+        setLocation({
+          lat,
+          lng,
+          ...addressData,
+        });
+      } finally {
+        geocodingInProgressRef.current.delete(cacheKey);
+      }
+    }, 500); // Wait 500ms after last location change before geocoding
   };
 
   const reverseGeocode = async (lat: number, lng: number) => {
+    // Round coordinates to 4 decimal places (~11 meters precision) for cache key
+    // This prevents cache misses for essentially the same location
+    const roundedLat = Math.round(lat * 10000) / 10000;
+    const roundedLng = Math.round(lng * 10000) / 10000;
+    const cacheKey = `${roundedLat},${roundedLng}`;
+    
+    // Check cache first
+    const cached = geocodeCacheRef.current.get(cacheKey);
+    if (cached) {
+      // Silently use cached data - no need to log
+      return cached;
+    }
+    
     try {
-      console.log("Reverse geocoding:", lat, lng);
+      // Only log if this is a new location (not already in progress)
+      if (!geocodingInProgressRef.current.has(cacheKey)) {
+        console.log("Reverse geocoding:", lat, lng);
+      }
       const res = await apiFetch(`/distance/geocode`, {
         method: "POST",
         body: JSON.stringify({ lat, lng }),
@@ -315,7 +388,7 @@ export default function LocationCapturePage() {
 
       if (res.ok && data.data) {
         console.log("Geocoding result:", data.data);
-        return {
+        const result = {
           address: data.data.formattedAddress,
           addressStreet: data.data.street,
           addressNumber: data.data.number,
@@ -324,16 +397,26 @@ export default function LocationCapturePage() {
           addressState: data.data.state,
           addressZip: data.data.zip,
         };
+        
+        // Cache the result
+        geocodeCacheRef.current.set(cacheKey, result);
+        return result;
       }
 
-      return {
+      const errorResult = {
         address: "Endereço não encontrado",
       };
+      // Cache error result too to avoid retrying immediately
+      geocodeCacheRef.current.set(cacheKey, errorResult);
+      return errorResult;
     } catch (error) {
       console.error("Geocoding error:", error);
-      return {
+      const errorResult = {
         address: "Erro ao obter endereço",
       };
+      // Cache error result too to avoid retrying immediately
+      geocodeCacheRef.current.set(cacheKey, errorResult);
+      return errorResult;
     }
   };
 

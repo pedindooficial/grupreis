@@ -242,10 +242,25 @@ const geocodeSchema = z.object({
   lng: z.number().min(-180).max(180)
 });
 
+// Simple in-memory cache for geocoding results
+// Key: "lat,lng" rounded to 4 decimal places (~11 meters precision)
+// Value: { data, timestamp }
+const geocodeCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour cache TTL
+const CACHE_CLEANUP_INTERVAL = 1000 * 60 * 30; // Clean up every 30 minutes
+
+// Cleanup old cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of geocodeCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      geocodeCache.delete(key);
+    }
+  }
+}, CACHE_CLEANUP_INTERVAL);
+
 router.post("/geocode", async (req, res) => {
   try {
-    console.log("Reverse geocoding:", req.body);
-    
     const parsed = geocodeSchema.safeParse(req.body);
     if (!parsed.success) {
       console.error("Validation error:", parsed.error.flatten());
@@ -253,6 +268,21 @@ router.post("/geocode", async (req, res) => {
     }
 
     const { lat, lng } = parsed.data;
+    
+    // Round coordinates to 4 decimal places (~11 meters precision) for cache key
+    const roundedLat = Math.round(lat * 10000) / 10000;
+    const roundedLng = Math.round(lng * 10000) / 10000;
+    const cacheKey = `${roundedLat},${roundedLng}`;
+    
+    // Check cache first
+    const cached = geocodeCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      // Silently return cached result - no need to log every cache hit
+      return res.json({ data: cached.data });
+    }
+    
+    // Only log if we're actually calling the API (not cached)
+    console.log("Reverse geocoding (API call):", { lat, lng });
     
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
@@ -289,9 +319,9 @@ router.post("/geocode", async (req, res) => {
       });
     }
 
-    const result = data.results[0];
-    const addressComponents = result.address_components;
-    const formattedAddress = result.formatted_address;
+    const geocodeResult = data.results[0];
+    const addressComponents = geocodeResult.address_components;
+    const formattedAddress = geocodeResult.formatted_address;
 
     // Parse address components
     let street = "";
@@ -339,18 +369,33 @@ router.post("/geocode", async (req, res) => {
 
     console.log("Parsed address:", { street, number, neighborhood, city, state, zip });
 
+    const result = {
+      formattedAddress,
+      street,
+      number,
+      neighborhood,
+      city,
+      state,
+      zip,
+      latitude: lat,
+      longitude: lng
+    };
+    
+    // Cache the result
+    geocodeCache.set(cacheKey, {
+      data: result,
+      timestamp: Date.now()
+    });
+    
+    // Limit cache size to prevent memory issues (keep last 1000 entries)
+    if (geocodeCache.size > 1000) {
+      const oldestKey = Array.from(geocodeCache.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0];
+      geocodeCache.delete(oldestKey);
+    }
+
     res.json({
-      data: {
-        formattedAddress,
-        street,
-        number,
-        neighborhood,
-        city,
-        state,
-        zip,
-        latitude: lat,
-        longitude: lng
-      }
+      data: result
     });
   } catch (error: any) {
     console.error("POST /api/distance/geocode error", error);

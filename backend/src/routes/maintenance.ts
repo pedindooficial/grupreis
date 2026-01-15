@@ -18,7 +18,8 @@ const maintenanceSchema = z.object({
   performedBy: z.string().optional(),
   nextMaintenanceDate: z.string().optional(),
   nextMaintenanceType: z.string().optional(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  isDone: z.boolean().optional()
 });
 
 // Get all maintenance records for an item

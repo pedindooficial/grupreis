@@ -30,9 +30,6 @@ export default function EquipmentPage() {
     unit: "un",
     assignedTo: "",
     location: "",
-    nextMaintenance: "",
-    nextMaintenanceType: "",
-    nextMaintenanceDetails: "",
     notes: ""
   });
 
@@ -83,9 +80,6 @@ export default function EquipmentPage() {
       unit: "un",
       assignedTo: "",
       location: "",
-      nextMaintenance: "",
-      nextMaintenanceType: "",
-      nextMaintenanceDetails: "",
       notes: ""
     });
 
@@ -107,9 +101,6 @@ export default function EquipmentPage() {
       unit: form.unit,
       assignedTo: form.assignedTo,
       location: form.location,
-        nextMaintenance: form.nextMaintenance,
-        nextMaintenanceType: form.nextMaintenanceType || undefined,
-        nextMaintenanceDetails: form.nextMaintenanceDetails || undefined,
       notes: form.notes
     };
 
@@ -165,9 +156,6 @@ export default function EquipmentPage() {
       unit: item.unit || "un",
       assignedTo: item.assignedTo || "",
       location: item.location || "",
-        nextMaintenance: item.nextMaintenance || "",
-        nextMaintenanceType: item.nextMaintenanceType || "",
-        nextMaintenanceDetails: item.nextMaintenanceDetails || "",
       notes: item.notes || ""
     });
   };
@@ -403,45 +391,6 @@ export default function EquipmentPage() {
                 placeholder="Almoxarifado, caminhão, obra..."
               />
             </div>
-            <div className="space-y-1 text-sm">
-              <label className="text-slate-200">Próxima manutenção</label>
-              <input
-                type="date"
-                value={form.nextMaintenance}
-                onChange={(e) => setForm((f) => ({ ...f, nextMaintenance: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
-              />
-            </div>
-            <div className="space-y-1 text-sm">
-              <label className="text-slate-200">Tipo de manutenção</label>
-              <select
-                value={form.nextMaintenanceType}
-                onChange={(e) => setForm((f) => ({ ...f, nextMaintenanceType: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
-              >
-                <option value="">Selecione o tipo</option>
-                <option value="Troca de óleo">Troca de óleo</option>
-                <option value="Revisão geral">Revisão geral</option>
-                <option value="Calibração">Calibração</option>
-                <option value="Troca de filtros">Troca de filtros</option>
-                <option value="Lubrificação">Lubrificação</option>
-                <option value="Inspeção">Inspeção</option>
-                <option value="Limpeza">Limpeza</option>
-                <option value="Reparo">Reparo</option>
-                <option value="Substituição de peças">Substituição de peças</option>
-                <option value="Outro">Outro</option>
-              </select>
-            </div>
-            <div className="space-y-1 text-sm md:col-span-2">
-              <label className="text-slate-200">Detalhes da manutenção</label>
-              <textarea
-                value={form.nextMaintenanceDetails}
-                onChange={(e) => setForm((f) => ({ ...f, nextMaintenanceDetails: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-3 sm:py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-emerald-400/60 focus:ring-emerald-500/40 touch-manipulation"
-                rows={3}
-                placeholder="Detalhes específicos sobre a manutenção a ser realizada (ex: trocar óleo do motor, revisar sistema hidráulico, calibrar instrumentos...)"
-              />
-            </div>
             <div className="space-y-1 text-sm md:col-span-2">
               <label className="text-slate-200">Observações gerais</label>
               <textarea
@@ -466,7 +415,7 @@ export default function EquipmentPage() {
                 itemType="equipment"
                 itemName={form.name || "Item"}
                 onMaintenanceAdded={() => {
-                  // Reload items to update nextMaintenance if it was updated
+                  // Reload items to get latest data
                   const load = async () => {
                     try {
                       const res = await apiFetch("/equipment", { cache: "no-store" });
@@ -488,9 +437,6 @@ export default function EquipmentPage() {
                               unit: updated.unit || "un",
                               assignedTo: updated.assignedTo || "",
                               location: updated.location || "",
-                              nextMaintenance: updated.nextMaintenance || "",
-                              nextMaintenanceType: updated.nextMaintenanceType || "",
-                              nextMaintenanceDetails: updated.nextMaintenanceDetails || "",
                               notes: updated.notes || ""
                             });
                           }
@@ -549,7 +495,6 @@ export default function EquipmentPage() {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Alocado</th>
                     <th className="px-4 py-3">Local</th>
-                    <th className="px-4 py-3">Próx. manutenção</th>
                     <th className="px-4 py-3 text-right">Ações</th>
                   </tr>
                 </thead>
@@ -582,9 +527,6 @@ export default function EquipmentPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-200">{item.assignedTo || "-"}</td>
                       <td className="px-4 py-3 text-slate-200">{item.location || "-"}</td>
-                      <td className="px-4 py-3 text-slate-200">
-                        {item.nextMaintenance || "-"}
-                      </td>
                       <td className="px-4 py-3 text-right text-slate-200">
                         <div className="flex justify-end gap-2 flex-wrap">
                           <button
@@ -689,12 +631,6 @@ export default function EquipmentPage() {
                         <p className="text-slate-200 break-words">{item.location}</p>
                       </div>
                     )}
-                    {item.nextMaintenance && (
-                      <div>
-                        <span className="text-slate-400">Próx. manutenção:</span>
-                        <p className="text-slate-200">{item.nextMaintenance}</p>
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
@@ -790,21 +726,6 @@ export default function EquipmentPage() {
               <div className="rounded-lg border border-white/10 bg-white/5 p-3">
                 <div className="text-xs text-slate-400 uppercase mb-1">Alocado para</div>
                 <div className="text-sm font-semibold text-white">{viewingItem.assignedTo}</div>
-              </div>
-            )}
-            {viewingItem.nextMaintenance && (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3 sm:col-span-2">
-                <div className="text-xs text-slate-400 uppercase mb-1">Próxima Manutenção</div>
-                <div className="text-sm font-semibold text-white">{viewingItem.nextMaintenance}</div>
-                {viewingItem.nextMaintenanceType && (
-                  <div className="text-xs text-slate-300 mt-1">{viewingItem.nextMaintenanceType}</div>
-                )}
-              </div>
-            )}
-            {viewingItem.nextMaintenanceDetails && (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3 sm:col-span-2">
-                <div className="text-xs text-slate-400 uppercase mb-1">Detalhes da Próxima Manutenção</div>
-                <div className="text-sm text-slate-200 break-words">{viewingItem.nextMaintenanceDetails}</div>
               </div>
             )}
             {viewingItem.notes && (

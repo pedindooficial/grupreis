@@ -87,9 +87,21 @@ export default function ClientsPage() {
   const [mode, setMode] = useState<"select" | "form" | null>(null);
   const [personType, setPersonType] = useState<PersonType | null>(null);
   const [clients, setClients] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"all" | PersonType>("all");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false
+  });
+  const [totalClientsCount, setTotalClientsCount] = useState(0);
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -139,7 +151,18 @@ export default function ClientsPage() {
   const loadClients = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await apiFetch("/clients", { cache: "no-store" });
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.set("page", String(currentPage));
+      params.set("limit", String(itemsPerPage));
+      if (search.trim()) {
+        params.set("search", search.trim());
+      }
+      if (filterType !== "all") {
+        params.set("filterType", filterType);
+      }
+      
+      const res = await apiFetch(`/clients?${params.toString()}`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         safeErrorLog("Erro ao carregar clientes", data);
@@ -148,10 +171,15 @@ export default function ClientsPage() {
       const clientsData = data?.data || [];
       setClients(clientsData);
       
+      // Update pagination metadata
+      if (data?.pagination) {
+        setPagination(data.pagination);
+      }
+      
       // Check for query parameters to auto-select client and budget
-      const params = new URLSearchParams(window.location.search);
-      const clientId = params.get("clientId");
-      const budgetId = params.get("budgetId");
+      const urlParams = new URLSearchParams(window.location.search);
+      const clientId = urlParams.get("clientId");
+      const budgetId = urlParams.get("budgetId");
       
       if (clientId && clientsData.length > 0) {
         const client = clientsData.find((c: any) => c._id === clientId);
@@ -171,11 +199,24 @@ export default function ClientsPage() {
     } finally {
       setLoading(false);
     }
+  }, [currentPage, itemsPerPage, search, filterType]);
+
+  const loadJobs = useCallback(async () => {
+    try {
+      const res = await apiFetch("/jobs", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.data) {
+        setJobs(Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (err) {
+      safeErrorLog("Error loading jobs", err);
+    }
   }, []);
 
   useEffect(() => {
     loadClients();
-  }, [loadClients]);
+    loadJobs();
+  }, [loadClients, loadJobs]);
 
   // Handle URL parameters when navigating from other pages
   useEffect(() => {
@@ -282,21 +323,11 @@ export default function ClientsPage() {
             const data = JSON.parse(event.data);
             
             if (data.type === "client") {
-              if (data.operation === "insert") {
-                // New client added
-                setClients((prev) => {
-                  const exists = prev.some((c) => c._id === data.client?._id);
-                  if (exists) return prev;
-                  return [data.client, ...prev];
-                });
-              } else if (data.operation === "update") {
-                // Client updated
-                setClients((prev) => {
-                  return prev.map((c) => 
-                    c._id === data.clientId ? { ...c, ...data.client } : c
-                  );
-                });
-                
+              // Reload clients to get updated paginated list
+              // This ensures we have the correct data for the current page
+              loadClients();
+              
+              if (data.operation === "update") {
                 // Update selected client if it's the one being updated
                 setSelectedClient((prev) => {
                   if (prev && prev._id === data.clientId) {
@@ -305,9 +336,6 @@ export default function ClientsPage() {
                   return prev;
                 });
               } else if (data.operation === "delete") {
-                // Client deleted
-                setClients((prev) => prev.filter((c) => c._id !== data.clientId));
-                
                 // Clear selection if deleted client was selected
                 setSelectedClient((prev) => {
                   if (prev && prev._id === data.clientId) {
@@ -362,28 +390,38 @@ export default function ClientsPage() {
     // dependency issues, as they are stable functions
   }, []);
 
-  const stats = useMemo(
-    () => [
-      { label: "Total de clientes", value: String(clients.length || 0) },
-      { label: "Clientes com serviços", value: "0" },
-      { label: "Serviços finalizados", value: "0" },
-      { label: "Serviços pendentes", value: "0" }
-    ],
-    [clients]
-  );
-
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return clients.filter((c) => {
-      const matchesType = filterType === "all" ? true : c.personType === filterType;
-      const matchesTerm =
-        term.length === 0 ||
-        c.name?.toLowerCase().includes(term) ||
-        c.docNumber?.toLowerCase().includes(term) ||
-        c.phone?.toLowerCase().includes(term);
-      return matchesType && matchesTerm;
+  const stats = useMemo(() => {
+    // Get unique client IDs that have jobs (match by clientId)
+    const clientsWithJobs = new Set<string>();
+    jobs.forEach((job) => {
+      const jobClientId = job.clientId ? String(job.clientId) : null;
+      if (jobClientId) {
+        clientsWithJobs.add(jobClientId);
+      }
     });
-  }, [clients, filterType, search]);
+    
+    // Count finished jobs (concluida status)
+    const finishedJobs = jobs.filter(
+      (job) => job.status === "concluida"
+    ).length;
+    
+    // Count pending jobs (pendente or em_execucao status)
+    const pendingJobs = jobs.filter(
+      (job) =>
+        job.status === "pendente" ||
+        job.status === "em_execucao"
+    ).length;
+
+    return [
+      { label: "Total de clientes", value: String(pagination.total || 0) },
+      { label: "Clientes com serviços", value: String(clientsWithJobs.size || 0) },
+      { label: "Serviços finalizados", value: String(finishedJobs || 0) },
+      { label: "Serviços pendentes", value: String(pendingJobs || 0) }
+    ];
+  }, [pagination.total, jobs]);
+
+  // Clients are already filtered and paginated by the backend
+  const paginatedClients = clients;
 
   // Keep ref in sync with selectedClient
   useEffect(() => {
@@ -523,8 +561,9 @@ export default function ClientsPage() {
         return;
       }
       Swal.fire("Sucesso", "Cliente salvo com sucesso.", "success");
-      setClients((prev) => [data.data, ...prev]);
       cancelFlow();
+      // Reload clients to get updated paginated list
+      loadClients();
     } catch (err) {
       safeErrorLog("Error loading clients", err);
       Swal.fire("Erro", "Falha ao salvar cliente.", "error");
@@ -575,11 +614,11 @@ export default function ClientsPage() {
       
       Swal.fire("Sucesso", "Cliente atualizado.", "success");
       
-      // Update the clients list
-      setClients((prev) => prev.map((c) => (c._id === selectedClient._id ? data.data : c)));
-      
       // Update selected client with fresh data from server
       setSelectedClient(data.data);
+      
+      // Reload clients to get updated paginated list
+      loadClients();
       
       // Reset editing state
       setEditing(false);
@@ -791,8 +830,9 @@ export default function ClientsPage() {
         }
         
         // Update states
-        setClients((prev) => prev.map((c) => (c._id === clientId ? data.data : c)));
         setSelectedClient(data.data);
+        // Reload clients to get updated paginated list
+        loadClients();
         
         // Find the address we just added/updated
         const addresses = data.data.addresses || [];
@@ -1104,9 +1144,10 @@ export default function ClientsPage() {
         return;
       }
       Swal.fire("Sucesso", `Cliente excluído. Motivo: ${reason}`, "success");
-      setClients((prev) => prev.filter((c) => c._id !== selectedClient._id));
       setSelectedClient(null);
       setEditing(false);
+      // Reload clients to get updated paginated list
+      loadClients();
     } catch (err) {
       safeErrorLog("Error loading clients", err);
       Swal.fire("Erro", "Falha ao excluir cliente.", "error");
@@ -1172,7 +1213,7 @@ export default function ClientsPage() {
               onClick={openNewClient}
               className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-blue-500 to-emerald-400 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:from-blue-600 hover:to-emerald-500 touch-manipulation active:scale-95"
             >
-              + Novo cliente/obra
+              + Novo Cliente
             </button>
           </div>
         )}
@@ -1200,7 +1241,11 @@ export default function ClientsPage() {
             <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
               <div className="font-semibold text-white">Lista de clientes</div>
               <span className="text-xs text-slate-300">
-                {loading ? "Carregando..." : `${filtered.length} registro(s)`}
+                {loading
+                  ? "Carregando..."
+                  : pagination.total === 0
+                  ? "0 registro(s)"
+                  : `${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, pagination.total)} de ${pagination.total} registro(s)`}
               </span>
             </div>
 
@@ -1209,15 +1254,15 @@ export default function ClientsPage() {
                 <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-400" />
                 <p className="text-sm">Carregando clientes...</p>
               </div>
-            ) : filtered.length === 0 ? (
+            ) : pagination.total === 0 ? (
               <div className="px-4 sm:px-6 py-4 text-slate-300 text-sm">
-                Nenhum cliente cadastrado. Clique em "+ Novo cliente/obra" para adicionar.
+                Nenhum cliente cadastrado. Clique em "+ Novo Cliente" para adicionar.
               </div>
             ) : (
               <>
                 {/* Mobile Card View */}
                 <div className="md:hidden space-y-3 px-4 pb-4">
-                  {filtered.map((c) => (
+                  {paginatedClients.map((c) => (
                     <div
                       key={c._id}
                       className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3 cursor-pointer transition hover:bg-white/10 active:bg-white/15"
@@ -1296,7 +1341,7 @@ export default function ClientsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.map((c) => (
+                      {paginatedClients.map((c) => (
                         <tr
                           key={c._id}
                           className="border-t border-white/5 hover:bg-white/5 cursor-pointer"
@@ -1344,6 +1389,61 @@ export default function ClientsPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {pagination.totalPages > 1 && (
+                  <div className="border-t border-white/5 px-6 py-4 flex items-center justify-between">
+                    <div className="text-xs text-slate-400">
+                      Página {pagination.page} de {pagination.totalPages}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={!pagination.hasPrevPage}
+                        className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Anterior
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (pagination.totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (pagination.page <= 3) {
+                            pageNum = i + 1;
+                          } else if (pagination.page >= pagination.totalPages - 2) {
+                            pageNum = pagination.totalPages - 4 + i;
+                          } else {
+                            pageNum = pagination.page - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
+                                pagination.page === pageNum
+                                  ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-300"
+                                  : "border-white/10 bg-white/5 text-white hover:border-emerald-300/40 hover:bg-white/10"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))}
+                        disabled={!pagination.hasNextPage}
+                        className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Próxima
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

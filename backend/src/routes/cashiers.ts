@@ -153,7 +153,7 @@ router.get("/:id/pdf", async (req, res) => {
     currentY += 20;
 
     // Draw summary box
-    const summaryHeight = cashier.notes ? 140 : 120;
+    const summaryHeight = cashier.notes ? 160 : 140; // Increased to accommodate extra spacing for closing balance
     drawBox(50, summaryBoxY - 5, 505, summaryHeight, "#fafafa");
     
     doc.fontSize(10).font("Helvetica");
@@ -202,8 +202,13 @@ router.get("/:id/pdf", async (req, res) => {
     doc.font("Helvetica").fillColor("#ef4444").text(formatCurrency(totalSaidas), 200, summaryY, { width: 120, align: "right" });
     summaryY += 15;
 
-    doc.moveTo(60, summaryY).lineTo(540, summaryY).strokeColor("#cccccc").stroke();
-    summaryY += 10;
+    // Draw separator line with thinner stroke to reduce visual weight and overlap
+    doc.moveTo(60, summaryY).lineTo(540, summaryY).lineWidth(0.3).strokeColor("#cccccc").stroke();
+    // Reset line width for subsequent operations
+    doc.lineWidth(1);
+    // Add extra spacing to account for text baseline (text extends upward from Y position)
+    // 12pt font needs ~10px clearance above baseline, plus buffer for line
+    summaryY += 22; // Spacing after line to prevent text overlap
 
     doc.fontSize(12).font("Helvetica-Bold").fillColor("#000000").text("Saldo de Fechamento:", 60, summaryY);
     doc.fontSize(12).font("Helvetica-Bold").fillColor("#000000").text(formatCurrency(closingBalance), 200, summaryY, { width: 120, align: "right" });

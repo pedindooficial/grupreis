@@ -12,6 +12,7 @@ import LoginScreen from "./_components/LoginScreen";
 import JobCard from "./_components/JobCard";
 import HamburgerMenu from "./_components/HamburgerMenu";
 import SignatureCanvas from "@/components/SignatureCanvas";
+import RouteMap from "./_components/RouteMap";
 
 export default function OperationTeamPage() {
   const { id: teamId } = useParams<{ id: string }>();
@@ -20,6 +21,8 @@ export default function OperationTeamPage() {
     return <div className="min-h-screen flex items-center justify-center text-white">Team ID não encontrado</div>;
   }
   const [view, setView] = useState<MainView>("ops");
+  const [routeJob, setRouteJob] = useState<any | null>(null);
+  const [routeOrigin, setRouteOrigin] = useState<string>("");
   
   const {
     password,
@@ -56,6 +59,41 @@ export default function OperationTeamPage() {
     await authWithPassword(password);
   };
 
+  const handleOpenRoute = async (job: any) => {
+    if (!job.site && (!job.siteLatitude || !job.siteLongitude)) {
+      Swal.fire("Erro", "Endereço do serviço não disponível.", "error");
+      return;
+    }
+
+    // Set job first to show loading state
+    setRouteJob(job);
+    setRouteOrigin("");
+
+    // Try to get current location for origin (non-blocking)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const origin = `${position.coords.latitude},${position.coords.longitude}`;
+          setRouteOrigin(origin);
+        },
+        (err) => {
+          console.warn("Could not get current location:", err);
+          // Will show destination only
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        }
+      );
+    }
+  };
+
+  const handleCloseRoute = () => {
+    setRouteJob(null);
+    setRouteOrigin("");
+  };
+
   if (checkingAuth || authLoading) {
     return <LoadingScreen />;
   }
@@ -70,6 +108,63 @@ export default function OperationTeamPage() {
         authLoading={authLoading}
         onLogin={handleAuth}
       />
+    );
+  }
+
+  // Route view mode - 10% top bar, 90% route map
+  if (routeJob) {
+    const destination = routeJob.siteLatitude && routeJob.siteLongitude
+      ? `${routeJob.siteLatitude},${routeJob.siteLongitude}`
+      : routeJob.site?.replace(/\s*\|\s*/g, ', ') || "";
+
+    return (
+      <div className="fixed inset-0 flex flex-col bg-slate-950 z-50">
+        {/* Top Bar - 10% */}
+        <div className="h-[10vh] min-h-[60px] bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-white/10 flex items-center justify-between px-4 shadow-lg">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <button
+              onClick={handleCloseRoute}
+              className="flex-shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
+            >
+              ← Voltar
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-white truncate">
+                {routeJob.title || `OS #${routeJob.seq || routeJob._id?.slice(-6)}`}
+              </div>
+              <div className="text-xs text-slate-400 truncate">
+                {routeJob.clientName || "Cliente"}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => {
+                // Option to open in external app
+                const destinationParam = routeJob.siteLatitude && routeJob.siteLongitude
+                  ? `${routeJob.siteLatitude},${routeJob.siteLongitude}`
+                  : routeJob.site?.replace(/\s*\|\s*/g, ', ') || "";
+                const webUrl = routeOrigin
+                  ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeOrigin)}&destination=${encodeURIComponent(destinationParam)}&travelmode=driving`
+                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destinationParam)}`;
+                window.open(webUrl, '_blank');
+              }}
+              className="rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-100 transition hover:border-blue-300/60 hover:bg-blue-500/20"
+            >
+              Abrir no Maps
+            </button>
+          </div>
+        </div>
+
+        {/* Route Map - 90% */}
+        <div className="flex-1 min-h-0">
+          <RouteMap
+            origin={routeOrigin}
+            destination={destination}
+            jobTitle={routeJob.title || `OS #${routeJob.seq || routeJob._id?.slice(-6)}`}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -136,7 +231,7 @@ export default function OperationTeamPage() {
                     {nextJob.site && (
                       <button
                         type="button"
-                        onClick={() => handleNavigateToJob(nextJob)}
+                        onClick={() => handleOpenRoute(nextJob)}
                         className="flex-1 rounded-md border border-purple-400/40 bg-purple-500/10 px-3 py-2 text-xs font-semibold text-purple-100 transition active:border-purple-300/60 active:bg-purple-500/20 touch-manipulation min-h-[40px]"
                       >
                         🚗 Rota
@@ -244,7 +339,7 @@ export default function OperationTeamPage() {
                       onStart={handleStartJob}
                       onComplete={(id) => updateJobStatus(id, "concluida")}
                       onReceive={markAsReceived}
-                      onNavigate={handleNavigateToJob}
+                      onNavigate={handleOpenRoute}
                       onViewDetails={setSelectedJob}
                       updating={updating}
                       hasTransaction={hasTransactionForJob}
@@ -525,7 +620,7 @@ export default function OperationTeamPage() {
                   {selectedJob.site && (
                     <button
                       type="button"
-                      onClick={() => handleNavigateToJob(selectedJob)}
+                      onClick={() => handleOpenRoute(selectedJob)}
                       className="w-full rounded-md border border-purple-400/40 bg-purple-500/10 px-3 sm:px-4 py-3 sm:py-2 text-xs sm:text-sm font-semibold text-purple-100 transition active:border-purple-300/60 active:bg-purple-500/20 touch-manipulation min-h-[44px]"
                     >
                       🚗 Rota

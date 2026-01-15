@@ -93,9 +93,44 @@ export default function RouteMap({ origin, destination, jobTitle }: RouteMapProp
   };
 
   const traceRoute = (directionsService: any, directionsRenderer: any, map: any) => {
-    if (!origin || !destination) {
-      setError("Origem ou destino não informado");
+    if (!destination) {
+      setError("Destino não informado");
       setLoading(false);
+      return;
+    }
+
+    // If no origin, just show destination marker
+    if (!origin) {
+      // Geocode destination to show on map
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: destination }, (results: any, status: string) => {
+        if (status === "OK" && results[0]) {
+          const location = results[0].geometry.location;
+          map.setCenter(location);
+          map.setZoom(15);
+          
+          // Add marker for destination
+          new window.google.maps.Marker({
+            position: location,
+            map: map,
+            title: jobTitle || destination,
+            icon: {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: "#ef4444",
+              fillOpacity: 1,
+              strokeColor: "#ffffff",
+              strokeWeight: 2
+            }
+          });
+          
+          setLoading(false);
+          setError("Localização atual não disponível. Mostrando apenas o destino.");
+        } else {
+          setError("Não foi possível encontrar o endereço de destino.");
+          setLoading(false);
+        }
+      });
       return;
     }
 

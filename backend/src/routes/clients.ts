@@ -75,11 +75,60 @@ const clientSchema = z.object({
   addresses: z.array(clientAddressSchema).optional()
 });
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
     await connectDB();
-    const clients = await ClientModel.find().sort({ createdAt: -1 }).lean();
-    res.json({ data: clients });
+    
+    // Parse query parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const search = (req.query.search as string)?.trim() || "";
+    const filterType = req.query.filterType as string || "all";
+    
+    // Build filter query
+    const filter: any = {};
+    
+    // Filter by personType if specified
+    if (filterType !== "all" && (filterType === "cpf" || filterType === "cnpj")) {
+      filter.personType = filterType;
+    }
+    
+    // Search filter (name, docNumber, or phone)
+    if (search) {
+      const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [
+        { name: searchRegex },
+        { docNumber: searchRegex },
+        { phone: searchRegex }
+      ];
+    }
+    
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+    
+    // Get total count for pagination metadata
+    const total = await ClientModel.countDocuments(filter);
+    
+    // Fetch paginated results
+    const clients = await ClientModel.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+    
+    const totalPages = Math.ceil(total / limit);
+    
+    res.json({
+      data: clients,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (error: any) {
     console.error("GET /clients error", error);
     res

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiFetch } from "@/lib/api-client";
 type Job = {
   _id?: string;
@@ -1053,7 +1054,7 @@ export default function Home() {
 
           // Check maintenance history for nextMaintenanceDate
           const itemsWithEffectiveDates = allItemsWithMaintenance.map((item) => {
-            // Find most recent maintenance record for this item
+            // Find all maintenance records for this item, sorted by date (most recent first)
             const itemMaintenance = filteredMaintenanceRecords
               .filter((m) => m.itemId === item._id && m.itemType === item.type)
               .sort((a, b) => {
@@ -1062,29 +1063,154 @@ export default function Home() {
                 return dateB - dateA;
               });
 
-            // Use nextMaintenanceDate from most recent maintenance record if available
-            const effectiveNextMaintenance = itemMaintenance.find((m) => m.nextMaintenanceDate)?.nextMaintenanceDate || item.nextMaintenance;
+            // Get the original nextMaintenance date from the item
+            const originalNextMaintenance = item.nextMaintenance;
+            const originalNextMaintenanceDate = originalNextMaintenance ? new Date(originalNextMaintenance).getTime() : null;
+
+            // Check if there's a maintenance record performed AFTER the original nextMaintenance date
+            // This means maintenance was done, so we should use the nextMaintenanceDate from that record
+            let effectiveNextMaintenance = originalNextMaintenance;
+            
+            if (originalNextMaintenanceDate && itemMaintenance.length > 0) {
+              // Find the most recent maintenance record that was performed after the original due date
+              const maintenanceAfterDueDate = itemMaintenance.find((m) => {
+                const maintenanceDate = new Date(m.date).getTime();
+                return maintenanceDate >= originalNextMaintenanceDate;
+              });
+
+              if (maintenanceAfterDueDate?.nextMaintenanceDate) {
+                // Maintenance was performed after the due date, use the new nextMaintenanceDate
+                effectiveNextMaintenance = maintenanceAfterDueDate.nextMaintenanceDate;
+              } else if (itemMaintenance.length > 0) {
+                // There are maintenance records, but none after the due date
+                // Check if the most recent one has a nextMaintenanceDate set
+                const mostRecent = itemMaintenance[0];
+                if (mostRecent.nextMaintenanceDate) {
+                  effectiveNextMaintenance = mostRecent.nextMaintenanceDate;
+                }
+                // Otherwise, if maintenance was done but no nextMaintenanceDate was set,
+                // and the original date has passed, it's not overdue (maintenance was done)
+                // We'll check this in the filter below
+              }
+            } else if (itemMaintenance.length > 0) {
+              // No original nextMaintenance date, but there are maintenance records
+              // Use the nextMaintenanceDate from the most recent one if available
+              const mostRecent = itemMaintenance.find((m) => m.nextMaintenanceDate);
+              if (mostRecent?.nextMaintenanceDate) {
+                effectiveNextMaintenance = mostRecent.nextMaintenanceDate;
+              }
+            }
+
+            // Check if maintenance was actually performed after the original due date
+            // AND if it's marked as done (isDone = true)
+            const maintenanceWasPerformed = originalNextMaintenanceDate && itemMaintenance.some((m) => {
+              const maintenanceDate = new Date(m.date).getTime();
+              // Check if maintenance was done after due date AND is marked as done
+              // If isDone is undefined/null, treat as not done (backward compatibility)
+              return maintenanceDate >= originalNextMaintenanceDate && m.isDone === true;
+            });
+
+            // Also check if there's a pending maintenance (not done) that should be tracked
+            const hasPendingMaintenance = originalNextMaintenanceDate && itemMaintenance.some((m) => {
+              const maintenanceDate = new Date(m.date).getTime();
+              // Check if there's maintenance after due date that is NOT done
+              // If isDone is undefined/null, treat as not done
+              return maintenanceDate >= originalNextMaintenanceDate && m.isDone !== true;
+            });
 
             return {
               ...item,
               effectiveNextMaintenance,
-              daysUntil: getDaysUntil(effectiveNextMaintenance)
+              daysUntil: getDaysUntil(effectiveNextMaintenance),
+              maintenanceWasPerformed,
+              hasPendingMaintenance,
+              originalNextMaintenance
             };
           });
 
-          const upcomingMaintenance = itemsWithEffectiveDates
-            .filter((item) => item.daysUntil <= 30 && item.daysUntil >= -7)
+          // Filter out items where maintenance was performed after the due date and marked as done
+          // Also exclude items that have pending maintenance (not done) - those should be tracked separately
+          const validItems = itemsWithEffectiveDates.filter((item) => {
+            // If maintenance was performed after the original due date AND marked as done
+            if (item.maintenanceWasPerformed) {
+              // Check if there's a new nextMaintenanceDate that's different from the original
+              if (item.effectiveNextMaintenance && item.effectiveNextMaintenance !== item.originalNextMaintenance) {
+                // There's a new date to track
+                return true;
+              }
+              // Maintenance was done but no new date was set - don't show as overdue
+              return false;
+            }
+            
+            // If there's pending maintenance (not done) after the due date, don't show as overdue
+            // because the maintenance record exists, it's just not completed yet
+            if (item.hasPendingMaintenance) {
+              return false;
+            }
+            
+            // No maintenance was performed after the due date, so it's a valid item to track
+            return true;
+          });
+
+          // Also check maintenance records directly for overdue items that aren't done
+          const overdueMaintenanceRecords = filteredMaintenanceRecords
+            .filter((m) => {
+              if (m.isDone === true) return false; // Exclude done maintenance
+              if (!m.nextMaintenanceDate) return false; // Need a nextMaintenanceDate
+              const daysUntil = getDaysUntil(m.nextMaintenanceDate);
+              return daysUntil < 0; // Overdue
+            })
+            .map((m) => {
+              // Find the item this maintenance belongs to
+              const item = m.itemType === "equipment" 
+                ? equipment.find((e) => e._id === m.itemId)
+                : machines.find((ma) => ma._id === m.itemId);
+              
+              if (!item) return null;
+              
+              return {
+                _id: item._id,
+                type: m.itemType,
+                itemName: item.name || m.itemName,
+                effectiveNextMaintenance: m.nextMaintenanceDate,
+                daysUntil: getDaysUntil(m.nextMaintenanceDate),
+                maintenanceRecordId: m._id
+              };
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null)
             .sort((a, b) => a.daysUntil - b.daysUntil);
 
-          const overdueMaintenance = itemsWithEffectiveDates
+          // Combine item-based overdue with maintenance record-based overdue
+          const itemBasedOverdue = validItems
             .filter((item) => item.daysUntil < 0)
+            .sort((a, b) => a.daysUntil - b.daysUntil);
+
+          // Merge and deduplicate by item ID
+          const allOverdueMap = new Map();
+          itemBasedOverdue.forEach((item) => {
+            allOverdueMap.set(`${item.type}-${item._id}`, item);
+          });
+          overdueMaintenanceRecords.forEach((item) => {
+            const key = `${item.type}-${item._id}`;
+            // Prefer the one with more days overdue (more urgent)
+            if (!allOverdueMap.has(key) || item.daysUntil < allOverdueMap.get(key).daysUntil) {
+              allOverdueMap.set(key, item);
+            }
+          });
+          const overdueMaintenance = Array.from(allOverdueMap.values())
+            .sort((a, b) => a.daysUntil - b.daysUntil);
+
+          const upcomingMaintenance = validItems
+            .filter((item) => item.daysUntil <= 30 && item.daysUntil >= -7)
             .sort((a, b) => a.daysUntil - b.daysUntil);
 
           const recentMaintenance = filteredMaintenanceRecords
             .filter((m) => {
               const maintenanceDate = new Date(m.date).getTime();
               const thirtyDaysAgo = new Date().getTime() - (30 * 24 * 60 * 60 * 1000);
-              return maintenanceDate >= thirtyDaysAgo;
+              // Only show maintenance that is marked as done (or undefined for backward compatibility)
+              // If isDone is explicitly false, don't show it in recent maintenance
+              return maintenanceDate >= thirtyDaysAgo && m.isDone !== false;
             })
             .sort((a, b) => {
               const dateA = new Date(a.date).getTime();
@@ -1142,6 +1268,47 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Overdue Maintenance - Show prominently if any */}
+              {overdueMaintenance.length > 0 && (
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 shadow-inner shadow-black/30 mb-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-red-200">⚠️ Manutenções Atrasadas</div>
+                      <div className="text-xs text-red-300/70 mt-1">Clique para ir ao item e resolver</div>
+                    </div>
+                    <div className="text-2xl font-semibold text-red-100">{overdueMaintenance.length}</div>
+                  </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {overdueMaintenance.map((item) => (
+                      <Link
+                        key={`overdue-${item.type}-${item._id}`}
+                        to={`/${item.type === "equipment" ? "equipment" : "machines"}`}
+                        className="block rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm transition hover:border-red-400/60 hover:bg-red-500/20 cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="font-semibold text-white text-xs">
+                              {item.itemName || item.name}
+                            </div>
+                            <div className="text-xs text-red-200/70 mt-1">
+                              {item.type === "equipment" ? "Equipamento" : "Máquina"}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-semibold px-2 py-1 rounded bg-red-500/30 text-red-100">
+                              {Math.abs(item.daysUntil)} dias atrasado
+                            </div>
+                            <div className="text-xs text-red-200/70 mt-1">
+                              {formatDate(item.effectiveNextMaintenance)}
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Upcoming and Recent Maintenance */}
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner shadow-black/30">
@@ -1151,9 +1318,10 @@ export default function Home() {
                       <div className="text-sm text-slate-400">Nenhuma manutenção próxima</div>
                     ) : (
                       upcomingMaintenance.map((item) => (
-                        <div
+                        <Link
                           key={`${item.type}-${item._id}`}
-                          className="rounded-lg border border-white/10 bg-slate-900/50 p-3 text-sm"
+                          to={`/${item.type === "equipment" ? "equipment" : "machines"}`}
+                          className="block rounded-lg border border-white/10 bg-slate-900/50 p-3 text-sm transition hover:border-emerald-400/40 hover:bg-slate-800/50 cursor-pointer"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
@@ -1187,7 +1355,7 @@ export default function Home() {
                               </div>
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       ))
                     )}
                   </div>
@@ -1200,9 +1368,10 @@ export default function Home() {
                       <div className="text-sm text-slate-400">Nenhuma manutenção recente</div>
                     ) : (
                       recentMaintenance.map((record) => (
-                        <div
+                        <Link
                           key={record._id}
-                          className="rounded-lg border border-white/10 bg-slate-900/50 p-3 text-sm"
+                          to={`/${record.itemType === "equipment" ? "equipment" : "machines"}`}
+                          className="block rounded-lg border border-white/10 bg-slate-900/50 p-3 text-sm transition hover:border-emerald-400/40 hover:bg-slate-800/50 cursor-pointer"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
@@ -1215,6 +1384,17 @@ export default function Home() {
                               {record.type && (
                                 <div className="text-xs text-blue-300 mt-1">
                                   {record.type}
+                                </div>
+                              )}
+                              {record.isDone !== undefined && (
+                                <div className="mt-1">
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                    record.isDone
+                                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                      : "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+                                  }`}>
+                                    {record.isDone ? "Concluída" : "Pendente"}
+                                  </span>
                                 </div>
                               )}
                             </div>
@@ -1231,7 +1411,7 @@ export default function Home() {
                               )}
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       ))
                     )}
                   </div>

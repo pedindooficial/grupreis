@@ -13,6 +13,7 @@ interface MaintenanceRecord {
   nextMaintenanceDate?: string;
   nextMaintenanceType?: string;
   notes?: string;
+  isDone?: boolean;
 }
 
 interface MaintenanceHistoryProps {
@@ -42,7 +43,8 @@ export default function MaintenanceHistory({
     performedBy: "",
     nextMaintenanceDate: "",
     nextMaintenanceType: "",
-    notes: ""
+    notes: "",
+    isDone: false
   });
 
   const formatDate = (dateString: string | undefined | null): string => {
@@ -103,7 +105,8 @@ export default function MaintenanceHistory({
       performedBy: "",
       nextMaintenanceDate: "",
       nextMaintenanceType: "",
-      notes: ""
+      notes: "",
+      isDone: false
     });
     setEditingId(null);
     setShowForm(false);
@@ -132,6 +135,7 @@ export default function MaintenanceHistory({
       if (form.nextMaintenanceDate) payload.nextMaintenanceDate = form.nextMaintenanceDate;
       if (form.nextMaintenanceType.trim()) payload.nextMaintenanceType = form.nextMaintenanceType.trim();
       if (form.notes.trim()) payload.notes = form.notes.trim();
+      payload.isDone = form.isDone;
 
       const res = editingId
         ? await apiFetch(`/maintenance/${editingId}`, {
@@ -172,9 +176,67 @@ export default function MaintenanceHistory({
       performedBy: record.performedBy || "",
       nextMaintenanceDate: record.nextMaintenanceDate || "",
       nextMaintenanceType: record.nextMaintenanceType || "",
-      notes: record.notes || ""
+      notes: record.notes || "",
+      isDone: record.isDone || false
     });
     setShowForm(true);
+  };
+
+  const handleRepeat = (record: MaintenanceRecord) => {
+    // Create a new maintenance entry based on the existing one
+    setEditingId(null);
+    setForm({
+      date: new Date().toISOString().split("T")[0], // Use today's date for new entry
+      type: record.type || "",
+      details: "",
+      cost: "",
+      vendor: record.vendor || "",
+      performedBy: record.performedBy || "",
+      nextMaintenanceDate: "",
+      nextMaintenanceType: record.nextMaintenanceType || "",
+      notes: "",
+      isDone: false
+    });
+    setShowForm(true);
+  };
+
+  const handleToggleDone = async (record: MaintenanceRecord) => {
+    try {
+      setSaving(true);
+      const payload: any = {
+        itemId,
+        itemType,
+        date: record.date,
+        type: record.type
+      };
+
+      if (record.details) payload.details = record.details;
+      if (record.cost) payload.cost = record.cost;
+      if (record.vendor) payload.vendor = record.vendor;
+      if (record.performedBy) payload.performedBy = record.performedBy;
+      if (record.nextMaintenanceDate) payload.nextMaintenanceDate = record.nextMaintenanceDate;
+      if (record.nextMaintenanceType) payload.nextMaintenanceType = record.nextMaintenanceType;
+      if (record.notes) payload.notes = record.notes;
+      payload.isDone = !record.isDone;
+
+      const res = await apiFetch(`/maintenance/${record._id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        Swal.fire("Erro", data?.error || "Não foi possível atualizar.", "error");
+        return;
+      }
+
+      loadMaintenanceHistory();
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Erro", "Falha ao atualizar status.", "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (recordId: string) => {
@@ -361,6 +423,17 @@ export default function MaintenanceHistory({
                 placeholder="Observações adicionais..."
               />
             </div>
+            <div className="space-y-1 text-sm sm:col-span-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isDone}
+                  onChange={(e) => setForm((f) => ({ ...f, isDone: e.target.checked }))}
+                  className="w-4 h-4 rounded border-white/20 bg-slate-900/60 text-emerald-500 focus:ring-emerald-500/40 focus:ring-2"
+                />
+                <span className="text-slate-200">Manutenção concluída</span>
+              </label>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2">
@@ -399,6 +472,16 @@ export default function MaintenanceHistory({
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="text-xs sm:text-sm font-semibold text-white">{record.type}</div>
                     <div className="text-xs text-slate-400">{formatDate(record.date)}</div>
+                    {record.isDone && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Concluída
+                      </span>
+                    )}
+                    {!record.isDone && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                        Pendente
+                      </span>
+                    )}
                     {record.cost && record.cost > 0 && (
                       <div className="text-xs text-emerald-300 font-semibold">
                         {formatCurrency(record.cost)}
@@ -430,7 +513,26 @@ export default function MaintenanceHistory({
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                  <button
+                    onClick={() => handleToggleDone(record)}
+                    disabled={saving}
+                    className={`rounded-md border px-2 py-1 text-xs font-semibold transition ${
+                      record.isDone
+                        ? "border-orange-500/40 bg-orange-500/10 text-orange-200 hover:border-orange-400/60 hover:bg-orange-500/20"
+                        : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/60 hover:bg-emerald-500/20"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                    title={record.isDone ? "Marcar como pendente" : "Marcar como concluída"}
+                  >
+                    {record.isDone ? "Pendente" : "Concluir"}
+                  </button>
+                  <button
+                    onClick={() => handleRepeat(record)}
+                    className="rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-xs font-semibold text-blue-200 transition hover:border-blue-400/60 hover:bg-blue-500/20"
+                    title="Criar nova manutenção baseada nesta"
+                  >
+                    Repetir
+                  </button>
                   <button
                     onClick={() => handleEdit(record)}
                     className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-white transition hover:border-emerald-300/40 hover:bg-white/10"
