@@ -18,9 +18,10 @@ pnpm-lock.yaml
 .env.development.local
 .env.test.local
 .env.production.local
-
+backend/ecosystem.config.cjs
 # PM2 logs
 backend/logs/
+backend/dist
 *.log
 
 frontend/dist

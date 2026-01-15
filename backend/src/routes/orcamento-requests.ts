@@ -201,8 +201,8 @@ router.get("/", async (req, res) => {
     const query: any = {};
     
     // By default, exclude archived requests unless showArchived is true
-    // Normalize showArchived to a boolean - it can be a string "true" or boolean true
-    const shouldShowArchived = showArchived === "true" || showArchived === true;
+    // Normalize showArchived to a boolean - it comes as a string from query params
+    const shouldShowArchived = showArchived === "true" || showArchived === "1";
     if (!shouldShowArchived) {
       query.archived = { $ne: true };
     }
