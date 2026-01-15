@@ -201,10 +201,25 @@ router.post("/password-reset", async (req, res) => {
     // Send email
     try {
       console.log("[Password Reset Request] Attempting to send email to:", client.email);
+      // Get the origin from the request to use the correct frontend URL
+      // Prefer origin header, fallback to extracting from referer
+      let requestOrigin: string | undefined;
+      if (req.headers.origin) {
+        requestOrigin = req.headers.origin;
+      } else if (req.headers.referer) {
+        try {
+          const refererUrl = new URL(req.headers.referer);
+          requestOrigin = `${refererUrl.protocol}//${refererUrl.host}`;
+        } catch (e) {
+          // Invalid referer URL, ignore
+        }
+      }
+      console.log("[Password Reset Request] Request origin:", requestOrigin);
       await sendPasswordResetEmail(
         client.email || "",
         resetToken,
-        client.name
+        client.name,
+        requestOrigin
       );
       console.log("[Password Reset Request] Email sent successfully");
     } catch (emailError: any) {

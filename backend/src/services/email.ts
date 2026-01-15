@@ -98,13 +98,15 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
 export async function sendPasswordResetEmail(
   email: string,
   resetToken: string,
-  clientName: string
+  clientName: string,
+  requestOrigin?: string
 ): Promise<void> {
   console.log("[Email] sendPasswordResetEmail called:", {
     email,
     clientName,
     tokenLength: resetToken.length,
-    tokenPreview: resetToken.substring(0, 10) + "..."
+    tokenPreview: resetToken.substring(0, 10) + "...",
+    requestOrigin
   });
 
   // Determine frontend URL based on environment
@@ -115,9 +117,17 @@ export async function sendPasswordResetEmail(
     frontendOrigin = "http://localhost:5173";
     console.log("[Email] Using development URL:", frontendOrigin);
   } else {
-    // In production, use FRONTEND_ORIGIN or default to production URL
-    frontendOrigin = process.env.FRONTEND_ORIGIN?.split(",")[0] || "https://www.reisfundacoes.com";
-    console.log("[Email] Using production URL:", frontendOrigin);
+    // In production, prefer request origin if available and valid, otherwise use FRONTEND_ORIGIN or default
+    if (requestOrigin && (requestOrigin.includes("reisfundacoes.com") || requestOrigin.includes("localhost"))) {
+      // Use the origin from the request (e.g., https://www.reisfundacoes.com)
+      // Only use if it's from a trusted domain
+      frontendOrigin = requestOrigin;
+      console.log("[Email] Using request origin URL:", frontendOrigin);
+    } else {
+      // Fallback to FRONTEND_ORIGIN or default to production URL
+      frontendOrigin = process.env.FRONTEND_ORIGIN?.split(",")[0] || "https://www.reisfundacoes.com";
+      console.log("[Email] Using production URL from env/default:", frontendOrigin);
+    }
   }
   
   const resetUrl = `${frontendOrigin}/reset-password?token=${resetToken}`;
