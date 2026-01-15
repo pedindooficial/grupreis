@@ -197,11 +197,13 @@ router.get("/", async (req, res) => {
     await connectDB();
 
     const { status, search, showArchived } = req.query;
-
+    
     const query: any = {};
     
     // By default, exclude archived requests unless showArchived is true
-    if (showArchived !== "true" && showArchived !== true) {
+    // Normalize showArchived to a boolean - it can be a string "true" or boolean true
+    const shouldShowArchived = showArchived === "true" || showArchived === true;
+    if (!shouldShowArchived) {
       query.archived = { $ne: true };
     }
     
